@@ -4,23 +4,39 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:convex": "convex dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/openai": "3.0.53",
+    "@clerk/nextjs": "7.2.7",
+    "@openrouter/ai-sdk-provider": "2.8.1",
+    "ai": "6.0.168",
+    "convex": "1.36.1",
+    "exa-js": "2.12.1",
+    "lucide-react": "1.11.0",
     "next": "16.2.4",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
+    "@types/node": "^25.6.0",
+    "@types/react": "19.2.14",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "eslint": "^10.2.1",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@clerk/shared",
+      "esbuild"
+    ]
   }
 }

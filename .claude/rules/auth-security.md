@@ -1,7 +1,7 @@
 ---
 name: Auth & security (career-steer-v2)
-description: Read before editing middleware.ts, app/api/auth/**, or anything that touches Clerk identity. Clerk is the source of truth; Convex enforces.
-appliesTo: middleware.ts, app/api/auth/**, lib/server/auth/**
+description: Read before editing proxy.ts, app/api/auth/**, or anything that touches Clerk identity. Clerk is the source of truth; Convex enforces.
+appliesTo: proxy.ts, app/api/auth/**, lib/server/auth/**
 ---
 
 # Auth & security — read before editing auth flows
