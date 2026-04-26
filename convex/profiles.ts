@@ -1,4 +1,4 @@
-import { query, internalMutation, action } from "./_generated/server";
+import { query, internalMutation, action, mutation } from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import { v } from "convex/values";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
@@ -172,5 +172,69 @@ export const parseUpload = action({
     });
 
     return { ok: true };
+  },
+});
+
+const userOwnedProfile = async (ctx: any) => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not authenticated");
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_tokenIdentifier", (q: any) =>
+      q.eq("tokenIdentifier", identity.tokenIdentifier),
+    )
+    .unique();
+  if (!user) throw new Error("User record missing");
+  const profile = await ctx.db
+    .query("profiles")
+    .withIndex("by_userId", (q: any) => q.eq("userId", user._id))
+    .unique();
+  if (!profile) throw new Error("No profile yet");
+  return profile;
+};
+
+const ProfilePatch = v.object({
+  name: v.optional(v.union(v.string(), v.null())),
+  headline: v.optional(v.union(v.string(), v.null())),
+  summary: v.optional(v.union(v.string(), v.null())),
+  location: v.optional(v.union(v.string(), v.null())),
+  experience: v.optional(v.array(v.object({
+    title: v.string(),
+    company: v.string(),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    description: v.optional(v.string()),
+  }))),
+  education: v.optional(v.array(v.object({
+    school: v.string(),
+    degree: v.optional(v.string()),
+    field: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+  }))),
+  skills: v.optional(v.array(v.string())),
+});
+
+export const update = mutation({
+  args: { patch: ProfilePatch },
+  handler: async (ctx, args) => {
+    const profile = await userOwnedProfile(ctx);
+    await ctx.db.patch(profile._id, args.patch);
+  },
+});
+
+export const markReviewed = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const profile = await userOwnedProfile(ctx);
+    await ctx.db.patch(profile._id, { reviewed: true });
+  },
+});
+
+export const clear = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const profile = await userOwnedProfile(ctx);
+    await ctx.db.delete(profile._id);
   },
 });
