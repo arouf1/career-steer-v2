@@ -94,7 +94,7 @@ function UploadPreview() {
           Drop your CV here and we&rsquo;ll explore what&rsquo;s possible.
         </p>
         <p className="type-caption mt-6 text-mute">
-          Supports PDF, DOCX, and image screenshots.
+          Supports PDF and DOCX.
         </p>
       </div>
     </article>
