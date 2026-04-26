@@ -1,26 +1,92 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Color palette — warm paper system. See DESIGN.md for the rules. */
+  --color-paper: oklch(96% 0.012 85);
+  --color-paper-raised: oklch(94% 0.014 85);
+  --color-ink: oklch(22% 0.015 70);
+  --color-ink-deep: oklch(15% 0.015 70);
+  --color-ink-soft: oklch(68% 0.005 75);
+  --color-body: oklch(40% 0.01 70);
+  --color-mute: oklch(60% 0.008 75);
+  --color-hairline: oklch(88% 0.008 80);
+  --color-hairline-strong: oklch(80% 0.008 80);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* State colors — used per-surface only, never in the resting palette. */
+  --color-state-error: oklch(45% 0.18 25);
+  --color-state-success: oklch(55% 0.12 145);
+  --color-state-warning: oklch(70% 0.14 75);
+
+  /* Font families — wired to next/font CSS variables in app/layout.tsx. */
+  --font-serif: var(--font-eb-garamond), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-figtree), system-ui, -apple-system, sans-serif;
+
+  /* Radii */
+  --radius-pill: 9999px;
+  --radius-card: 20px;
+  --radius-surface: 12px;
+  --radius-control: 8px;
+  --radius-hair: 2px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-body);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+@layer utilities {
+  .type-display {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: clamp(2.75rem, 6vw, 4.5rem);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .type-headline {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: clamp(1.875rem, 3.5vw, 2.5rem);
+    line-height: 1.15;
+    letter-spacing: -0.005em;
+  }
+  .type-title {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 1.25rem;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+  }
+  .type-body-lg {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 1.125rem;
+    line-height: 1.6;
+  }
+  .type-body {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .type-label {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 0.8125rem;
+    line-height: 1;
+    letter-spacing: 0.06em;
+  }
+  .type-caption {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
 }

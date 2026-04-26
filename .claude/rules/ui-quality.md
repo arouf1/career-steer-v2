@@ -27,6 +27,7 @@ Every other Impeccable command reads these two files before doing real work. Wit
 
 - **shadcn primitives over custom CSS.** Buttons, inputs, dialogs, dropdowns, sheets — install from shadcn (use `vercel-plugin:shadcn`) before writing your own. Custom CSS is a last resort, not a first move.
 - **Tailwind tokens over magic numbers.** `gap-4`, not `gap-[17px]`. `text-sm`, not `text-[13.5px]`. If a token doesn't exist, extend the theme — don't sprinkle one-off values.
+- **No emoji in UI. lucide only for icons.** Emoji are banned from every user-facing surface — copy, buttons, badges, toasts, status pills, empty/error states, marketing, onboarding. All icons import from `lucide-react` (static) or `lucide-animated` (animated). No other icon libraries (Heroicons, Phosphor, Tabler, Radix Icons, Iconify) and no inline SVG icons. If a needed glyph is missing from lucide, ask before reaching elsewhere.
 - **Server Components by default.** Make a component `'use client'` only when it actually needs hooks, event handlers, or browser APIs. Lift `'use client'` to the smallest leaf possible.
 - **No raw `<img>`.** Use `next/image`. Always specify `width`, `height`, and `alt`.
 - **Empty / loading / error states are part of "done."** Every async surface gets all three. Skeleton on load, friendly empty state, recoverable error state.

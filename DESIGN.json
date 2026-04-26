@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-26T00:00:00Z",
+  "title": "Design System: Career Steer",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cream Paper",
+        "canonical": "oklch(96% 0.012 85)",
+        "tonalRamp": [
+          "oklch(20% 0.012 85)",
+          "oklch(35% 0.012 85)",
+          "oklch(50% 0.012 85)",
+          "oklch(65% 0.012 85)",
+          "oklch(78% 0.012 85)",
+          "oklch(88% 0.012 85)",
+          "oklch(94% 0.012 85)",
+          "oklch(96% 0.012 85)"
+        ]
+      },
+      "paper-raised": {
+        "role": "neutral",
+        "displayName": "Cream Paper Raised",
+        "canonical": "oklch(94% 0.014 85)",
+        "tonalRamp": [
+          "oklch(18% 0.014 85)",
+          "oklch(33% 0.014 85)",
+          "oklch(48% 0.014 85)",
+          "oklch(63% 0.014 85)",
+          "oklch(76% 0.014 85)",
+          "oklch(86% 0.014 85)",
+          "oklch(92% 0.014 85)",
+          "oklch(94% 0.014 85)"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Warm Ink",
+        "canonical": "oklch(22% 0.015 70)",
+        "tonalRamp": [
+          "oklch(12% 0.015 70)",
+          "oklch(22% 0.015 70)",
+          "oklch(32% 0.015 70)",
+          "oklch(45% 0.015 70)",
+          "oklch(58% 0.015 70)",
+          "oklch(72% 0.015 70)",
+          "oklch(85% 0.015 70)",
+          "oklch(94% 0.015 70)"
+        ]
+      },
+      "ink-deep": {
+        "role": "primary",
+        "displayName": "Warm Ink Deep",
+        "canonical": "oklch(15% 0.015 70)",
+        "tonalRamp": [
+          "oklch(8% 0.015 70)",
+          "oklch(15% 0.015 70)",
+          "oklch(28% 0.015 70)",
+          "oklch(42% 0.015 70)",
+          "oklch(56% 0.015 70)",
+          "oklch(70% 0.015 70)",
+          "oklch(83% 0.015 70)",
+          "oklch(92% 0.015 70)"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(68% 0.005 75)",
+        "tonalRamp": [
+          "oklch(20% 0.005 75)",
+          "oklch(32% 0.005 75)",
+          "oklch(45% 0.005 75)",
+          "oklch(58% 0.005 75)",
+          "oklch(68% 0.005 75)",
+          "oklch(78% 0.005 75)",
+          "oklch(88% 0.005 75)",
+          "oklch(94% 0.005 75)"
+        ]
+      },
+      "body": {
+        "role": "neutral",
+        "displayName": "Body Warm Grey",
+        "canonical": "oklch(40% 0.01 70)",
+        "tonalRamp": [
+          "oklch(15% 0.01 70)",
+          "oklch(25% 0.01 70)",
+          "oklch(40% 0.01 70)",
+          "oklch(55% 0.01 70)",
+          "oklch(68% 0.01 70)",
+          "oklch(80% 0.01 70)",
+          "oklch(90% 0.01 70)",
+          "oklch(95% 0.01 70)"
+        ]
+      },
+      "mute": {
+        "role": "neutral",
+        "displayName": "Muted Warm Grey",
+        "canonical": "oklch(60% 0.008 75)",
+        "tonalRamp": [
+          "oklch(20% 0.008 75)",
+          "oklch(35% 0.008 75)",
+          "oklch(48% 0.008 75)",
+          "oklch(60% 0.008 75)",
+          "oklch(72% 0.008 75)",
+          "oklch(82% 0.008 75)",
+          "oklch(90% 0.008 75)",
+          "oklch(95% 0.008 75)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(88% 0.008 80)",
+        "tonalRamp": [
+          "oklch(25% 0.008 80)",
+          "oklch(45% 0.008 80)",
+          "oklch(60% 0.008 80)",
+          "oklch(72% 0.008 80)",
+          "oklch(80% 0.008 80)",
+          "oklch(85% 0.008 80)",
+          "oklch(88% 0.008 80)",
+          "oklch(94% 0.008 80)"
+        ]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "oklch(80% 0.008 80)",
+        "tonalRamp": [
+          "oklch(20% 0.008 80)",
+          "oklch(38% 0.008 80)",
+          "oklch(55% 0.008 80)",
+          "oklch(68% 0.008 80)",
+          "oklch(76% 0.008 80)",
+          "oklch(80% 0.008 80)",
+          "oklch(86% 0.008 80)",
+          "oklch(92% 0.008 80)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headlines only. One per page." },
+      "headline": { "displayName": "Headline", "purpose": "Section openers, marketing subheads." },
+      "title": { "displayName": "Title", "purpose": "Card titles, dialog titles, in-app subsection labels." },
+      "body-large": { "displayName": "Body Large", "purpose": "Hero subheads, lede paragraphs introducing a section." },
+      "body": { "displayName": "Body", "purpose": "Default paragraphs, list text. 65–75ch line length." },
+      "label": { "displayName": "Label", "purpose": "Button text, segmented toggle labels, eyebrow tags." },
+      "caption": { "displayName": "Caption", "purpose": "Metadata, footnotes, helper text, privacy notices." }
+    },
+    "shadows": [
+      { "name": "lift-soft", "value": "0 1px 2px oklch(0% 0 0 / 0.04), 0 8px 24px oklch(0% 0 0 / 0.06)", "purpose": "Hover state for interactive cards. Never visible at rest." },
+      { "name": "focus-ring", "value": "0 0 0 3px oklch(22% 0.015 70 / 0.18)", "purpose": "Keyboard focus ring around interactive elements. Replaces default browser outline." }
+    ],
+    "motion": [
+      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "Default easing for state changes (hover, focus, toggle)." },
+      { "name": "ease-out-quint", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Punchier easing for entrances and view transitions." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Micro-state changes — button color shift, link underline." },
+      { "name": "duration-medium", "value": "240ms", "purpose": "Toggles, dialog open, sheet slide." },
+      { "name": "duration-slow", "value": "400ms", "purpose": "Page transitions, longer reveals." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ],
+    "stateColors": [
+      { "name": "state-error", "value": "oklch(45% 0.18 25)", "purpose": "Validation errors only. Added per-surface, never introduced to the resting palette." },
+      { "name": "state-success", "value": "oklch(55% 0.12 145)", "purpose": "Confirmation moments only — saved, sent, applied. Subdued mossy green, not bright SaaS green." },
+      { "name": "state-warning", "value": "oklch(70% 0.14 75)", "purpose": "Cautionary state — pending review, deadline approaching. Warm amber matching the paper hue range." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Filled dark pill, the brand's loudest element. Used for the single most important CTA on a surface.",
+      "html": "<button class=\"ds-btn-primary\">Sign Up</button>",
+      "css": ".ds-btn-primary { background: oklch(22% 0.015 70); color: oklch(96% 0.012 85); border: none; border-radius: 9999px; padding: 12px 24px; font-family: Figtree, system-ui, -apple-system, sans-serif; font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.06em; line-height: 1; cursor: pointer; transition: background 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary:hover { background: oklch(15% 0.015 70); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(22% 0.015 70 / 0.18); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Transparent text-style button paired with Primary. Used for Sign In, Cancel, secondary actions.",
+      "html": "<button class=\"ds-btn-ghost\">Sign In</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: oklch(22% 0.015 70); border: none; border-radius: 9999px; padding: 12px 24px; font-family: Figtree, system-ui, -apple-system, sans-serif; font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.06em; line-height: 1; cursor: pointer; transition: color 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-ghost:hover { color: oklch(15% 0.015 70); } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(22% 0.015 70 / 0.18); }"
+    },
+    {
+      "name": "Segmented Toggle",
+      "kind": "chip",
+      "refersTo": "segmented-toggle-active",
+      "description": "Two-option pill switcher. Active option fills with paper (lifted out of the paper-raised container). Used for top-of-card mode switches.",
+      "html": "<div class=\"ds-toggle\"><button class=\"ds-toggle-opt is-active\"><svg class=\"ds-toggle-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/></svg>Upload CV</button><button class=\"ds-toggle-opt\"><svg class=\"ds-toggle-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z\"/><rect x=\"2\" y=\"9\" width=\"4\" height=\"12\"/><circle cx=\"4\" cy=\"4\" r=\"2\"/></svg>LinkedIn</button></div>",
+      "css": ".ds-toggle { display: inline-flex; align-items: center; gap: 4px; background: oklch(94% 0.014 85); border-radius: 9999px; padding: 4px; font-family: Figtree, system-ui, -apple-system, sans-serif; } .ds-toggle-opt { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: oklch(60% 0.008 75); border: none; border-radius: 9999px; padding: 10px 20px; font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.06em; line-height: 1; cursor: pointer; transition: background 150ms cubic-bezier(0.25, 1, 0.5, 1), color 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-toggle-opt:hover { color: oklch(40% 0.01 70); } .ds-toggle-opt.is-active { background: oklch(96% 0.012 85); color: oklch(22% 0.015 70); } .ds-toggle-icon { width: 16px; height: 16px; flex-shrink: 0; }"
+    },
+    {
+      "name": "Paper Card",
+      "kind": "card",
+      "refersTo": "card-paper",
+      "description": "Default content card. Inset feel via tonal layering, no shadow at rest. Optional 1px hairline border.",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-card-title\">CV or career profile screenshots</h3><p class=\"ds-card-body\">Drop your CV here and we'll explore what's possible.</p></article>",
+      "css": ".ds-card { background: oklch(94% 0.014 85); border: 1px solid oklch(88% 0.008 80); border-radius: 20px; padding: 32px; max-width: 480px; font-family: Figtree, system-ui, -apple-system, sans-serif; } .ds-card-title { margin: 0 0 8px; color: oklch(22% 0.015 70); font-size: 1.25rem; font-weight: 600; line-height: 1.3; letter-spacing: -0.005em; } .ds-card-body { margin: 0; color: oklch(40% 0.01 70); font-size: 1rem; font-weight: 400; line-height: 1.6; }"
+    },
+    {
+      "name": "Upload Invitation Card",
+      "kind": "card",
+      "refersTo": "card-upload",
+      "description": "Dashed-border variant for input invitations only — drag-drop, upload, click-to-add. Dashedness is a single dedicated affordance signal.",
+      "html": "<button class=\"ds-card-upload\"><svg class=\"ds-card-upload-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"17 8 12 3 7 8\"/><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"15\"/></svg><span class=\"ds-card-upload-title\">Drop your CV here</span><span class=\"ds-card-upload-meta\">PDF, DOCX, or images</span></button>",
+      "css": ".ds-card-upload { display: flex; flex-direction: column; align-items: center; gap: 12px; background: oklch(94% 0.014 85); border: 1px dashed oklch(80% 0.008 80); border-radius: 20px; padding: 48px 32px; width: 100%; max-width: 480px; color: oklch(40% 0.01 70); cursor: pointer; font-family: Figtree, system-ui, -apple-system, sans-serif; transition: border-color 150ms cubic-bezier(0.25, 1, 0.5, 1), background 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-card-upload:hover { border-color: oklch(60% 0.008 75); background: oklch(96% 0.012 85); } .ds-card-upload:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(22% 0.015 70 / 0.18); } .ds-card-upload-icon { width: 32px; height: 32px; color: oklch(60% 0.008 75); } .ds-card-upload-title { color: oklch(22% 0.015 70); font-size: 1rem; font-weight: 600; line-height: 1.3; } .ds-card-upload-meta { color: oklch(60% 0.008 75); font-size: 0.875rem; font-weight: 400; line-height: 1.5; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Default text input. Paper background, 1px hairline border. Focus deepens border to ink-soft.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Email</span><input class=\"ds-field-input\" type=\"email\" placeholder=\"you@domain.com\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; max-width: 360px; font-family: Figtree, system-ui, -apple-system, sans-serif; } .ds-field-label { color: oklch(22% 0.015 70); font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.06em; line-height: 1; } .ds-field-input { background: oklch(96% 0.012 85); color: oklch(22% 0.015 70); border: 1px solid oklch(88% 0.008 80); border-radius: 12px; padding: 12px 16px; font-family: inherit; font-size: 1rem; font-weight: 400; line-height: 1.6; transition: border-color 150ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-field-input::placeholder { color: oklch(60% 0.008 75); } .ds-field-input:focus { outline: none; border-color: oklch(68% 0.005 75); box-shadow: 0 0 0 3px oklch(22% 0.015 70 / 0.18); }"
+    },
+    {
+      "name": "Hairline Bullet List",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Signature feature-list pattern. Thin vertical hairline replaces the conventional bullet dot.",
+      "html": "<ul class=\"ds-hairline-list\"><li class=\"ds-hairline-item\">AI-powered path matching based on your real experience</li><li class=\"ds-hairline-item\">Personalised roadmaps with actionable next steps</li><li class=\"ds-hairline-item\">Your data stays private and confidential</li></ul>",
+      "css": ".ds-hairline-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 16px; max-width: 36rem; font-family: Figtree, system-ui, -apple-system, sans-serif; } .ds-hairline-item { position: relative; padding-left: 16px; color: oklch(40% 0.01 70); font-size: 1rem; font-weight: 400; line-height: 1.5; } .ds-hairline-item::before { content: ''; position: absolute; left: 0; top: 0.4em; width: 1px; height: 0.7em; background: oklch(80% 0.008 80); }"
+    },
+    {
+      "name": "Wordmark",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The Career Steer wordmark in EB Garamond italic. Always given ample whitespace.",
+      "html": "<a class=\"ds-wordmark\" href=\"/\">Career Steer</a>",
+      "css": ".ds-wordmark { display: inline-block; color: oklch(22% 0.015 70); font-family: 'EB Garamond', Georgia, 'Times New Roman', serif; font-size: 1.5rem; font-weight: 400; font-style: italic; letter-spacing: -0.005em; text-decoration: none; line-height: 1; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Editorial Atelier",
+    "overview": "Career Steer is built like a quiet workshop where careers are shaped the way thoughtful publications are shaped — with patience, attention, and a respect for the reader. The interface borrows from longform editorial design (Substack, Read.cv, The Marginalian) more than from the recruiting category. Cream paper in place of dashboard white. Warm ink in place of corporate black. A single high-contrast Renaissance serif for everything that says something, a humanist sans for everything that says how. Generous whitespace doing the work of information hierarchy. Type doing the work of brand. The system explicitly rejects LinkedIn / ZipRecruiter / Indeed visual conventions and the AI-product cliché of purple/teal gradients, glass cards, sparkles, and 'AI-powered' badges. Restraint is the loudest design choice on the page.",
+    "keyCharacteristics": [
+      "Cream paper, never #fff. Warm ink, never #000.",
+      "EB Garamond (display) paired with Figtree (body) — editorial serif over humanist sans.",
+      "One accent: ink itself. No chromatic primary in the resting palette.",
+      "Pill buttons, soft cards (20px radius), thin hairlines, dashed borders only on input invitations.",
+      "Flat-by-default. Depth via tonal layering, not shadows.",
+      "Two-tone headline emphasis (ink + ink-soft on different words), not bold or italic.",
+      "Slow rhythm. Generous whitespace. No urgency manufactured by the platform.",
+      "Iconography exclusively from lucide-react / lucide-animated. Emoji forbidden."
+    ],
+    "rules": [
+      { "name": "The Cream Doctrine", "body": "The page background is paper (oklch(96% 0.012 85)). Pure #fff and pure #000 are forbidden — they read clinical against the warm hue and break the editorial atmosphere. Every neutral is tinted toward the cream hue range (70–85°).", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "There is exactly one accent in this system: ink. We do not introduce a chromatic primary unless a specific surface (charts, status, severity) genuinely needs it. Status colors live in the sidecar as future tokens and are added per-surface, never globally.", "section": "colors" },
+      { "name": "The 10% Rule", "body": "Saturated ink (the dark pill button) appears on no more than 10% of any given screen. Its rarity is the point. If a screen has more than two filled primary buttons, redesign — one of them is wrong.", "section": "colors" },
+      { "name": "The Two-Tone Headline Rule", "body": "Headline emphasis comes from tonal contrast (ink + ink-soft on different words within the same line), not from weight, italics, or color. Bold serifs are forbidden in headlines — EB Garamond carries weight through its high-contrast strokes alone.", "section": "typography" },
+      { "name": "The 65–75ch Rule", "body": "Body copy never exceeds 75 characters per line. EB Garamond italics are permitted in body for emphasis. Bold is reserved for Figtree at title weight only — never in body paragraphs.", "section": "typography" },
+      { "name": "The No-Tracking Rule", "body": "Default tracking is normal. Negative tracking (-0.005 to -0.01em) is allowed only on display sizes ≥1.5rem. Positive letter-spacing (+0.06em) is reserved for the label role. No letter-spaced body copy ever.", "section": "typography" },
+      { "name": "The Garamond-or-Figtree Rule", "body": "The system has exactly two type families. Geist Mono is used only when literal monospace data is being shown (resume excerpts in code-style review notes are the sole legitimate case).", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "No drop shadows on cards, buttons, dialogs, or any surface at rest. If a region needs to read as 'lifted,' tone it darker, not raised. If it needs to read as 'set in,' tone it raised against the page.", "section": "elevation" },
+      { "name": "The No-Glass Rule", "body": "Glassmorphism — backdrop-filter: blur(...) on translucent surfaces — is forbidden. Paper does not become glass. Modals and sheets sit on solid paper-raised, not on a blurred-through translucent layer.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use cream paper (oklch(96% 0.012 85)) as the page background everywhere. Always.",
+      "Do keep ink as the brand's only saturated commitment. The dark pill button is the loudest element on any given surface.",
+      "Do create headline emphasis through tonal contrast (ink + ink-soft on different words) — never via bold, italic, or color shift.",
+      "Do import every icon from lucide-react (static) or lucide-animated (animated). Sized 16–20px in body, 24px max in headers.",
+      "Do lean on whitespace before reaching for chrome. The Editorial Atelier breathes.",
+      "Do reserve dashed borders for cards that invite input (upload, drag-drop, empty add-state). One dedicated affordance signal.",
+      "Do keep body line length to 65–75ch.",
+      "Do use tonal layering (paper → paper-raised) to signal recession. Inset, not lifted."
+    ],
+    "donts": [
+      "Don't use #fff or #000. Both are forbidden. Per The Cream Doctrine, every neutral is tinted toward the warm hue range (70–85°).",
+      "Don't introduce gradients of any kind — purple/teal, pink/orange, AI-product rainbow, gradient text via background-clip: text. Zero gradients in the system.",
+      "Don't use glassmorphism, backdrop-filter: blur, or translucent glass cards. Forbidden by The No-Glass Rule.",
+      "Don't render emoji in any UI surface — copy, buttons, badges, toasts, status pills, empty/error states, marketing, onboarding. Iconography is lucide-react / lucide-animated only.",
+      "Don't use side-stripe borders (border-left greater than 1px) as colored accents on cards, callouts, or alerts.",
+      "Don't stack drop shadows on cards at rest. Per The Flat-By-Default Rule, shadows are state responses only.",
+      "Don't nest cards. A card inside a card is always wrong.",
+      "Don't use Geist Mono unless representing literal monospace data. Per The Garamond-or-Figtree Rule, the system has exactly two type families.",
+      "Don't quote LinkedIn / ZipRecruiter / Indeed visual conventions — corporate-blue chrome, 'X people viewed this' badges, urgency banners, sponsored-card outlines, dense sidebar nav.",
+      "Don't add 'AI-powered' badges, sparkle icons, animated shimmer on AI-generated text, or hype copy. The product uses AI; it does not advertise it.",
+      "Don't manufacture urgency — countdowns, streaks, 'Y people are looking at this,' progress bars without a real underlying process.",
+      "Don't use stock photography or generic illustration sets. Every illustrated element is bespoke; every empty state earns its art or goes type-only.",
+      "Don't use bold weights in EB Garamond headlines. The Renaissance contrast carries weight on its own."
+    ]
+  }
+}
