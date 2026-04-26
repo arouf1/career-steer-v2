@@ -1,4 +1,4 @@
-import { File } from "node:buffer";
+import { File as NodeFile } from "node:buffer";
 import { describe, it, expect, vi } from "vitest";
 import { extractText, MAX_FILE_SIZE_BYTES } from "./extract-text";
 
@@ -22,8 +22,8 @@ vi.mock("mammoth/mammoth.browser.js", () => ({
   },
 }));
 
-const makeFile = (name: string, type: string, sizeBytes = 100) =>
-  new File([new Uint8Array(sizeBytes)], name, { type });
+const makeFile = (name: string, type: string, sizeBytes = 100): File =>
+  new NodeFile([new Uint8Array(sizeBytes)], name, { type }) as unknown as File;
 
 describe("extractText", () => {
   it("extracts PDF text", async () => {
