@@ -8,19 +8,25 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-sdk/openai": "3.0.53",
     "@clerk/nextjs": "7.2.7",
+    "@hookform/resolvers": "5.2.2",
     "@openrouter/ai-sdk-provider": "2.8.1",
     "ai": "6.0.168",
     "convex": "1.36.1",
     "exa-js": "2.12.1",
     "lucide-react": "1.11.0",
+    "mammoth": "1.12.0",
     "next": "16.2.4",
+    "pdfjs-dist": "5.6.205",
     "react": "19.2.5",
     "react-dom": "19.2.5",
+    "react-hook-form": "7.74.0",
     "zod": "4.3.6"
   },
   "devDependencies": {
@@ -28,10 +34,12 @@
     "@types/node": "^25.6.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "^19",
+    "convex-test": "0.0.50",
     "eslint": "^10.2.1",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "4.1.5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
