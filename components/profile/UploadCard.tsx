@@ -28,6 +28,7 @@ const ERROR_COPY: Record<string, string> = {
 export function UploadCard() {
   const parseUpload = useAction(api.profiles.parseUpload);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [dragActive, setDragActive] = useState(false);
 
   async function onFile(file: File) {
     setStatus({ kind: "extracting" });
@@ -54,14 +55,46 @@ export function UploadCard() {
     setStatus({ kind: "idle" });
   }
 
+  const isInFlight = status.kind === "extracting" || status.kind === "parsing";
+
+  function handleDragOver(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isInFlight) {
+      setDragActive(true);
+    }
+  }
+
+  function handleDragEnter(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isInFlight) {
+      setDragActive(true);
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && !isInFlight) {
+      onFile(file);
+    }
+  }
+
   const bodyText =
     status.kind === "extracting"
       ? "Reading your résumé."
       : status.kind === "parsing"
         ? "Thinking about what we read. About ten seconds."
         : "Drop a résumé here and we'll read it carefully.";
-
-  const isInFlight = status.kind === "extracting" || status.kind === "parsing";
 
   return (
     <article className="w-full rounded-card border border-hairline bg-paper-raised p-6 sm:p-8">
@@ -84,7 +117,15 @@ export function UploadCard() {
       {/* Drop zone — the entire label is the affordance, no separate Browse button */}
       <label
         htmlFor="resume-upload"
-        className="block cursor-pointer rounded-card border border-dashed border-hairline-strong bg-paper px-6 py-12 text-center transition-colors hover:border-ink"
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`block cursor-pointer rounded-card border bg-paper px-6 py-12 text-center transition-colors ${
+          dragActive
+            ? "border-solid border-ink"
+            : "border-dashed border-hairline-strong hover:border-ink"
+        }`}
       >
         <UploadCloud
           className="mx-auto mb-4 h-8 w-8 text-mute"
