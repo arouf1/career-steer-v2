@@ -1,67 +1,73 @@
+import Link from "next/link";
 import { ArrowRight, FileText, IdCard, UploadCloud } from "lucide-react";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@/convex/_generated/api";
 import { SiteNav } from "@/components/site/SiteNav";
+import { CareerGuideSearchHero } from "@/components/career-guides/CareerGuideSearchHero";
+import { CareerGuideCard } from "@/components/career-guides/CareerGuideCard";
 
-export default function Home() {
+export const revalidate = 60;
+
+export default async function Home() {
+  const recent = await fetchQuery(api.careerGuides.listRecent, { limit: 9 });
+
   return (
     <>
       <SiteNav />
       <main className="flex flex-1 flex-col">
-        <section className="border-b border-hairline">
-          <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2 md:gap-16 md:py-28">
-            <div className="flex flex-col gap-10">
-              <h1 className="type-display text-ink">
-                Where could{" "}
-                <span className="text-ink-soft">your</span>{" "}
-                <span className="text-ink-soft">career</span> take you?
-              </h1>
+        <CareerGuideSearchHero />
 
-              <p className="type-body-lg text-body max-w-prose">
-                Career transitions can feel uncertain. Share your background and
-                we&rsquo;ll map out paths that match your experience, interests,
-                and ambitions, then help you get there.
-              </p>
-
-              <ul className="flex flex-col gap-4 max-w-prose">
-                {[
-                  "AI-powered path matching based on your real experience",
-                  "Personalised roadmaps with actionable next steps",
-                  "Your data stays private and confidential",
-                ].map((item) => (
-                  <li key={item} className="relative pl-4 type-body text-body">
-                    <span
-                      aria-hidden="true"
-                      className="absolute left-0 top-2.5 h-3 w-px bg-hairline-strong"
-                    />
-                    {item}
+        {recent.length > 0 && (
+          <section className="border-b border-hairline">
+            <div className="mx-auto w-full max-w-6xl px-6 py-20">
+              <header className="mb-10 flex items-end justify-between gap-4">
+                <h2 className="type-headline text-ink">Recently written</h2>
+                <Link
+                  href="/career-guides"
+                  className="type-label inline-flex items-center gap-2 text-ink-soft transition-colors hover:text-ink"
+                >
+                  See all
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </header>
+              <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {recent.map((g) => (
+                  <li key={g._id}>
+                    <CareerGuideCard guide={g} />
                   </li>
                 ))}
               </ul>
+            </div>
+          </section>
+        )}
 
-              <a
-                href="#features"
+        <section className="mx-auto w-full max-w-6xl px-6 py-20">
+          <div className="grid gap-12 md:grid-cols-2 md:gap-16">
+            <div className="flex flex-col gap-6">
+              <p className="type-label text-mute">Or, make it personal</p>
+              <h2 className="type-headline text-ink">
+                Where could{" "}
+                <span className="text-ink-soft">your</span> career take you?
+              </h2>
+              <p className="type-body-lg text-body max-w-prose">
+                Generic guides only go so far. Upload your CV and we will map
+                paths that match your real experience and ambitions.
+              </p>
+              <Link
+                href="/profile"
                 className="type-label inline-flex items-center gap-2 self-start text-ink transition-colors hover:text-ink-deep"
               >
-                See all features
+                Build my path
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </a>
+              </Link>
             </div>
-
-            <div className="flex items-start">
+            <div>
               <UploadPreview />
             </div>
           </div>
         </section>
 
-        <section
-          id="features"
-          className="mx-auto w-full max-w-6xl px-6 py-16"
-        >
-          <p className="type-caption text-mute max-w-prose">
-            Your CV is analysed locally and never stored unless you create an
-            account. We use AI to understand your experience, not to collect
-            your data.
-          </p>
-        </section>
+        <SearchActionJsonLd />
       </main>
     </>
   );
@@ -93,10 +99,27 @@ function UploadPreview() {
         <p className="type-body mt-2 text-body max-w-sm mx-auto">
           Drop your CV here and we&rsquo;ll explore what&rsquo;s possible.
         </p>
-        <p className="type-caption mt-6 text-mute">
-          Supports PDF and DOCX.
-        </p>
+        <p className="type-caption mt-6 text-mute">Supports PDF and DOCX.</p>
       </div>
     </article>
+  );
+}
+
+function SearchActionJsonLd() {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Career Steer",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: "/career-guides/{search_term_string}",
+      "query-input": "required name=search_term_string",
+    },
+  };
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
   );
 }

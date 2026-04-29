@@ -22,16 +22,16 @@ export function SiteNav() {
 
         <nav className="flex items-center gap-1 sm:gap-2">
           <Link
-            href="#features"
+            href="/career-guides"
             className="type-label hidden sm:inline-flex rounded-pill px-4 py-2 text-body transition-colors hover:text-ink"
           >
-            Features
+            Career guides
           </Link>
           <Link
-            href="#contact"
+            href="/profile"
             className="type-label hidden sm:inline-flex rounded-pill px-4 py-2 text-body transition-colors hover:text-ink"
           >
-            Contact
+            Profile
           </Link>
 
           <span
@@ -44,7 +44,11 @@ export function SiteNav() {
           </AuthLoading>
 
           <Unauthenticated>
-            <SignInButton mode="modal">
+            <SignInButton
+              mode="modal"
+              fallbackRedirectUrl="/profile"
+              signUpFallbackRedirectUrl="/profile"
+            >
               <button
                 type="button"
                 className="type-label rounded-pill px-4 py-2 text-ink transition-colors hover:text-ink-deep"
@@ -52,7 +56,11 @@ export function SiteNav() {
                 Sign In
               </button>
             </SignInButton>
-            <SignUpButton mode="modal">
+            <SignUpButton
+              mode="modal"
+              fallbackRedirectUrl="/profile"
+              signInFallbackRedirectUrl="/profile"
+            >
               <button
                 type="button"
                 className="type-label rounded-pill bg-ink px-5 py-2.5 text-paper transition-colors hover:bg-ink-deep"
