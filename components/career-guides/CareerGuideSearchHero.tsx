@@ -132,7 +132,12 @@ export function CareerGuideSearchHero() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (state.kind === "valid") void onGenerate();
+    if (state.kind !== "valid") return;
+    if (state.slug) {
+      router.push(`/career-guides/${state.slug}`);
+      return;
+    }
+    void onGenerate();
   };
 
   return (
@@ -166,7 +171,13 @@ export function CareerGuideSearchHero() {
             <button
               type="submit"
               disabled={state.kind !== "valid" || generating}
-              aria-label={generating ? "Generating guide" : "Generate guide"}
+              aria-label={
+                generating
+                  ? "Generating guide"
+                  : state.kind === "valid" && state.slug
+                    ? "Open guide"
+                    : "Generate guide"
+              }
               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-ink text-paper transition-all hover:bg-ink-deep disabled:cursor-not-allowed disabled:opacity-30"
             >
               {generating ? (
@@ -227,9 +238,10 @@ function StatusLine({
   if (state.kind === "invalid") {
     return <p className="type-caption text-mute">{state.reason}</p>;
   }
+  if (state.slug) return null;
   return (
     <p className="type-caption inline-flex items-center gap-2 text-body">
-      Ready to write a guide for{" "}
+      Hit enter and we&rsquo;ll write you a guide for{" "}
       <span className="type-label text-ink">{state.normalizedTitle}</span>
       <ArrowRight className="h-3 w-3 text-ink" aria-hidden="true" />
     </p>

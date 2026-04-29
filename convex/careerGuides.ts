@@ -127,12 +127,23 @@ export const getValidation = query({
   handler: async (ctx, args): Promise<Doc<"career_validations"> | null> => {
     const normalized = normalizeTitle(args.careerNormalized);
     if (!normalized) return null;
-    return await ctx.db
+    const row = await ctx.db
       .query("career_validations")
       .withIndex("by_career_normalized", (q) =>
         q.eq("careerNormalized", normalized),
       )
       .first();
+    if (!row?.slug) return row;
+    // Self-heal: strip stale slugs whose guide has been deleted (or was
+    // never created — earlier validateCareer set slug optimistically before
+    // a guide existed). Without this, the search hero would short-circuit
+    // straight to a 404.
+    const guide = await ctx.db
+      .query("career_guides")
+      .withIndex("by_slug", (q) => q.eq("slug", row.slug as string))
+      .first();
+    if (guide && guide.contentStatus !== "failed") return row;
+    return { ...row, slug: undefined };
   },
 });
 
@@ -604,9 +615,17 @@ export const validateCareer = internalAction({
         prompt: buildValidationPrompt(args.career),
       });
 
-      const slug = output.normalizedTitle
-        ? slugify(output.normalizedTitle)
-        : undefined;
+      // Only return a slug if a real guide already exists for the normalized
+      // title. Otherwise the frontend would navigate to a non-existent page
+      // before /generate has a chance to create the guide.
+      let slug: string | undefined;
+      if (output.valid && output.normalizedTitle) {
+        const existing = await ctx.runQuery(
+          internal.careerGuides._findByExactTitle,
+          { rawQuery: output.normalizedTitle },
+        );
+        if (existing) slug = existing.slug;
+      }
 
       await ctx.runMutation(internal.careerGuides._updateValidation, {
         validationId: args.validationId,
