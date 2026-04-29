@@ -19,6 +19,7 @@ import { api } from "@/convex/_generated/api";
 import type { GuideWithUrl } from "@/convex/careerGuides";
 import { MobileTableOfContents } from "./MobileTableOfContents";
 import { FieldCitation, type CitationSource } from "./FieldCitation";
+import { CareerGuidePodcast } from "./CareerGuidePodcast";
 
 export type Region = "us" | "uk";
 
@@ -34,14 +35,20 @@ type ArticleProps = {
 
 type SectionLink = { id: string; label: string };
 
-function buildSections(title: string, hasRisks: boolean): SectionLink[] {
-  const sections: SectionLink[] = [
+function buildSections(
+  title: string,
+  hasRisks: boolean,
+  hasPodcast: boolean,
+): SectionLink[] {
+  const sections: SectionLink[] = [];
+  if (hasPodcast) sections.push({ id: "podcast", label: "Listen" });
+  sections.push(
     { id: "overview", label: `What is a ${title}?` },
     { id: "skills", label: "Skills you need" },
     { id: "day-to-day", label: "Day to day" },
     { id: "outlook", label: "Career outlook" },
     { id: "learning-path", label: "How to get there" },
-  ];
+  );
   if (hasRisks) sections.push({ id: "considerations", label: "Worth knowing" });
   sections.push({ id: "related", label: "Related roles" });
   return sections;
@@ -57,9 +64,15 @@ export function CareerGuideArticle({
     searchParams.get("region") === "uk" ? "uk" : defaultRegion;
 
   const c = guide.content;
+  const hasPodcast = guide.podcast?.status !== undefined && guide.podcast.status !== "failed";
   const sections = useMemo(
-    () => buildSections(guide.title, (c?.riskFactors.length ?? 0) > 0),
-    [guide.title, c?.riskFactors.length],
+    () =>
+      buildSections(
+        guide.title,
+        (c?.riskFactors.length ?? 0) > 0,
+        hasPodcast,
+      ),
+    [guide.title, c?.riskFactors.length, hasPodcast],
   );
 
   if (!c) return null;
@@ -100,6 +113,8 @@ export function CareerGuideArticle({
             status={guide.illustrationStatus}
             title={guide.title}
           />
+
+          <CareerGuidePodcast guide={guide} />
 
           <div className="divide-y divide-hairline">
             <ArticleSection

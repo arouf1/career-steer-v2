@@ -381,6 +381,41 @@ export default defineSchema({
         costCents: v.number(),
       }),
     ),
+    // Auto-generated host + guest podcast that talks through the guide's
+    // themes. Two-stage pipeline: scripting (LLM dialogue) → synthesizing
+    // (Gemini TTS multi-speaker). All fields optional so existing rows
+    // remain valid before backfill.
+    podcast: v.optional(
+      v.object({
+        status: v.union(
+          v.literal("pending"),
+          v.literal("scripting"),
+          v.literal("synthesizing"),
+          v.literal("complete"),
+          v.literal("failed"),
+        ),
+        audioStorageId: v.optional(v.id("_storage")),
+        durationSeconds: v.optional(v.number()),
+        hostVoice: v.string(),
+        guestVoice: v.optional(v.string()),
+        guestName: v.optional(v.string()),
+        guestRole: v.optional(v.string()),
+        guestGender: v.optional(
+          v.union(v.literal("female"), v.literal("male")),
+        ),
+        transcript: v.optional(
+          v.array(
+            v.object({
+              speaker: v.union(v.literal("host"), v.literal("guest")),
+              text: v.string(),
+            }),
+          ),
+        ),
+        error: v.optional(v.string()),
+        attempts: v.number(),
+        generatedAt: v.optional(v.number()),
+      }),
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -68,6 +68,7 @@ const citationValidator = v.object({
 
 export type GuideWithUrl = Doc<"career_guides"> & {
   illustrationUrl: string | null;
+  podcastAudioUrl: string | null;
 };
 
 const resolveIllustration = async (
@@ -77,6 +78,9 @@ const resolveIllustration = async (
   ...doc,
   illustrationUrl: doc.illustrationStorageId
     ? await storage.getUrl(doc.illustrationStorageId)
+    : null,
+  podcastAudioUrl: doc.podcast?.audioStorageId
+    ? await storage.getUrl(doc.podcast.audioStorageId)
     : null,
 });
 
@@ -325,6 +329,9 @@ export const _updateContent = internalMutation({
       updatedAt: now,
     });
     await ctx.scheduler.runAfter(0, internal.careerGuides.enrichGuide, {
+      guideId: args.guideId,
+    });
+    await ctx.scheduler.runAfter(0, internal.podcasts.generateScript, {
       guideId: args.guideId,
     });
   },

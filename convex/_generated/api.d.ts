@@ -19,6 +19,8 @@ import type * as lib_imageReference from "../lib/imageReference.js";
 import type * as lib_normalize from "../lib/normalize.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as matching from "../matching.js";
+import type * as podcasts from "../podcasts.js";
+import type * as podcastsTts from "../podcastsTts.js";
 import type * as profiles from "../profiles.js";
 import type * as users from "../users.js";
 
@@ -40,6 +42,8 @@ declare const fullApi: ApiFromModules<{
   "lib/normalize": typeof lib_normalize;
   "lib/rateLimit": typeof lib_rateLimit;
   matching: typeof matching;
+  podcasts: typeof podcasts;
+  podcastsTts: typeof podcastsTts;
   profiles: typeof profiles;
   users: typeof users;
 }>;
