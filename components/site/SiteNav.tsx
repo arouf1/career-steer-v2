@@ -15,7 +15,7 @@ export function SiteNav() {
       <div className="mx-auto flex h-20 max-w-6xl items-center justify-between gap-6 px-6">
         <Link
           href="/"
-          className="font-serif text-2xl italic text-ink leading-none rounded-control focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink"
+          className="font-logo text-2xl font-medium text-ink leading-none rounded-control focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink"
         >
           Career Steer
         </Link>

@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Vogun";
+  src:
+    url("/fonts/Vogun-Medium.woff2") format("woff2"),
+    url("/fonts/Vogun-Medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Vogun";
+  src:
+    url("/fonts/Vogun-MediumItalic.woff2") format("woff2"),
+    url("/fonts/Vogun-MediumItalic.woff") format("woff");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
 @theme inline {
   /* Color palette — warm paper system. See DESIGN.md for the rules. */
   --color-paper: oklch(96% 0.012 85);
@@ -20,6 +40,7 @@
   /* Font families — wired to next/font CSS variables in app/layout.tsx. */
   --font-serif: var(--font-eb-garamond), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-figtree), system-ui, -apple-system, sans-serif;
+  --font-logo: "Vogun", Georgia, "Times New Roman", serif;
 
   /* Radii */
   --radius-pill: 9999px;
