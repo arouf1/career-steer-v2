@@ -10,8 +10,10 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
-  Check,
+  BadgeCheck,
+  BookOpen,
   CircleAlert,
+  Loader2,
   MapPin,
   RotateCw,
   Sparkles,
@@ -22,11 +24,17 @@ import type { GuideWithUrl } from "@/convex/careerGuides";
 import { MobileTableOfContents } from "./MobileTableOfContents";
 import { FieldCitation, type CitationSource } from "./FieldCitation";
 import { CareerGuidePodcast } from "./CareerGuidePodcast";
+import { AllSourcesPanel } from "./AllSourcesPanel";
 
 export type Region = "us" | "uk";
 
 const eyebrowCls =
   "text-[10px] uppercase tracking-[0.18em] font-medium text-mute";
+
+const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
+const convexHttpOrigin = CONVEX_URL
+  ? CONVEX_URL.replace(".convex.cloud", ".convex.site")
+  : null;
 
 type ArticleProps = {
   guide: GuideWithUrl;
@@ -281,23 +289,12 @@ export function CareerGuideArticle({
                 {r.relatedRoles.map((role) => {
                   const existingSlug =
                     existingByTitle[role.toLowerCase().trim()];
-                  const href = existingSlug
-                    ? `/career-guides/${existingSlug}`
-                    : `/?q=${encodeURIComponent(role)}`;
                   return (
                     <li key={role}>
-                      <Link
-                        href={href}
-                        className="group -mx-2 flex items-center justify-between rounded-control border-b border-hairline/70 px-2 py-3 transition-colors last:border-b-0 hover:bg-ink/[0.03]"
-                      >
-                        <span className="text-[15px] text-ink/85 transition-colors group-hover:text-ink">
-                          {role}
-                        </span>
-                        <ArrowUpRight
-                          className="h-3.5 w-3.5 text-mute opacity-0 transition-all duration-300 group-hover:translate-x-0.5 group-hover:opacity-100"
-                          aria-hidden="true"
-                        />
-                      </Link>
+                      <RelatedRoleLink
+                        title={role}
+                        existingSlug={existingSlug}
+                      />
                     </li>
                   );
                 })}
@@ -651,6 +648,81 @@ const FACT_CHECK_VERBS = [
 
 const RECHECK_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 
+function RelatedRoleLink({
+  title,
+  existingSlug,
+}: {
+  title: string;
+  existingSlug?: string;
+}) {
+  const router = useRouter();
+  const [generating, setGenerating] = useState(false);
+
+  const rowCls =
+    "group -mx-2 flex w-full items-center justify-between rounded-control border-b border-hairline/70 px-2 py-3 text-left transition-colors last:border-b-0 hover:bg-ink/[0.03] disabled:cursor-not-allowed disabled:opacity-70";
+
+  const inner = (
+    <>
+      <span className="text-[15px] text-ink/85 transition-colors group-hover:text-ink">
+        {title}
+      </span>
+      {generating ? (
+        <Loader2
+          className="h-3.5 w-3.5 animate-spin text-mute"
+          aria-hidden="true"
+          strokeWidth={1.75}
+        />
+      ) : (
+        <ArrowUpRight
+          className="h-3.5 w-3.5 text-mute opacity-0 transition-all duration-300 group-hover:translate-x-0.5 group-hover:opacity-100"
+          aria-hidden="true"
+        />
+      )}
+    </>
+  );
+
+  if (existingSlug) {
+    return (
+      <Link href={`/career-guides/${existingSlug}`} className={rowCls}>
+        {inner}
+      </Link>
+    );
+  }
+
+  const onClick = async () => {
+    if (generating || !convexHttpOrigin) return;
+    setGenerating(true);
+    try {
+      const res = await fetch(`${convexHttpOrigin}/career-guides/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { slug?: string; error?: string }
+        | null;
+      if (data?.slug) {
+        router.push(`/career-guides/${data.slug}`);
+        return;
+      }
+      setGenerating(false);
+    } catch {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={generating}
+      className={rowCls}
+    >
+      {inner}
+    </button>
+  );
+}
+
 function FactCheckCard({ slug }: { slug: string }) {
   const live = useQuery(api.careerGuides.getBySlug, { slug });
   const enrichment = live?.enrichment;
@@ -659,6 +731,7 @@ function FactCheckCard({ slug }: { slug: string }) {
   );
   const [verbIdx, setVerbIdx] = useState(0);
   const [refreshPending, setRefreshPending] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   const isRunning = enrichment?.status === "running";
 
@@ -703,37 +776,54 @@ function FactCheckCard({ slug }: { slug: string }) {
       <div className="rounded-card border border-hairline bg-paper-raised p-5">
         <div className="flex items-center justify-between">
           <p className={eyebrowCls}>Fact-checked</p>
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-pill border border-hairline-strong text-ink">
-            <Check
-              className="h-3 w-3"
-              aria-hidden="true"
-              strokeWidth={2.25}
-            />
-          </span>
+          <BadgeCheck
+            className="h-5 w-5 text-ink"
+            aria-hidden="true"
+            strokeWidth={1.75}
+          />
         </div>
         <p className="mt-2 type-caption text-ink">
           Verified {formatRelative(lastEnrichedAt)}
         </p>
-        {totalSources > 0 && (
-          <p className="mt-1 type-caption text-mute">
-            {totalSources} {totalSources === 1 ? "source" : "sources"} cited inline
-          </p>
+        {(totalSources > 0 || isStale) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {totalSources > 0 && (
+              <button
+                type="button"
+                onClick={() => setSourcesOpen(true)}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill border border-hairline-strong bg-paper px-2.5 py-1 text-[11px] font-medium leading-none text-ink transition-all hover:border-ink hover:bg-ink hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              >
+                <BookOpen
+                  className="h-3 w-3"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+                View all {totalSources}{" "}
+                {totalSources === 1 ? "source" : "sources"}
+              </button>
+            )}
+            {isStale && (
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshPending}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill border border-hairline-strong bg-paper px-2.5 py-1 text-[11px] font-medium leading-none text-ink transition-all hover:border-ink hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              >
+                <RotateCw
+                  className={`h-2.5 w-2.5 ${refreshPending ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+                {refreshPending ? "Re-checking…" : "Re-check sources"}
+              </button>
+            )}
+          </div>
         )}
-        {isStale && (
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshPending}
-            className="mt-4 inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill border border-hairline-strong bg-paper px-2.5 py-1 text-[11px] font-medium leading-none text-ink transition-all hover:border-ink hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-          >
-            <RotateCw
-              className={`h-2.5 w-2.5 ${refreshPending ? "animate-spin" : ""}`}
-              aria-hidden="true"
-              strokeWidth={1.75}
-            />
-            {refreshPending ? "Re-checking…" : "Re-check sources"}
-          </button>
-        )}
+        <AllSourcesPanel
+          open={sourcesOpen}
+          onClose={() => setSourcesOpen(false)}
+          citations={live?.citations ?? {}}
+        />
       </div>
     );
   }

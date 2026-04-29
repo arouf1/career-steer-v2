@@ -59,7 +59,7 @@ export function FieldCitation({
         }`}
       >
         <BookOpen
-          className="h-2.5 w-2.5"
+          className="h-3 w-3"
           aria-hidden="true"
           strokeWidth={1.75}
         />
