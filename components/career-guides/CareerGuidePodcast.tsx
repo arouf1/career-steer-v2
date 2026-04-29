@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import {
   ChevronDown,
   Headphones,
@@ -17,18 +19,23 @@ type Props = {
 const HOST_NAME = "Alice Clements";
 
 export function CareerGuidePodcast({ guide }: Props) {
-  const podcast = guide.podcast;
+  // Subscribe to the live guide doc so the section transitions from
+  // "generating" to "ready" without a page reload. Falls back to the
+  // SSR-rendered prop until the websocket connects.
+  const live = useQuery(api.careerGuides.getBySlug, { slug: guide.slug });
+  const current = live ?? guide;
+  const podcast = current.podcast;
   if (!podcast) return null;
 
   if (podcast.status === "failed") return null;
 
-  if (podcast.status !== "complete" || !guide.podcastAudioUrl) {
+  if (podcast.status !== "complete" || !current.podcastAudioUrl) {
     return <PendingCard />;
   }
 
   return (
     <ReadyCard
-      audioUrl={guide.podcastAudioUrl}
+      audioUrl={current.podcastAudioUrl}
       transcript={podcast.transcript ?? []}
       guestName={podcast.guestName ?? "Guest"}
       guestRole={podcast.guestRole ?? ""}
