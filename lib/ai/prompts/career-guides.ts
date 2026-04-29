@@ -105,11 +105,11 @@ Field guidance:
 - dayToDay: 100 to 150 words. Specific and vivid description of a typical working day or week.
 - riskFactors: 3 to 5 honest considerations or challenges someone should know before pursuing this path. Include automation exposure and market volatility where relevant.
 - whyConsider: 80 to 120 words. Genuine and specific reasons to consider this career, not salesy.
-- regional.us.salary: structured US compensation in USD, drawn from BLS, O*NET, Levels.fyi, Glassdoor US. Each band is a short string (typically a range, e.g. "$50k–$65k" or "$120k+"). Use entry for early-career, mid for established practitioners, senior for senior or principal level. Use note for optional one-line context (sector or location variance, signing-on norms, etc.); set note to null if not needed.
+- regional.us.salary: structured US compensation in USD, drawn from BLS, O*NET, Levels.fyi, Glassdoor US. Each band is a short, compact string with no thousands separators and the symbol-free k/m form, e.g. "50k to 65k" or "120k+". Use entry for early-career, mid for established practitioners, senior for senior or principal level. Use note for optional one-line context (sector or location variance, signing-on norms, etc.); set note to null if not needed.
 - regional.us.careerOutlook: 100 to 150 words on US hiring demand, 12-month trend, growth trajectory, US-specific industry context.
 - regional.us.learningPath: 5 to 8 sequential steps for entering this career in the US, with US-specific qualifications where relevant (state licensure, US certifications, common US degree routes).
 - regional.us.relatedRoles: 4 to 6 distinctly different careers a person in this role might pivot to, as they appear in US job postings. Do NOT include seniority variants of the main title (different levels of the same job) or near-synonyms (the same role under another name). Each must have a different functional focus, different daily work, or different skill emphasis from the main role.
-- regional.uk.salary: same structure as regional.us.salary, in GBP, drawn from ONS, Prospects, Reed, Glassdoor UK. Each band is a short range string (e.g. "£28k–£38k").
+- regional.uk.salary: same structure as regional.us.salary, in GBP, in the same compact symbol-free form (e.g. "28k to 38k"), drawn from ONS, Prospects, Reed, Glassdoor UK.
 - regional.uk.careerOutlook: 100 to 150 words on UK hiring demand, 12-month trend, growth trajectory, UK-specific industry context.
 - regional.uk.learningPath: 5 to 8 sequential steps for entering this career in the UK, with UK-specific qualifications where relevant (chartered status, UK apprenticeships, common UK degree routes, professional bodies).
 - regional.uk.relatedRoles: same as regional.us.relatedRoles but with names as they appear in UK job postings. Same distinctness rule applies.
@@ -253,7 +253,7 @@ For each region, compare the stored salary band against the freshly-researched E
 - minor: small variation (a few thousand off, or rounded differently) but the band is broadly correct; no patch.
 - material: the stored band is meaningfully wrong (more than ~15% off on any band, or a band falls outside the cited range, or the currency or unit is wrong); patch is required.
 
-Only set "proposed" when verdict is "material". When you propose, ground each band in the cited sources, keep the stored format ("$50k-$65k", "£28k-£38k"), and use the same casing and currency conventions as the stored band. Include a one-line "note" only if the cited sources reveal an important regional or sector caveat; otherwise set note to null.
+Only set "proposed" when verdict is "material". When you propose, ground each band in the cited sources and use the compact symbol-free form ("50k to 65k", "120k+", "28k to 38k") with no thousands separators or currency symbols. Include a one-line "note" only if the cited sources reveal an important regional or sector caveat; otherwise set note to null.
 
 Return reasoning as a short single sentence per region.
 

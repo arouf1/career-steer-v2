@@ -13,8 +13,10 @@ import {
   Check,
   CircleAlert,
   MapPin,
+  RotateCw,
   Sparkles,
 } from "lucide-react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { GuideWithUrl } from "@/convex/careerGuides";
 import { MobileTableOfContents } from "./MobileTableOfContents";
@@ -515,6 +517,32 @@ type Salary = {
   note?: string;
 };
 
+// Compacts six-figure salary strings for display:
+//   "$300,000 to $400,000" -> "300k to 400k"
+//   "£28,000 to £38,000"   -> "28k to 38k"
+//   "$600,000+"            -> "600k+"
+//   "$50,500 to $63,500"   -> "50.5k to 63.5k"
+// Currency symbol is stripped because the active region is already shown
+// in the sidebar's segmented toggle directly above.
+function formatSalaryBand(s: string): string {
+  return s
+    .replace(/[$£€]/g, "")
+    .replace(/\b\d{1,3}(?:,\d{3})+\b/g, (m) => {
+      const n = Number.parseInt(m.replace(/,/g, ""), 10);
+      if (!Number.isFinite(n)) return m;
+      if (n >= 1_000_000) {
+        const v = n / 1_000_000;
+        return `${v % 1 === 0 ? v : v.toFixed(1)}m`;
+      }
+      if (n >= 1_000) {
+        const v = n / 1_000;
+        return `${v % 1 === 0 ? v : v.toFixed(1)}k`;
+      }
+      return m;
+    })
+    .trim();
+}
+
 function Sidebar({
   slug,
   region,
@@ -527,9 +555,9 @@ function Sidebar({
   salaryCitations?: CitationSource[];
 }) {
   const bands: Array<[string, string]> = [
-    ["Entry", salary.entry],
-    ["Mid", salary.mid],
-    ["Senior", salary.senior],
+    ["Entry", formatSalaryBand(salary.entry)],
+    ["Mid", formatSalaryBand(salary.mid)],
+    ["Senior", formatSalaryBand(salary.senior)],
   ];
 
   return (
@@ -621,10 +649,16 @@ const FACT_CHECK_VERBS = [
   "Spotting the trade-offs",
 ];
 
+const RECHECK_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+
 function FactCheckCard({ slug }: { slug: string }) {
   const live = useQuery(api.careerGuides.getBySlug, { slug });
   const enrichment = live?.enrichment;
+  const triggerRefresh = useMutation(
+    api.careerGuides.triggerEnrichmentBySlug,
+  );
   const [verbIdx, setVerbIdx] = useState(0);
+  const [refreshPending, setRefreshPending] = useState(false);
 
   const isRunning = enrichment?.status === "running";
 
@@ -637,6 +671,14 @@ function FactCheckCard({ slug }: { slug: string }) {
     return () => clearInterval(id);
   }, [isRunning]);
 
+  // Reset the local pending flag once the doc flips out of "complete" — at
+  // that point the card visually switches to the running/queued layout.
+  useEffect(() => {
+    if (refreshPending && enrichment && enrichment.status !== "complete") {
+      setRefreshPending(false);
+    }
+  }, [refreshPending, enrichment]);
+
   if (!enrichment) return null;
 
   if (enrichment.status === "complete") {
@@ -645,6 +687,18 @@ function FactCheckCard({ slug }: { slug: string }) {
       (acc, arr) => acc + arr.length,
       0,
     );
+    const isStale = Date.now() - lastEnrichedAt > RECHECK_AFTER_MS;
+
+    const handleRefresh = async () => {
+      if (refreshPending) return;
+      setRefreshPending(true);
+      try {
+        await triggerRefresh({ slug });
+      } catch {
+        setRefreshPending(false);
+      }
+    };
+
     return (
       <div className="rounded-card border border-hairline bg-paper-raised p-5">
         <div className="flex items-center justify-between">
@@ -664,6 +718,21 @@ function FactCheckCard({ slug }: { slug: string }) {
           <p className="mt-1 type-caption text-mute">
             {totalSources} {totalSources === 1 ? "source" : "sources"} cited inline
           </p>
+        )}
+        {isStale && (
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshPending}
+            className="mt-4 inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill border border-hairline-strong bg-paper px-2.5 py-1 text-[11px] font-medium leading-none text-ink transition-all hover:border-ink hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            <RotateCw
+              className={`h-2.5 w-2.5 ${refreshPending ? "animate-spin" : ""}`}
+              aria-hidden="true"
+              strokeWidth={1.75}
+            />
+            {refreshPending ? "Re-checking…" : "Re-check sources"}
+          </button>
         )}
       </div>
     );
