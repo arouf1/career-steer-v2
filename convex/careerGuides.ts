@@ -12,19 +12,27 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { chatModel } from "../lib/ai/providers";
 import {
   CONTENT_MODEL_ID,
+  ContentResponseGroundedSchema,
   ContentResponseSchema,
   DedupResponseSchema,
   ENRICHMENT_TASKS,
+  FIELD_PATH_TO_USED_KEY,
   JUDGE_MODEL_ID,
+  MetaOnlySchema,
   SalaryJudgeSchema,
   ValidationResponseSchema,
   buildContentPrompt,
   buildDedupPrompt,
   buildEnrichmentQuery,
+  buildGroundedContentPrompt,
+  buildMetaPrompt,
   buildSalaryJudgePrompt,
   buildValidationPrompt,
 } from "../lib/ai/prompts/career-guides";
-import type { EnrichmentTask } from "../lib/ai/prompts/career-guides";
+import type {
+  EnrichmentTask,
+  GroundedResearch,
+} from "../lib/ai/prompts/career-guides";
 import { tryConsumeRateLimit } from "./lib/rateLimit";
 import {
   findGuideByExactTitle,
@@ -41,9 +49,25 @@ const ENRICHMENT_CONCURRENCY = 6;
 const ENRICHMENT_MAX_ATTEMPTS = 2;
 const ENRICHMENT_RETRY_DELAY_MS = 60_000;
 const ENRICHMENT_TOTAL = ENRICHMENT_TASKS.length;
+// Threshold for taking the grounded path. If fewer than this many of the 8
+// pre-content Exa fan-out tasks succeed, treat as a systemic Exa issue and
+// fall back to ungrounded content + deferred enrichment.
+const MIN_GROUNDED_TASKS = 4;
+// How long after fallback publication to retry full Exa enrichment.
+const DEFERRED_ENRICHMENT_DELAY_MS = 60 * 60 * 1000;
 const VALIDATE_RATE = { max: 15, windowMs: 60_000 };
 const GENERATE_RATE = { max: 3, windowMs: 300_000 };
 const IMAGE_MODEL_ID = "google/gemini-3.1-flash-image-preview";
+
+// Failed-content auto-retry policy. Initial attempt + 2 auto-retries = 3 total
+// before the cron and page-load triggers stop firing. The "Try again" button
+// in the failed UI bypasses the cap (force=true) so users always have a path
+// out of a permanently-stuck guide.
+const CONTENT_MAX_ATTEMPTS = 3;
+const CONTENT_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
+const CONTENT_RETRY_BATCH_SIZE = 5;
+const CONTENT_RETRY_STAGGER_MS = 10_000;
+const RETRY_RATE = { max: 1, windowMs: 30_000 };
 
 const salaryValidator = v.object({
   entry: v.string(),
@@ -64,6 +88,31 @@ const citationValidator = v.object({
   title: v.string(),
   publisher: v.optional(v.string()),
   fetchedAt: v.number(),
+});
+
+// Validator mirrors the schema's record shape rather than enumerating keys
+// — Convex v.object rejects identifiers with hyphens, but section IDs use
+// kebab-case ("day-to-day", "outlook-us", etc.) per FOLLOW_UP_SECTION_IDS.
+const followUpsValidator = v.record(v.string(), v.array(v.string()));
+
+const metaValidator = v.object({
+  title: v.string(),
+  description: v.string(),
+  keywords: v.array(v.string()),
+  socialAlt: v.string(),
+});
+
+const contentValidator = v.object({
+  overview: v.string(),
+  typicalSkills: v.array(v.string()),
+  dayToDay: v.string(),
+  riskFactors: v.array(v.string()),
+  whyConsider: v.string(),
+  meta: v.optional(metaValidator),
+  regional: v.object({
+    us: regionalBlockValidator,
+    uk: regionalBlockValidator,
+  }),
 });
 
 export type GuideWithUrl = Doc<"career_guides"> & {
@@ -163,6 +212,26 @@ export const _searchCandidates = internalQuery({
 export const _getById = internalQuery({
   args: { guideId: v.id("career_guides") },
   handler: async (ctx, args) => ctx.db.get(args.guideId),
+});
+
+// Pulls every previously-used podcast guest name across the catalog so the
+// script generator can avoid reusing them. Unbounded scan: at our scale
+// (hundreds of guides) this is well within Convex's per-query limits, and
+// dedup correctness requires seeing every guide. Pass `excludeGuideId` so a
+// re-trigger on the same guide doesn't conflict with its own prior attempt.
+export const _getUsedGuestNames = internalQuery({
+  args: { excludeGuideId: v.optional(v.id("career_guides")) },
+  returns: v.array(v.string()),
+  handler: async (ctx, { excludeGuideId }) => {
+    const guides = await ctx.db.query("career_guides").collect();
+    const names = new Set<string>();
+    for (const g of guides) {
+      if (excludeGuideId && g._id === excludeGuideId) continue;
+      const n = g.podcast?.guestName?.trim();
+      if (n) names.add(n);
+    }
+    return [...names];
+  },
 });
 
 // ── Internal mutations (state transitions) ──────────────────────────────────
@@ -311,49 +380,106 @@ export const _requestGeneration = internalMutation({
   },
 });
 
-export const _updateContent = internalMutation({
+// Grounded path: content was written with Exa research already attached.
+// Citations are materialised from the LLM's `usedSources` index map and
+// stored alongside content in a single atomic patch. Skips enrichGuide
+// because grounding is already done — only schedules the podcast.
+export const _updateContentGrounded = internalMutation({
   args: {
     guideId: v.id("career_guides"),
-    content: v.object({
-      overview: v.string(),
-      typicalSkills: v.array(v.string()),
-      dayToDay: v.string(),
-      riskFactors: v.array(v.string()),
-      whyConsider: v.string(),
-      regional: v.object({
-        us: regionalBlockValidator,
-        uk: regionalBlockValidator,
-      }),
-    }),
+    content: contentValidator,
+    followUps: followUpsValidator,
+    citations: v.record(v.string(), v.array(citationValidator)),
+    costCents: v.number(),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
     await ctx.db.patch(args.guideId, {
       content: args.content,
       contentStatus: "complete",
+      contentAttempts: 0,
+      contentLastError: undefined,
+      followUps: args.followUps,
+      followUpsStatus: "complete",
+      citations: args.citations,
       enrichment: {
-        status: "pending",
+        status: "complete",
+        progress: { total: ENRICHMENT_TOTAL, done: ENRICHMENT_TOTAL },
+        attempts: 0,
+        costCents: Math.round(args.costCents * 100) / 100,
+        lastEnrichedAt: now,
+      },
+      updatedAt: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.podcasts.generateScript, {
+      guideId: args.guideId,
+    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.guideBranches._prewarmTopBranches,
+      { guideId: args.guideId },
+    );
+  },
+});
+
+// Deferred path: Exa retrieval failed (or returned <MIN_GROUNDED_TASKS).
+// Publishes ungrounded content immediately and schedules a full Exa
+// enrichment to run in 1 hour. Status "deferred" tells the UI that
+// citations are not yet available but are coming.
+export const _updateContentDeferred = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    content: contentValidator,
+    followUps: followUpsValidator,
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    await ctx.db.patch(args.guideId, {
+      content: args.content,
+      contentStatus: "complete",
+      contentAttempts: 0,
+      contentLastError: undefined,
+      followUps: args.followUps,
+      followUpsStatus: "complete",
+      enrichment: {
+        status: "deferred",
         progress: { total: ENRICHMENT_TOTAL, done: 0 },
         attempts: 0,
         costCents: 0,
       },
       updatedAt: now,
     });
-    await ctx.scheduler.runAfter(0, internal.careerGuides.enrichGuide, {
-      guideId: args.guideId,
-    });
+    await ctx.scheduler.runAfter(
+      DEFERRED_ENRICHMENT_DELAY_MS,
+      internal.careerGuides.enrichGuide,
+      { guideId: args.guideId },
+    );
     await ctx.scheduler.runAfter(0, internal.podcasts.generateScript, {
       guideId: args.guideId,
     });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.guideBranches._prewarmTopBranches,
+      { guideId: args.guideId },
+    );
   },
 });
 
 export const _markContentFailed = internalMutation({
-  args: { guideId: v.id("career_guides") },
+  args: {
+    guideId: v.id("career_guides"),
+    error: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    const prevAttempts = guide?.contentAttempts ?? 0;
+    const now = Date.now();
     await ctx.db.patch(args.guideId, {
       contentStatus: "failed",
-      updatedAt: Date.now(),
+      contentAttempts: prevAttempts + 1,
+      contentLastFailureAt: now,
+      contentLastError: args.error?.slice(0, 500),
+      updatedAt: now,
     });
   },
 });
@@ -448,6 +574,158 @@ export const _purgeAllGuides = internalMutation({
       await ctx.db.delete(r._id);
     }
     return { deleted: rows.length };
+  },
+});
+
+// Destructive ops trigger: deletes all branches, all guides (including
+// illustration + podcast storage), then schedules regeneration of each
+// captured title via the new grounded-first pipeline. Requires an explicit
+// confirmation literal to prevent accidental runs. Validation rows are
+// left in place — getValidation self-heals stale slugs.
+export const purgeAndRegenerateAll = mutation({
+  args: { confirm: v.literal("purge-and-regenerate") },
+  returns: v.object({
+    purged: v.number(),
+    scheduled: v.number(),
+    titles: v.array(v.string()),
+  }),
+  handler: async (ctx) => {
+    const guides = await ctx.db.query("career_guides").collect();
+    const titles = guides.map((g) => g.title);
+
+    // Delete branches first (FK to guides).
+    const branches = await ctx.db.query("career_guide_branches").collect();
+    for (const b of branches) {
+      await ctx.db.delete(b._id);
+    }
+
+    // Delete guides + their stored illustration and podcast audio.
+    for (const g of guides) {
+      if (g.illustrationStorageId) {
+        try {
+          await ctx.storage.delete(g.illustrationStorageId);
+        } catch {
+          // storage may already be gone
+        }
+      }
+      if (g.podcast?.audioStorageId) {
+        try {
+          await ctx.storage.delete(g.podcast.audioStorageId);
+        } catch {
+          // storage may already be gone
+        }
+      }
+      await ctx.db.delete(g._id);
+    }
+
+    // Schedule regeneration: each title gets its own clientIp bucket so the
+    // generate-rate limit (3 per 5 min) doesn't gate the backfill, and a
+    // 10s stagger keeps Exa + LLM concurrency bounded.
+    let i = 0;
+    for (const title of titles) {
+      await ctx.scheduler.runAfter(
+        i * 10_000,
+        internal.careerGuides.requestGuideFromSearch,
+        { title, clientIp: `backfill-${i}` },
+      );
+      i++;
+    }
+
+    return {
+      purged: guides.length,
+      scheduled: titles.length,
+      titles,
+    };
+  },
+});
+
+// ── Meta backfill ──────────────────────────────────────────────────────────
+//
+// Retroactively produces content.meta for guides created before SEO meta
+// fields existed in the content schema. One small LLM call per guide,
+// driven by existing content as input. Idempotent: skips guides that
+// already have meta.
+
+export const _setContentMeta = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    meta: metaValidator,
+  },
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide?.content) return;
+    await ctx.db.patch(args.guideId, {
+      content: {
+        ...guide.content,
+        meta: args.meta,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const _backfillMeta = internalAction({
+  args: { guideId: v.id("career_guides") },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const guide = await ctx.runQuery(internal.careerGuides._getById, {
+      guideId: args.guideId,
+    });
+    if (!guide?.content || guide.contentStatus !== "complete") return null;
+    if (guide.content.meta) return null;
+
+    try {
+      const { output } = await generateText({
+        model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+        output: Output.object({ schema: MetaOnlySchema }),
+        prompt: buildMetaPrompt({
+          title: guide.title,
+          overview: guide.content.overview,
+          typicalSkills: guide.content.typicalSkills,
+          riskFactors: guide.content.riskFactors,
+          usSalary: guide.content.regional.us.salary,
+          ukSalary: guide.content.regional.uk.salary,
+          usOutlook: guide.content.regional.us.careerOutlook,
+          ukOutlook: guide.content.regional.uk.careerOutlook,
+          relatedRolesUs: guide.content.regional.us.relatedRoles,
+        }),
+      });
+      await ctx.runMutation(internal.careerGuides._setContentMeta, {
+        guideId: args.guideId,
+        meta: output.meta,
+      });
+    } catch (err) {
+      console.error("careerGuides:backfill-meta-failed", {
+        guideId: args.guideId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return null;
+  },
+});
+
+// Ops trigger: schedule meta backfill across every complete guide.
+// 5s stagger keeps Gemini concurrency bounded.
+export const triggerMetaBackfill = mutation({
+  args: {},
+  returns: v.object({ scheduled: v.number() }),
+  handler: async (ctx) => {
+    const guides = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "complete"))
+      .collect();
+
+    let i = 0;
+    for (const guide of guides) {
+      await ctx.scheduler.runAfter(
+        i * 5000,
+        internal.careerGuides._backfillMeta,
+        { guideId: guide._id },
+      );
+      i++;
+    }
+
+    return { scheduled: guides.length };
   },
 });
 
@@ -700,7 +978,146 @@ export const generateContent = internalAction({
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);
 
+    const stripSalaryNullNote = (s: {
+      entry: string;
+      mid: string;
+      senior: string;
+      note: string | null;
+    }) => ({
+      entry: s.entry,
+      mid: s.mid,
+      senior: s.senior,
+      ...(s.note ? { note: s.note } : {}),
+    });
+
     try {
+      // Phase A — Best-effort Exa fan-out across all 8 enrichment tasks.
+      // We do this BEFORE the LLM call so the model can ground its prose
+      // in fresh sources rather than parametric memory. EXA_API_KEY missing
+      // skips straight to the deferred fallback.
+      const exaByField = new Map<string, GroundedResearch>();
+      let groundingCostCents = 0;
+
+      if (process.env.EXA_API_KEY) {
+        const tasks = ENRICHMENT_TASKS.map((task) => async () => {
+          try {
+            const { query, systemPrompt } = buildEnrichmentQuery(
+              task,
+              args.title,
+            );
+            const res = await exaAnswer(query, {
+              systemPrompt,
+              signal: controller.signal,
+            });
+            return {
+              fieldPath: task.fieldPath,
+              ok: true as const,
+              answer: res.answer,
+              sources: res.citations,
+              costCents: res.costCents,
+            };
+          } catch (err) {
+            console.error("generateContent:exa-task-failed", {
+              guideId: args.guideId,
+              fieldPath: task.fieldPath,
+              err: err instanceof Error ? err.message : String(err),
+            });
+            return { fieldPath: task.fieldPath, ok: false as const };
+          }
+        });
+
+        const outcomes = await runWithConcurrency(
+          tasks,
+          ENRICHMENT_CONCURRENCY,
+        );
+        for (const o of outcomes) {
+          if (o.ok) {
+            exaByField.set(o.fieldPath, {
+              answer: o.answer,
+              sources: o.sources,
+            });
+            groundingCostCents += o.costCents;
+          }
+        }
+      } else {
+        console.warn("generateContent:exa-key-missing", {
+          guideId: args.guideId,
+        });
+      }
+
+      const groundedCount = exaByField.size;
+
+      if (groundedCount >= MIN_GROUNDED_TASKS) {
+        // Phase B (grounded): LLM writes prose grounded in fresh research,
+        // returns per-field source indexes we materialise into citations.
+        const { output } = await generateText({
+          model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+          output: Output.object({ schema: ContentResponseGroundedSchema }),
+          prompt: buildGroundedContentPrompt(args.title, exaByField),
+          abortSignal: controller.signal,
+        });
+
+        const citations: Record<string, Citation[]> = {};
+        for (const task of ENRICHMENT_TASKS) {
+          const usedKey = FIELD_PATH_TO_USED_KEY[task.fieldPath];
+          const indexes =
+            output.usedSources[usedKey as keyof typeof output.usedSources] ??
+            [];
+          const research = exaByField.get(task.fieldPath);
+          if (!research || indexes.length === 0) continue;
+          const fieldCitations: Citation[] = [];
+          for (const i of indexes) {
+            if (
+              Number.isInteger(i) &&
+              i >= 0 &&
+              i < research.sources.length
+            ) {
+              fieldCitations.push(research.sources[i]);
+            }
+          }
+          if (fieldCitations.length > 0) {
+            citations[task.fieldPath] = fieldCitations;
+          }
+        }
+
+        await ctx.runMutation(
+          internal.careerGuides._updateContentGrounded,
+          {
+            guideId: args.guideId,
+            content: {
+              overview: output.overview,
+              typicalSkills: output.typicalSkills,
+              dayToDay: output.dayToDay,
+              riskFactors: output.riskFactors,
+              whyConsider: output.whyConsider,
+              meta: output.meta,
+              regional: {
+                us: {
+                  ...output.regional.us,
+                  salary: stripSalaryNullNote(output.regional.us.salary),
+                },
+                uk: {
+                  ...output.regional.uk,
+                  salary: stripSalaryNullNote(output.regional.uk.salary),
+                },
+              },
+            },
+            followUps: output.followUps,
+            citations,
+            costCents: groundingCostCents,
+          },
+        );
+        return null;
+      }
+
+      // Phase B fallback (deferred): Exa is unhealthy. Publish ungrounded
+      // content from parametric memory and schedule full enrichment in 1h.
+      console.warn("generateContent:falling-back-to-deferred", {
+        guideId: args.guideId,
+        groundedCount,
+        threshold: MIN_GROUNDED_TASKS,
+      });
+
       const { output } = await generateText({
         model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
         output: Output.object({ schema: ContentResponseSchema }),
@@ -708,30 +1125,37 @@ export const generateContent = internalAction({
         abortSignal: controller.signal,
       });
 
-      const stripSalaryNullNote = (s: { entry: string; mid: string; senior: string; note: string | null }) => ({
-        entry: s.entry,
-        mid: s.mid,
-        senior: s.senior,
-        ...(s.note ? { note: s.note } : {}),
-      });
-
-      await ctx.runMutation(internal.careerGuides._updateContent, {
+      await ctx.runMutation(internal.careerGuides._updateContentDeferred, {
         guideId: args.guideId,
         content: {
-          ...output,
+          overview: output.overview,
+          typicalSkills: output.typicalSkills,
+          dayToDay: output.dayToDay,
+          riskFactors: output.riskFactors,
+          whyConsider: output.whyConsider,
+          meta: output.meta,
           regional: {
-            us: { ...output.regional.us, salary: stripSalaryNullNote(output.regional.us.salary) },
-            uk: { ...output.regional.uk, salary: stripSalaryNullNote(output.regional.uk.salary) },
+            us: {
+              ...output.regional.us,
+              salary: stripSalaryNullNote(output.regional.us.salary),
+            },
+            uk: {
+              ...output.regional.uk,
+              salary: stripSalaryNullNote(output.regional.uk.salary),
+            },
           },
         },
+        followUps: output.followUps,
       });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error("generateContent:failed", {
         guideId: args.guideId,
-        err,
+        err: message,
       });
       await ctx.runMutation(internal.careerGuides._markContentFailed, {
         guideId: args.guideId,
+        error: message,
       });
     } finally {
       clearTimeout(timeout);
@@ -1009,5 +1433,154 @@ export const enrichGuide = internalAction({
     }
 
     return null;
+  },
+});
+
+// Atomic guard for content regeneration. Mirrors _beginEnrichment: refuses
+// if the guide is already generating or already complete, and (unless the
+// caller passes bypassAttemptCap) refuses once contentAttempts >= cap.
+// Sets contentStatus to "generating" in the same transaction so a second
+// caller arriving moments later sees "already_generating" and bails.
+export const _beginContentRetry = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    bypassAttemptCap: v.boolean(),
+  },
+  returns: v.union(
+    v.object({ ok: v.literal(true), title: v.string() }),
+    v.object({ ok: v.literal(false), reason: v.string() }),
+  ),
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide) return { ok: false as const, reason: "not_found" };
+    if (guide.contentStatus === "complete") {
+      return { ok: false as const, reason: "already_complete" };
+    }
+    if (guide.contentStatus === "generating") {
+      return { ok: false as const, reason: "already_generating" };
+    }
+    if (
+      !args.bypassAttemptCap &&
+      (guide.contentAttempts ?? 0) >= CONTENT_MAX_ATTEMPTS
+    ) {
+      return { ok: false as const, reason: "max_attempts" };
+    }
+    await ctx.db.patch(args.guideId, {
+      contentStatus: "generating",
+      content: undefined,
+      updatedAt: Date.now(),
+    });
+    return { ok: true as const, title: guide.title };
+  },
+});
+
+// Public mutation called by the failed-state UI: once on mount (force=false,
+// honours the auto-cap) and on the manual "Try again" click (force=true,
+// bypasses the cap so users always have a recovery option). Rate-limited per
+// slug+IP so a hammer-refresh can't queue N concurrent regenerations.
+export const retryFailedGuide = mutation({
+  args: {
+    slug: v.string(),
+    clientIp: v.string(),
+    force: v.boolean(),
+  },
+  returns: v.object({
+    ok: v.boolean(),
+    reason: v.optional(v.string()),
+  }),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ ok: boolean; reason?: string }> => {
+    const limit = await tryConsumeRateLimit(ctx, {
+      key: `retryGuide:${args.slug}:${args.clientIp}`,
+      ...RETRY_RATE,
+    });
+    if (!limit.ok) return { ok: false, reason: "rate_limited" };
+
+    const guide = await ctx.db
+      .query("career_guides")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .first();
+    if (!guide) return { ok: false, reason: "not_found" };
+
+    const begin: { ok: true; title: string } | { ok: false; reason: string } =
+      await ctx.runMutation(internal.careerGuides._beginContentRetry, {
+        guideId: guide._id,
+        bypassAttemptCap: args.force,
+      });
+    if (!begin.ok) return { ok: false, reason: begin.reason };
+
+    await ctx.scheduler.runAfter(0, internal.careerGuides.generateContent, {
+      guideId: guide._id,
+      title: begin.title,
+    });
+    if (
+      guide.illustrationStatus === "failed" ||
+      !guide.illustrationStorageId
+    ) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.careerGuides.generateIllustration,
+        { guideId: guide._id, title: begin.title },
+      );
+    }
+    return { ok: true };
+  },
+});
+
+// Cron worker: scans failed guides eligible for auto-retry and schedules
+// regenerations, staggered to avoid Exa rate-limit thundering herd.
+export const _retryFailedGuides = internalAction({
+  args: {},
+  returns: v.object({ scanned: v.number(), scheduled: v.number() }),
+  handler: async (
+    ctx,
+  ): Promise<{ scanned: number; scheduled: number }> => {
+    const candidates = await ctx.runQuery(
+      internal.careerGuides._listFailedGuidesForRetry,
+      {},
+    );
+    let scheduled = 0;
+    for (const c of candidates) {
+      const begin = await ctx.runMutation(
+        internal.careerGuides._beginContentRetry,
+        { guideId: c._id, bypassAttemptCap: false },
+      );
+      if (!begin.ok) continue;
+      const delay = scheduled * CONTENT_RETRY_STAGGER_MS;
+      await ctx.scheduler.runAfter(
+        delay,
+        internal.careerGuides.generateContent,
+        { guideId: c._id, title: begin.title },
+      );
+      if (c.illustrationStatus === "failed") {
+        await ctx.scheduler.runAfter(
+          delay,
+          internal.careerGuides.generateIllustration,
+          { guideId: c._id, title: begin.title },
+        );
+      }
+      scheduled++;
+    }
+    return { scanned: candidates.length, scheduled };
+  },
+});
+
+// Returns failed guides that are (a) under the attempt cap and (b) past the
+// cooldown since their last failure. Cooldown gives a transient upstream
+// outage time to recover before the cron retries en-masse.
+export const _listFailedGuidesForRetry = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - CONTENT_RETRY_COOLDOWN_MS;
+    const rows = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "failed"))
+      .take(50);
+    return rows
+      .filter((r) => (r.contentAttempts ?? 0) < CONTENT_MAX_ATTEMPTS)
+      .filter((r) => (r.contentLastFailureAt ?? 0) < cutoff)
+      .slice(0, CONTENT_RETRY_BATCH_SIZE);
   },
 });

@@ -10,6 +10,7 @@
 
 import type * as careerGuides from "../careerGuides.js";
 import type * as careerPaths from "../careerPaths.js";
+import type * as crons from "../crons.js";
 import type * as embeddings from "../embeddings.js";
 import type * as enrichments from "../enrichments.js";
 import type * as guideBranches from "../guideBranches.js";
@@ -34,6 +35,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   careerGuides: typeof careerGuides;
   careerPaths: typeof careerPaths;
+  crons: typeof crons;
   embeddings: typeof embeddings;
   enrichments: typeof enrichments;
   guideBranches: typeof guideBranches;

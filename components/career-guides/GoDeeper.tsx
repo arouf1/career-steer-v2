@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { CornerDownRight, Loader2, Plus, Minus } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { FieldCitation, type CitationSource } from "./FieldCitation";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { FieldCitation } from "./FieldCitation";
 
 const eyebrowCls =
   "text-[10px] uppercase tracking-[0.18em] font-medium text-mute";
@@ -16,16 +16,7 @@ const convexHttpOrigin = CONVEX_URL
   ? CONVEX_URL.replace(".convex.cloud", ".convex.site")
   : null;
 
-type BranchRow = {
-  _id: Id<"career_guide_branches">;
-  sectionId: string;
-  question: string;
-  questionNormalized: string;
-  status: "generating" | "researching" | "complete" | "failed";
-  groundingMode: "exa" | "inherited";
-  answer?: { title: string; body: string };
-  citations?: CitationSource[];
-};
+type BranchRow = Doc<"career_guide_branches">;
 
 const normalize = (q: string): string =>
   q.toLowerCase().replace(/\s+/g, " ").trim();
@@ -34,21 +25,34 @@ export function GoDeeper({
   guideId,
   sectionId,
   followUps,
+  initialBranches,
 }: {
   guideId: Id<"career_guides">;
   sectionId: string;
   followUps: string[];
+  /**
+   * Server-fetched branches passed from the route. Used during SSR (when
+   * useQuery is undefined) so completed Q&A renders into the initial HTML
+   * for crawlers. Also seeds the expanded set so already-complete answers
+   * appear open on first paint.
+   */
+  initialBranches: BranchRow[];
 }) {
-  const branches = useQuery(api.guideBranches.listForGuide, { guideId }) as
+  const liveBranches = useQuery(api.guideBranches.listForGuide, { guideId }) as
     | BranchRow[]
     | undefined;
+  const branches = liveBranches ?? initialBranches;
+
+  // All branches start collapsed. Pre-warmed answers are still rendered into
+  // the DOM (via the always-mounted motion.div below, animated to height 0)
+  // so crawlers and AI engines can extract the Q&A even when visually closed.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<Set<string>>(new Set());
 
   if (!followUps || followUps.length === 0) return null;
 
   const branchByQuestion = new Map<string, BranchRow>();
-  for (const b of branches ?? []) {
+  for (const b of branches) {
     if (b.sectionId === sectionId) {
       branchByQuestion.set(b.questionNormalized, b);
     }
@@ -91,9 +95,16 @@ export function GoDeeper({
   };
 
   return (
-    <div className="border-t border-hairline pt-10">
-      <p className={eyebrowCls}>Go deeper</p>
-      <ul className="mt-4 max-w-2xl divide-y divide-hairline/70">
+    <>
+      <span className="inline-flex items-center gap-1.5 rounded-pill border border-hairline/70 bg-paper px-2.5 py-1">
+        <CornerDownRight
+          className="h-3 w-3 text-mute"
+          aria-hidden="true"
+          strokeWidth={1.75}
+        />
+        <span className={eyebrowCls}>Go deeper</span>
+      </span>
+      <ul className="mt-5 max-w-2xl divide-y divide-hairline/70">
         {followUps.map((question) => {
           const key = normalize(question);
           const branch = branchByQuestion.get(key);
@@ -103,12 +114,7 @@ export function GoDeeper({
             isPending ||
             branch?.status === "generating" ||
             branch?.status === "researching";
-          const workingLabel =
-            branch?.status === "researching"
-              ? "Checking sources…"
-              : isWorking
-                ? "Drafting…"
-                : null;
+          const workingLabel = isWorking ? "Researching…" : null;
 
           return (
             <li key={question}>
@@ -151,62 +157,83 @@ export function GoDeeper({
                 )}
               </button>
 
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    key={`${key}-body`}
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.32, ease: [0.2, 0.65, 0.3, 1] }}
-                    className="overflow-hidden"
-                  >
-                    <div className="ml-7 pb-6">
-                      {branch?.status === "complete" && branch.answer ? (
-                        <>
-                          <h3 className="mt-2 text-balance text-[22px] leading-[1.2] tracking-tight text-ink [font-family:var(--font-serif)]">
-                            {branch.answer.title}
-                          </h3>
-                          <div className="mt-4 space-y-4">
-                            {branch.answer.body.split("\n").map((para, i, arr) => (
-                              <p
-                                key={i}
-                                className="text-balance text-[16px] leading-[1.7] text-ink/80"
-                              >
-                                {para}
-                                {i === arr.length - 1 &&
-                                branch.citations &&
-                                branch.citations.length > 0 ? (
-                                  <FieldCitation citations={branch.citations} />
-                                ) : null}
-                              </p>
-                            ))}
-                          </div>
-                        </>
-                      ) : branch?.status === "failed" ? (
-                        <p className="mt-2 text-[14px] leading-relaxed text-mute">
-                          Couldn&rsquo;t draft this one. Click again to retry.
-                        </p>
-                      ) : (
-                        // generating / researching / pending — render skeleton
-                        <div className="mt-4 space-y-3">
-                          {[80, 95, 70].map((w, i) => (
-                            <div
-                              key={i}
-                              className="h-3 animate-pulse rounded-hair bg-hairline"
-                              style={{ width: `${w}%` }}
-                            />
-                          ))}
+              <AnswerPanel isOpen={isOpen}>
+                <div className="ml-7 pb-6">
+                  {branch?.status === "complete" && branch.answer ? (
+                    <>
+                      <h3 className="mt-2 text-balance text-[22px] leading-[1.2] tracking-tight text-ink [font-family:var(--font-serif)]">
+                        {branch.answer.title}
+                      </h3>
+                      <div className="mt-4 space-y-4">
+                        {branch.answer.body.split("\n").map((para, i) => (
+                          <p
+                            key={i}
+                            className="text-balance text-[16px] leading-[1.7] text-ink/80"
+                          >
+                            {para}
+                          </p>
+                        ))}
+                      </div>
+                      {branch.citations && branch.citations.length > 0 && (
+                        <div className="mt-5 flex items-center gap-2">
+                          <span className={eyebrowCls}>Sources</span>
+                          <FieldCitation
+                            citations={branch.citations}
+                            label="Sources for this answer"
+                          />
                         </div>
                       )}
+                    </>
+                  ) : branch?.status === "failed" ? (
+                    <p className="mt-2 text-[14px] leading-relaxed text-mute">
+                      Couldn&rsquo;t draft this one. Click again to retry.
+                    </p>
+                  ) : (
+                    // generating / researching / pending — render skeleton
+                    <div className="mt-4 space-y-3">
+                      {[80, 95, 70].map((w, i) => (
+                        <div
+                          key={i}
+                          className="h-3 animate-pulse rounded-hair bg-hairline"
+                          style={{ width: `${w}%` }}
+                        />
+                      ))}
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  )}
+                </div>
+              </AnswerPanel>
             </li>
           );
         })}
       </ul>
-    </div>
+    </>
+  );
+}
+
+// Each accordion answer animates height 0 ↔ auto. During the animation we
+// need overflow:hidden so child content doesn't spill while the height is in
+// flight; once it settles open, we flip to overflow:visible so popovers (e.g.
+// the FieldCitation source list) can extend outside the panel without being
+// clipped.
+function AnswerPanel({
+  isOpen,
+  children,
+}: {
+  isOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [overflowVisible, setOverflowVisible] = useState(false);
+  return (
+    <motion.div
+      initial={false}
+      animate={{ opacity: isOpen ? 1 : 0, height: isOpen ? "auto" : 0 }}
+      transition={{ duration: 0.32, ease: [0.2, 0.65, 0.3, 1] }}
+      onAnimationStart={() => setOverflowVisible(false)}
+      onAnimationComplete={() => setOverflowVisible(isOpen)}
+      style={{ overflow: overflowVisible ? "visible" : "hidden" }}
+      aria-hidden={!isOpen}
+    >
+      {children}
+    </motion.div>
   );
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useQuery } from "convex/react";
 import {
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
 import type { GuideWithUrl } from "@/convex/careerGuides";
 import { MobileTableOfContents } from "./MobileTableOfContents";
 import { FieldCitation, type CitationSource } from "./FieldCitation";
@@ -42,6 +43,12 @@ type ArticleProps = {
   defaultRegion: Region;
   /** Map of normalized (lowercased + trimmed) existing guide titles → slug. */
   existingByTitle: Record<string, string>;
+  /**
+   * Server-fetched Go Deeper branches. Seeds GoDeeper's expanded set with
+   * already-complete branches so crawlers see Q&A in the SSR'd HTML rather
+   * than waiting for the client to mount and run useQuery.
+   */
+  initialBranches: Doc<"career_guide_branches">[];
 };
 
 type SectionLink = { id: string; label: string };
@@ -69,6 +76,7 @@ export function CareerGuideArticle({
   guide,
   defaultRegion,
   existingByTitle,
+  initialBranches,
 }: ArticleProps) {
   const searchParams = useSearchParams();
   const region: Region =
@@ -117,6 +125,7 @@ export function CareerGuideArticle({
         <article className="min-w-0 lg:col-span-7">
           <Byline
             title={guide.title}
+            publishedAt={guide.createdAt}
             updatedAt={guide.updatedAt}
             lead={c.whyConsider}
           />
@@ -129,20 +138,11 @@ export function CareerGuideArticle({
 
           <CareerGuidePodcast guide={guide} />
 
-          <div className="divide-y divide-hairline">
+          <div>
             <ArticleSection
               id="overview"
               eyebrow="Section one"
               title={`What is a ${guide.title}?`}
-              footer={
-                followUpsFor("overview") ? (
-                  <GoDeeper
-                    guideId={guide._id}
-                    sectionId="overview"
-                    followUps={followUpsFor("overview")!}
-                  />
-                ) : undefined
-              }
             >
               <div className="max-w-2xl space-y-5">
                 {c.overview.split("\n").map((para, i) => (
@@ -155,12 +155,12 @@ export function CareerGuideArticle({
                 ))}
               </div>
 
-              <div className="mt-10 max-w-2xl rounded-surface border border-hairline bg-paper-raised px-6 py-5">
-                <p className="text-[15px] leading-relaxed text-body">
+              <div className="mt-10 max-w-2xl rounded-surface bg-ink px-6 py-5">
+                <p className="text-[15px] leading-relaxed text-paper/85">
                   This is a general guide.{" "}
                   <Link
                     href="/profile"
-                    className="font-medium text-ink underline-offset-4 transition-colors hover:underline"
+                    className="font-medium text-paper underline underline-offset-4 transition-colors hover:text-paper/80"
                   >
                     Upload your CV
                   </Link>{" "}
@@ -169,6 +169,17 @@ export function CareerGuideArticle({
                 </p>
               </div>
             </ArticleSection>
+
+            {followUpsFor("overview") && (
+              <DeepDiveBand>
+                <GoDeeper
+                  guideId={guide._id}
+                  sectionId="overview"
+                  followUps={followUpsFor("overview")!}
+                  initialBranches={initialBranches}
+                />
+              </DeepDiveBand>
+            )}
 
             <ArticleSection
               id="skills"
@@ -202,15 +213,6 @@ export function CareerGuideArticle({
               eyebrow="Section three"
               title="What does the day look like?"
               lead="What the work actually looks like, beyond the job description."
-              footer={
-                followUpsFor("day-to-day") ? (
-                  <GoDeeper
-                    guideId={guide._id}
-                    sectionId="day-to-day"
-                    followUps={followUpsFor("day-to-day")!}
-                  />
-                ) : undefined
-              }
             >
               <div className="max-w-2xl space-y-5">
                 {c.dayToDay.split("\n").map((para, i) => (
@@ -224,21 +226,23 @@ export function CareerGuideArticle({
               </div>
             </ArticleSection>
 
+            {followUpsFor("day-to-day") && (
+              <DeepDiveBand>
+                <GoDeeper
+                  guideId={guide._id}
+                  sectionId="day-to-day"
+                  followUps={followUpsFor("day-to-day")!}
+                  initialBranches={initialBranches}
+                />
+              </DeepDiveBand>
+            )}
+
             <ArticleSection
               id="outlook"
               eyebrow="Section four"
               title="What's the career outlook?"
               lead="Where the demand is heading and what the market looks like today."
               meta={<RegionBadge region={region} />}
-              footer={
-                followUpsFor(`outlook-${region}`) ? (
-                  <GoDeeper
-                    guideId={guide._id}
-                    sectionId={`outlook-${region}`}
-                    followUps={followUpsFor(`outlook-${region}`)!}
-                  />
-                ) : undefined
-              }
             >
               <div className="max-w-2xl space-y-5">
                 {r.careerOutlook.split("\n").map((para, i, arr) => (
@@ -257,21 +261,23 @@ export function CareerGuideArticle({
               </div>
             </ArticleSection>
 
+            {followUpsFor(`outlook-${region}`) && (
+              <DeepDiveBand>
+                <GoDeeper
+                  guideId={guide._id}
+                  sectionId={`outlook-${region}`}
+                  followUps={followUpsFor(`outlook-${region}`)!}
+                  initialBranches={initialBranches}
+                />
+              </DeepDiveBand>
+            )}
+
             <ArticleSection
               id="learning-path"
               eyebrow="Section five"
               title="How do you get there?"
               lead="A practical path from interest to competence, step by step."
               meta={<RegionBadge region={region} />}
-              footer={
-                followUpsFor(`learning-path-${region}`) ? (
-                  <GoDeeper
-                    guideId={guide._id}
-                    sectionId={`learning-path-${region}`}
-                    followUps={followUpsFor(`learning-path-${region}`)!}
-                  />
-                ) : undefined
-              }
             >
               <ol className="max-w-2xl space-y-7">
                 {r.learningPath.map((step, i, arr) => (
@@ -292,21 +298,23 @@ export function CareerGuideArticle({
               </ol>
             </ArticleSection>
 
+            {followUpsFor(`learning-path-${region}`) && (
+              <DeepDiveBand>
+                <GoDeeper
+                  guideId={guide._id}
+                  sectionId={`learning-path-${region}`}
+                  followUps={followUpsFor(`learning-path-${region}`)!}
+                  initialBranches={initialBranches}
+                />
+              </DeepDiveBand>
+            )}
+
             {c.riskFactors.length > 0 && (
               <ArticleSection
                 id="considerations"
                 eyebrow="Section six"
                 title="Worth knowing."
                 lead="Honest considerations to weigh before you commit."
-                footer={
-                  followUpsFor("considerations") ? (
-                    <GoDeeper
-                      guideId={guide._id}
-                      sectionId="considerations"
-                      followUps={followUpsFor("considerations")!}
-                    />
-                  ) : undefined
-                }
               >
                 <ul className="max-w-2xl space-y-5">
                   {c.riskFactors.map((item, i, arr) => (
@@ -324,6 +332,17 @@ export function CareerGuideArticle({
                   ))}
                 </ul>
               </ArticleSection>
+            )}
+
+            {c.riskFactors.length > 0 && followUpsFor("considerations") && (
+              <DeepDiveBand>
+                <GoDeeper
+                  guideId={guide._id}
+                  sectionId="considerations"
+                  followUps={followUpsFor("considerations")!}
+                  initialBranches={initialBranches}
+                />
+              </DeepDiveBand>
             )}
 
             <ArticleSection
@@ -371,18 +390,28 @@ export function CareerGuideArticle({
 
 function Byline({
   title,
+  publishedAt,
   updatedAt,
   lead,
 }: {
   title: string;
+  publishedAt: number;
   updatedAt: number;
   lead?: string;
 }) {
-  const formatted = new Date(updatedAt).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const formatDate = (ms: number) =>
+    new Date(ms).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  const publishedFormatted = formatDate(publishedAt);
+  const updatedFormatted = formatDate(updatedAt);
+  // Only show "Last updated" when meaningfully later than publish (>~1 day),
+  // otherwise the two timestamps look redundant on freshly-created guides.
+  const showUpdated =
+    updatedAt - publishedAt > 24 * 60 * 60 * 1000 &&
+    publishedFormatted !== updatedFormatted;
   return (
     <motion.header
       initial={{ opacity: 0, y: 8 }}
@@ -403,7 +432,25 @@ function Byline({
         <span aria-hidden className="text-mute/40">
           ·
         </span>
-        <span>Last updated {formatted}</span>
+        <span>
+          Published{" "}
+          <time dateTime={new Date(publishedAt).toISOString()}>
+            {publishedFormatted}
+          </time>
+        </span>
+        {showUpdated && (
+          <>
+            <span aria-hidden className="text-mute/40">
+              ·
+            </span>
+            <span>
+              Updated{" "}
+              <time dateTime={new Date(updatedAt).toISOString()}>
+                {updatedFormatted}
+              </time>
+            </span>
+          </>
+        )}
       </div>
     </motion.header>
   );
@@ -461,7 +508,10 @@ function ArticleSection({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24 py-14 first:pt-0">
+    <section
+      id={id}
+      className="scroll-mt-24 border-t border-hairline py-14 first:border-t-0 first:pt-0"
+    >
       {(eyebrow || meta) && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           {eyebrow && <p className={eyebrowCls}>{eyebrow}</p>}
@@ -479,6 +529,14 @@ function ArticleSection({
       <div className="mt-6">{children}</div>
       {footer && <div className="mt-12">{footer}</div>}
     </section>
+  );
+}
+
+function DeepDiveBand({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="-my-6 rounded-card border border-hairline/60 bg-paper-raised px-6 py-7 sm:px-10 sm:py-9 lg:-my-8">
+      {children}
+    </div>
   );
 }
 
@@ -643,7 +701,7 @@ function Sidebar({
         <hr className="my-6 border-hairline" />
 
         <div className="flex items-center justify-between gap-3">
-          <p className={eyebrowCls}>Typical earnings</p>
+          <h3 className={eyebrowCls}>Typical earnings</h3>
           <FieldCitation citations={salaryCitations} />
         </div>
         <dl className="mt-3 divide-y divide-hairline">
@@ -1039,21 +1097,54 @@ export function CareerGuidePending({
 }
 
 function CareerGuideFailed({ slug, title }: { slug: string; title: string }) {
-  void slug;
+  const retry = useMutation(api.careerGuides.retryFailedGuide);
+  const [pending, setPending] = useState(false);
+  const autoFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (autoFiredRef.current) return;
+    autoFiredRef.current = true;
+    void retry({ slug, clientIp: "", force: false }).catch(() => {});
+  }, [slug, retry]);
+
+  const handleClick = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      await retry({ slug, clientIp: "", force: true });
+    } catch {
+      // Surface nothing — the parent useQuery will reflect the next state.
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <p className="type-label text-state-error">Generation failed</p>
       <h1 className="type-headline text-ink">{title}</h1>
       <p className="type-body max-w-prose text-body">
-        We could not finish this guide. This is usually a temporary model hiccup,
-        not something wrong with the title.
+        We could not finish this guide. This is usually a temporary model
+        hiccup, not something wrong with the title.
       </p>
-      <Link
-        href="/"
-        className="type-label inline-flex items-center gap-2 self-start rounded-pill bg-ink px-6 py-3 text-paper transition-colors hover:bg-ink-deep"
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={pending}
+        className="type-label inline-flex items-center gap-2 self-start rounded-pill bg-ink px-6 py-3 text-paper transition-colors hover:bg-ink-deep disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Try again from the home page
-      </Link>
+        {pending ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            Retrying
+          </>
+        ) : (
+          <>
+            <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
+            Try again
+          </>
+        )}
+      </button>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 
@@ -196,6 +197,66 @@ http.route({
       { title, clientIp },
     );
     return jsonResponse(result);
+  }),
+});
+
+// ── /career-guides/branches/create ──────────────────────────────────────────
+
+http.route({
+  path: "/career-guides/branches/create",
+  method: "OPTIONS",
+  handler: httpAction(async () => optionsResponse()),
+});
+
+http.route({
+  path: "/career-guides/branches/create",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    let body: { guideId?: unknown; sectionId?: unknown; question?: unknown };
+    try {
+      body = (await req.json()) as {
+        guideId?: unknown;
+        sectionId?: unknown;
+        question?: unknown;
+      };
+    } catch {
+      return jsonResponse({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const guideId =
+      typeof body.guideId === "string" ? body.guideId.trim() : "";
+    const sectionId =
+      typeof body.sectionId === "string" ? body.sectionId.trim() : "";
+    const question =
+      typeof body.question === "string" ? body.question.trim() : "";
+
+    if (!guideId || !sectionId || !question) {
+      return jsonResponse(
+        { error: "guideId, sectionId, and question are required" },
+        { status: 400 },
+      );
+    }
+    if (question.length < 4 || question.length > 240) {
+      return jsonResponse(
+        { error: "Question must be 4 to 240 characters" },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const result = await ctx.runAction(api.guideBranches.deepenSection, {
+        guideId: guideId as Id<"career_guides">,
+        sectionId,
+        question,
+      });
+      return jsonResponse(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return jsonResponse(
+        { error: message.slice(0, 200) },
+        { status: 400 },
+      );
+    }
   }),
 });
 

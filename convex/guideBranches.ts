@@ -4,6 +4,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  mutation,
   query,
   action,
 } from "./_generated/server";
@@ -14,9 +15,11 @@ import {
   CONTENT_MODEL_ID,
   DeepenAnswerSchema,
   DeepenAnswerGroundedSchema,
+  FollowUpsBackfillSchema,
   buildDeepenPrompt,
   buildDeepenPromptGrounded,
   buildBranchExaQuery,
+  buildFollowUpsBackfillPrompt,
   isFactHeavySection,
 } from "../lib/ai/prompts/career-guides";
 import { exaAnswer, type Citation } from "../lib/server/exa";
@@ -258,6 +261,200 @@ export const deepenSection = action({
     }
 
     return { branchId, cached: !isNew };
+  },
+});
+
+// ── Pre-warm action ────────────────────────────────────────────────────────
+//
+// Fires after a guide's content publishes. Pre-generates branches for the
+// first follow-up question of three high-value sections so the article page
+// ships with crawlable Q&A in its SSR'd HTML rather than waiting for organic
+// user clicks. Three picks balance coverage vs. cost (~3 LLM calls + 2 Exa
+// calls per guide):
+//   - "overview"        — inherited mode, fast, no Exa cost
+//   - "outlook-us"      — exa-grounded, US is the larger market
+//   - "considerations"  — exa-grounded, high-engagement section
+// _createOrGetBranch is idempotent, so re-runs are safe and cheap.
+
+const PREWARM_SECTION_IDS = ["overview", "outlook-us", "considerations"] as const;
+
+export const _prewarmTopBranches = internalAction({
+  args: { guideId: v.id("career_guides") },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const guide = await ctx.runQuery(internal.guideBranches._getGuide, {
+      guideId: args.guideId,
+    });
+    if (!guide?.followUps) return null;
+
+    for (const sectionId of PREWARM_SECTION_IDS) {
+      const questions = guide.followUps[sectionId];
+      const question = questions?.[0]?.trim();
+      if (!question) continue;
+
+      const { branchId, isNew }: {
+        branchId: Id<"career_guide_branches">;
+        isNew: boolean;
+      } = await ctx.runMutation(internal.guideBranches._createOrGetBranch, {
+        guideId: args.guideId,
+        sectionId,
+        question,
+      });
+      if (isNew) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.guideBranches._runBranchGeneration,
+          { branchId },
+        );
+      }
+    }
+
+    return null;
+  },
+});
+
+// ── Backfill (one-shot ops) ────────────────────────────────────────────────
+//
+// Brings older guides up to current-pipeline parity:
+//   1. If `followUps` is missing (the early generateContent path discarded
+//      it), regenerate them via the backfill prompt.
+//   2. Trigger _prewarmTopBranches so the article ships with crawlable Q&A.
+// Both steps are idempotent — safe to re-run, and skips work already done.
+
+const followUpsValidator = v.record(v.string(), v.array(v.string()));
+
+export const _setFollowUpsBackfilled = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    followUps: followUpsValidator,
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.guideId, {
+      followUps: args.followUps,
+      followUpsStatus: "complete",
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const _backfillOneGuide = internalAction({
+  args: { guideId: v.id("career_guides") },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const guide = await ctx.runQuery(internal.guideBranches._getGuide, {
+      guideId: args.guideId,
+    });
+    if (!guide || guide.contentStatus !== "complete" || !guide.content) {
+      return null;
+    }
+
+    // Step 1: regenerate followUps if missing.
+    if (!guide.followUps) {
+      try {
+        const { output } = await generateText({
+          model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+          output: Output.object({ schema: FollowUpsBackfillSchema }),
+          prompt: buildFollowUpsBackfillPrompt({
+            title: guide.title,
+            overview: guide.content.overview,
+            dayToDay: guide.content.dayToDay,
+            outlookUs: guide.content.regional.us.careerOutlook,
+            outlookUk: guide.content.regional.uk.careerOutlook,
+            learningPathUs: guide.content.regional.us.learningPath,
+            learningPathUk: guide.content.regional.uk.learningPath,
+            riskFactors: guide.content.riskFactors,
+          }),
+        });
+        await ctx.runMutation(
+          internal.guideBranches._setFollowUpsBackfilled,
+          {
+            guideId: args.guideId,
+            followUps: output.followUps,
+          },
+        );
+      } catch (err) {
+        console.error("guideBranches:backfill-followups-failed", {
+          guideId: args.guideId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+    }
+
+    // Step 2: pre-warm top branches (idempotent — _createOrGetBranch is
+    // race-safe and short-circuits when the row already exists).
+    await ctx.scheduler.runAfter(
+      0,
+      internal.guideBranches._prewarmTopBranches,
+      { guideId: args.guideId },
+    );
+
+    return null;
+  },
+});
+
+// Ops trigger: run backfill across every complete guide. Stagger by 8s
+// per guide so the LLM + Exa fan-out from prewarm doesn't all hit at once.
+export const triggerBackfillAll = mutation({
+  args: {},
+  returns: v.object({ scheduled: v.number() }),
+  handler: async (ctx) => {
+    const guides = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "complete"))
+      .collect();
+
+    let i = 0;
+    for (const guide of guides) {
+      await ctx.scheduler.runAfter(
+        i * 8000,
+        internal.guideBranches._backfillOneGuide,
+        { guideId: guide._id },
+      );
+      i++;
+    }
+
+    return { scheduled: guides.length };
+  },
+});
+
+// Ops trigger: legacy inherited-mode branches have no citations because
+// inherited mode never ran Exa. After flipping isFactHeavySection to always
+// return true, this mutation deletes those legacy rows so they regenerate
+// as exa mode on next click or pre-warm. Scheduled prewarm afterwards
+// repopulates the top branches across every guide.
+export const triggerInheritedCleanup = mutation({
+  args: {},
+  returns: v.object({
+    deletedBranches: v.number(),
+    rePrewarmed: v.number(),
+  }),
+  handler: async (ctx) => {
+    const allBranches = await ctx.db.query("career_guide_branches").collect();
+    let deleted = 0;
+    for (const b of allBranches) {
+      if (b.groundingMode === "inherited") {
+        await ctx.db.delete(b._id);
+        deleted++;
+      }
+    }
+
+    const guides = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "complete"))
+      .collect();
+
+    let i = 0;
+    for (const guide of guides) {
+      await ctx.scheduler.runAfter(
+        i * 5000,
+        internal.guideBranches._prewarmTopBranches,
+        { guideId: guide._id },
+      );
+      i++;
+    }
+
+    return { deletedBranches: deleted, rePrewarmed: guides.length };
   },
 });
 

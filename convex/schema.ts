@@ -318,6 +318,16 @@ export default defineSchema({
         dayToDay: v.string(),
         riskFactors: v.array(v.string()),
         whyConsider: v.string(),
+        // SEO meta produced inline with content. Optional so legacy guides
+        // (pre-meta) still validate; backfilled by triggerMetaBackfill.
+        meta: v.optional(
+          v.object({
+            title: v.string(),
+            description: v.string(),
+            keywords: v.array(v.string()),
+            socialAlt: v.string(),
+          }),
+        ),
         regional: v.object({
           us: v.object({
             salary: v.object({
@@ -387,6 +397,7 @@ export default defineSchema({
           v.literal("running"),
           v.literal("complete"),
           v.literal("failed"),
+          v.literal("deferred"),
         ),
         progress: v.object({ total: v.number(), done: v.number() }),
         lastEnrichedAt: v.optional(v.number()),
@@ -432,6 +443,12 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
+    // Content-generation retry bookkeeping. Counts every failure (incl. the
+    // initial attempt); reset to 0 on successful publish. Cron + page-load
+    // triggers honour CONTENT_MAX_ATTEMPTS unless `force` bypass is used.
+    contentAttempts: v.optional(v.number()),
+    contentLastFailureAt: v.optional(v.number()),
+    contentLastError: v.optional(v.string()),
   })
     .index("by_slug", ["slug"])
     .index("by_title_normalized", ["titleNormalized"])

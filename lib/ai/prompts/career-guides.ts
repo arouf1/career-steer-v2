@@ -101,6 +101,16 @@ const FollowUpsSchema = z.object({
 });
 export type FollowUps = z.infer<typeof FollowUpsSchema>;
 
+// SEO meta produced inline with content. No bound constraints — Gemini
+// rejects them; lengths and counts are encoded in the prompt.
+export const ContentMetaSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  keywords: z.array(z.string()),
+  socialAlt: z.string(),
+});
+export type ContentMeta = z.infer<typeof ContentMetaSchema>;
+
 export const ContentResponseSchema = z.object({
   overview: z.string(),
   typicalSkills: z.array(z.string()),
@@ -112,6 +122,7 @@ export const ContentResponseSchema = z.object({
     uk: RegionalBlockSchema,
   }),
   followUps: FollowUpsSchema,
+  meta: ContentMetaSchema,
 });
 export type ContentResponse = z.infer<typeof ContentResponseSchema>;
 
@@ -152,6 +163,11 @@ Field guidance:
   Examples of the right voice for "${title}": "Could someone without a marketing background actually break in?", "How exposed is this role to AI replacing the basic work?", "Does this job get more or less interesting as you get senior?". Examples of the WRONG voice: "Which on-page ranking factors matter most?", "How do practitioners handle technical SEO disputes?", "What is the typical fringe-fitting calculation?".
 
   Skip "skills" and "related" sections — those already function as drill-downs.
+- meta: SEO meta tags for the page. Produce all four fields in the same British English voice as the rest of the guide.
+  - meta.title: 50 to 60 characters total. Lead with the role and a high-CTR benefit phrase. Do NOT append "career guide" or the site name (the layout adds a site suffix automatically). Use a SERP-CTR pattern such as "Park Ranger Career: Salary, Skills, How to Become One" or "How to Become a Cardiologist: Routes, Pay, Outlook". Title-case the first word and proper nouns.
+  - meta.description: 150 to 160 characters. A single complete sentence — no mid-cut, no ellipsis. Lead with what the role does. Ground a number where natural (a representative salary band or a hiring trend signal). Do not start with "Discover" or "Learn about" — pick a concrete, declarative opening.
+  - meta.keywords: 8 to 12 short search-intent phrases. Mix head terms (the role title alone, common variants) with tail terms ("how to become a ${title} uk", "${title} salary us", "${title} career path"). Lower-case, no quotes.
+  - meta.socialAlt: 1 to 2 sentences describing the role for the OG/Twitter image's alt attribute. Plain English, ends with a full stop. Used by screen readers and platforms that strip the image.
 
 Style: avoid em dashes and en dashes; use commas, colons, or new sentences. Be concrete and insightful, not generic. Where US and UK genuinely look similar, still produce both regional blocks with region-appropriate phrasing and localised numbers.
 `.trim();
@@ -241,6 +257,163 @@ export function buildEnrichmentQuery(
         systemPrompt: `You are researching honest risk factors for a public career guide. Cite from labour-market reports, industry trend pieces, and reputable workplace surveys. Today's date is ${new Date().toISOString().slice(0, 10)}.`,
       };
   }
+}
+
+// ── Grounded content generation ────────────────────────────────────────────
+//
+// Used when Exa retrieval succeeds for ≥4 enrichment tasks before content
+// generation. The model writes prose grounded in fresh research and returns
+// `usedSources` — per-field 0-based indexes into the per-field source list
+// it actually drew from. The Convex action then materialises citations
+// directly from those indexes, so the LLM never invents URLs.
+//
+// Schema-key shape: kebab-case keys (mirrors FollowUpsSchema's known-good
+// pattern). Dotted fieldPaths like "regional.us.salary" map to safe keys
+// like "salary-us" via FIELD_PATH_TO_USED_KEY. Per project memory: no
+// .int/.min/.max/array-length constraints — Gemini rejects them.
+
+export const FIELD_PATH_TO_USED_KEY: Record<string, string> = {
+  "regional.us.salary": "salary-us",
+  "regional.uk.salary": "salary-uk",
+  "regional.us.careerOutlook": "career-outlook-us",
+  "regional.uk.careerOutlook": "career-outlook-uk",
+  "regional.us.learningPath": "learning-path-us",
+  "regional.uk.learningPath": "learning-path-uk",
+  typicalSkills: "typical-skills",
+  riskFactors: "risk-factors",
+};
+
+const UsedSourcesSchema = z.object({
+  "salary-us": z.array(z.number()),
+  "salary-uk": z.array(z.number()),
+  "career-outlook-us": z.array(z.number()),
+  "career-outlook-uk": z.array(z.number()),
+  "learning-path-us": z.array(z.number()),
+  "learning-path-uk": z.array(z.number()),
+  "typical-skills": z.array(z.number()),
+  "risk-factors": z.array(z.number()),
+});
+
+export const ContentResponseGroundedSchema = ContentResponseSchema.extend({
+  usedSources: UsedSourcesSchema,
+});
+export type ContentResponseGrounded = z.infer<
+  typeof ContentResponseGroundedSchema
+>;
+
+export type GroundedResearch = {
+  answer: string;
+  sources: Citation[];
+};
+
+export function buildGroundedContentPrompt(
+  title: string,
+  exaByField: Map<string, GroundedResearch>,
+): string {
+  const researchBlocks: string[] = [];
+  for (const task of ENRICHMENT_TASKS) {
+    const usedKey = FIELD_PATH_TO_USED_KEY[task.fieldPath];
+    const research = exaByField.get(task.fieldPath);
+    if (!research || research.sources.length === 0) {
+      researchBlocks.push(
+        `### ${task.fieldPath} (usedSources key: "${usedKey}")\n(no fresh research available — write from your own knowledge and return [] for usedSources["${usedKey}"])`,
+      );
+      continue;
+    }
+    const sourceList = research.sources
+      .map(
+        (c, i) =>
+          `[${i}] ${c.title} — ${c.url}${c.publisher ? ` (${c.publisher})` : ""}`,
+      )
+      .join("\n");
+    researchBlocks.push(
+      `### ${task.fieldPath} (usedSources key: "${usedKey}")\nFresh research:\n${research.answer}\n\nSources (cite by 0-based index into THIS field's list):\n${sourceList}`,
+    );
+  }
+
+  const groundingPreamble = `
+You are writing a grounded career guide. For the fields listed below, FRESH RESEARCH and SOURCES from a recent web search have been retrieved for you. You must use them.
+
+Rules:
+- For every grounded field with fresh research, write that field's content from the research below. Do not contradict the cited sources. If your prior knowledge disagrees with the sources, prefer the sources.
+- For grounded fields where research is empty, fall back to your own knowledge for that one field and return an empty array for its key in "usedSources".
+- Do NOT invent URLs, publishers, or citations. The Convex layer materialises citations from the indexes you return.
+- Return a top-level "usedSources" object with ALL eight required keys: "salary-us", "salary-uk", "career-outlook-us", "career-outlook-uk", "learning-path-us", "learning-path-uk", "typical-skills", "risk-factors". Each value is a list of 0-based indexes into THAT field's source list — only the indexes you actually drew from. Use [] if you used none.
+- Source indexes are LOCAL to each field. "salary-us"'s [0] is unrelated to "salary-uk"'s [0].
+
+GROUNDED FIELDS:
+
+${researchBlocks.join("\n\n")}
+
+────────────────────────────────────────
+
+Now write the rest of the guide as instructed below. Narrative fields (overview, dayToDay, whyConsider, relatedRoles, followUps) are not grounded and should be written from your own knowledge in the same warm, authoritative voice — no usedSources entry required for them.
+
+`;
+
+  return `${groundingPreamble.trim()}\n\n${buildContentPrompt(title)}`;
+}
+
+// ── Meta-only backfill ─────────────────────────────────────────────────────
+//
+// Used to retroactively produce content.meta for guides created before the
+// SEO meta fields existed in ContentResponseSchema. Cheaper than
+// regenerating the whole guide — feeds existing content as input and asks
+// for just the four meta fields.
+
+export const MetaOnlySchema = z.object({
+  meta: ContentMetaSchema,
+});
+export type MetaOnly = z.infer<typeof MetaOnlySchema>;
+
+export function buildMetaPrompt(args: {
+  title: string;
+  overview: string;
+  typicalSkills: string[];
+  riskFactors: string[];
+  usSalary: { entry: string; mid: string; senior: string };
+  ukSalary: { entry: string; mid: string; senior: string };
+  usOutlook: string;
+  ukOutlook: string;
+  relatedRolesUs: string[];
+}): string {
+  return `
+You are producing SEO meta tags for an existing public career guide on "${args.title}". The guide is already written and published; you are only producing the meta object.
+
+Existing content for context:
+
+OVERVIEW
+${args.overview}
+
+TYPICAL SKILLS
+${args.typicalSkills.join(", ")}
+
+US SALARY (USD)
+entry ${args.usSalary.entry}, mid ${args.usSalary.mid}, senior ${args.usSalary.senior}
+
+UK SALARY (GBP)
+entry ${args.ukSalary.entry}, mid ${args.ukSalary.mid}, senior ${args.ukSalary.senior}
+
+US OUTLOOK
+${args.usOutlook}
+
+UK OUTLOOK
+${args.ukOutlook}
+
+RELATED ROLES (US)
+${args.relatedRolesUs.join(", ")}
+
+RISK FACTORS
+${args.riskFactors.join("; ")}
+
+Produce the meta object using these rules:
+- meta.title: 50 to 60 characters total. Lead with the role and a high-CTR benefit phrase. Do NOT append "career guide" or the site name (the layout adds a site suffix automatically). Use a SERP-CTR pattern such as "Park Ranger Career: Salary, Skills, How to Become One" or "How to Become a Cardiologist: Routes, Pay, Outlook". Title-case the first word and proper nouns.
+- meta.description: 150 to 160 characters. A single complete sentence — no mid-cut, no ellipsis. Lead with what the role does. Ground a number where natural (use the existing salary or outlook content above). Do not start with "Discover" or "Learn about" — pick a concrete, declarative opening.
+- meta.keywords: 8 to 12 short search-intent phrases. Mix head terms (the role title alone, common variants) with tail terms ("how to become a ${args.title} uk", "${args.title} salary us", "${args.title} career path"). Lower-case, no quotes.
+- meta.socialAlt: 1 to 2 sentences describing the role for the OG/Twitter image's alt attribute. Plain English, ends with a full stop.
+
+British English. Avoid em dashes and en dashes. No emoji.
+`.trim();
 }
 
 // Salary judge — compares stored vs Exa-grounded salary, may patch on
@@ -380,6 +553,11 @@ ${numbered(args.riskFactors)}
 
 // Sections that fan out to Exa on first click. Single source of truth —
 // imported by convex/guideBranches.ts to route the generation flow.
+//
+// As of the citation-everywhere change: ALL Go Deeper sections run through
+// Exa so every branch carries its own sources. The set is kept for any
+// future caller that wants to know which sections are "naturally" fact-heavy
+// (vs narrative), but isFactHeavySection now always returns true.
 export const FACT_HEAVY_SECTION_IDS: ReadonlySet<string> = new Set([
   "outlook-us",
   "outlook-uk",
@@ -388,8 +566,7 @@ export const FACT_HEAVY_SECTION_IDS: ReadonlySet<string> = new Set([
   "considerations",
 ]);
 
-export const isFactHeavySection = (sectionId: string): boolean =>
-  FACT_HEAVY_SECTION_IDS.has(sectionId);
+export const isFactHeavySection = (_sectionId: string): boolean => true;
 
 // Friendly labels for the section context shown to the model.
 const SECTION_LABELS: Record<string, string> = {
@@ -545,7 +722,19 @@ export function buildBranchExaQuery(args: {
       systemPrompt: `You are researching honest considerations for a public career guide. Cite from labour-market reports, industry trend pieces, and reputable workplace surveys. Today's date is ${today}.`,
     };
   }
-  // Fallback (shouldn't fire in v1 — narrative sections use inherited mode).
+  if (args.sectionId === "overview") {
+    return {
+      query: `For people working as a ${args.guideTitle}: ${args.question} Cite recent industry context, employment patterns, or comparison to adjacent roles.`,
+      systemPrompt: `You are researching a question about who a ${args.guideTitle} role suits and what it broadly involves, for a public career guide. Prefer authoritative careers, labour-market, and industry sources. Today's date is ${today}.`,
+    };
+  }
+  if (args.sectionId === "day-to-day") {
+    return {
+      query: `What the day-to-day work of a ${args.guideTitle} actually looks like: ${args.question} Cite practitioner accounts, workplace surveys, or industry reports.`,
+      systemPrompt: `You are researching a question about the lived experience of working as a ${args.guideTitle}, for a public career guide. Prefer practitioner accounts, professional bodies, workplace surveys, and trade publications. Today's date is ${today}.`,
+    };
+  }
+  // Generic fallback for any future section.
   return {
     query: `In the context of working as a ${args.guideTitle}: ${args.question}`,
     systemPrompt: `You are researching a follow-up question for a public career guide. Cite recent, reputable sources. Today's date is ${today}.`,
