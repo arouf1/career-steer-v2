@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { generateText, Output } from "ai";
 import { internalAction, internalMutation, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -80,6 +80,24 @@ export const _savePodcastScript = internalMutation({
   handler: async (ctx, args) => {
     const guide = await ctx.db.get(args.guideId);
     if (!guide) return;
+
+    // Race-condition guard: if another guide concurrently picked the same
+    // guest name between this action's pre-fetch and now, reject so the
+    // action can retry with the new name added to its forbidden set.
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+    const taken = norm(args.guestName);
+    if (taken) {
+      const all = await ctx.db.query("career_guides").collect();
+      const collision = all.find(
+        (g) =>
+          g._id !== args.guideId &&
+          norm(g.podcast?.guestName ?? "") === taken,
+      );
+      if (collision) {
+        throw new ConvexError(`guestName_collision_race:${args.guestName}`);
+      }
+    }
+
     const prev = guide.podcast;
     await ctx.db.patch(args.guideId, {
       podcast: {
@@ -225,15 +243,27 @@ export const generateScript = internalAction({
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), SCRIPT_TIMEOUT_MS);
-    const prompt = buildPodcastScriptPrompt({
-      title: guide.title,
-      content: guide.content,
-    });
+
+    // Pull every prior guest name once. Re-fetching per attempt would catch
+    // concurrent saves, but the save-time race guard in _savePodcastScript
+    // covers that case more reliably than a query refresh.
+    const forbidden = new Set<string>(
+      await ctx.runQuery(internal.careerGuides._getUsedGuestNames, {
+        excludeGuideId: args.guideId,
+      }),
+    );
+    const normName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+    const forbiddenNorm = new Set([...forbidden].map(normName));
 
     let lastErr: unknown;
     let success = false;
     for (let attempt = 0; attempt <= SCRIPT_RETRIES; attempt++) {
       try {
+        const prompt = buildPodcastScriptPrompt({
+          title: guide.title,
+          content: guide.content,
+          forbiddenGuestNames: [...forbidden],
+        });
         const { output } = await generateText({
           model: chatModel(SCRIPT_MODEL_ID, { zdr: true }),
           output: Output.object({ schema: PodcastScriptSchema }),
@@ -243,6 +273,13 @@ export const generateScript = internalAction({
 
         if (output.dialogue.length < 4) {
           throw new Error("dialogue_too_short");
+        }
+        if (forbiddenNorm.has(normName(output.guestName))) {
+          // LLM ignored the do-not-reuse list. Add the offender so the next
+          // attempt's prompt names it explicitly, and retry.
+          forbidden.add(output.guestName);
+          forbiddenNorm.add(normName(output.guestName));
+          throw new Error(`guestName_collision:${output.guestName}`);
         }
 
         const guestVoice = pickGuestVoice(output.guestGender);
@@ -266,6 +303,15 @@ export const generateScript = internalAction({
         const msg = err instanceof Error ? err.message : String(err);
         // Don't retry on abort (timeout) — caller can re-trigger.
         if (controller.signal.aborted) break;
+        // Save-time race guard threw — treat the same as an in-process
+        // collision: add the colliding name and retry.
+        if (msg.startsWith("guestName_collision_race:")) {
+          const taken = msg.slice("guestName_collision_race:".length);
+          if (taken) {
+            forbidden.add(taken);
+            forbiddenNorm.add(normName(taken));
+          }
+        }
         console.warn("generateScript:retry", {
           guideId: args.guideId,
           attempt,

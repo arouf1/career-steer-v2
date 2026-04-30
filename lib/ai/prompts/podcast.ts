@@ -33,10 +33,24 @@ const HOST_NAME = "Alice Clements";
 export function buildPodcastScriptPrompt(args: {
   title: string;
   content: ContentBundle;
+  forbiddenGuestNames: string[];
 }): string {
-  const { title, content } = args;
+  const { title, content, forbiddenGuestNames } = args;
+  // Cap the injected list. Each name is ~15 chars, so 200 names ≈ 3 KB —
+  // well under any prompt budget. Most-recent-first wouldn't matter since
+  // the goal is "don't reuse any of these," but we slice from the start to
+  // keep the behaviour deterministic across attempts.
+  const recent = forbiddenGuestNames.slice(0, 200);
+  const forbiddenBlock = recent.length
+    ? `
+
+Used guest names (do NOT reuse any of these full names, case-insensitively):
+${recent.join(", ")}
+
+Also vary the FIRST name — do not reuse a first name from that list unless absolutely unavoidable. Every episode should feature a distinct-feeling person.`
+    : "";
   return `
-You are writing the script for a short conversational podcast episode about the career of "${title}". The episode is part of the Career Steer podcast — a friendly, no-fluff series that helps people understand what different careers are actually like.
+You are writing the script for a short conversational podcast episode about the career of "${title}". The episode is part of Career Cast — a friendly, no-fluff series that helps people understand what different careers are actually like.
 
 The host is ${HOST_NAME}. She is warm, curious, conversational, and not afraid to ask the obvious question. She has a dry, mostly-affectionate sense of humour and isn't above a gentle tease. She subtly mentions Career Steer (the app users are reading the guide on) once or twice — never salesy, just as the natural setting of the show.
 
@@ -55,7 +69,7 @@ Hard rules:
 - Use short, natural turns. Most turns should be one to four sentences. Avoid monologues. Real people interrupt themselves, trail off, change tack mid-thought — write that.
 - No em dashes or en dashes. Use commas, full stops, or new sentences.
 - Do not list the typical skills or related roles in a recital. Bring those topics up the way real people do, by telling small stories or making side observations.
-- The host opens with a brief welcome and quickly hands over to the guest. The guest closes the episode with a sentence of advice for someone considering this path. The host wraps with a one-line sign-off that mentions Career Steer.
+- The host opens with a brief welcome and quickly hands over to the guest. The guest closes the episode with a sentence of advice for someone considering this path. The host wraps with a one-line sign-off that mentions Career Cast.
 
 Sound design — markup tags inline in the text:
 The TTS engine interprets a small set of bracketed tags as audio cues, NOT as words to read aloud. Use them sparingly so they land. They go inside the spoken text, e.g. "Wait, really? [laughs] That's the worst." or "Yeah, that one stings. [sigh] Took me a while to get over it."
@@ -77,7 +91,7 @@ FORBIDDEN tags (these get read aloud as words, which sounds broken):
 
 Casting:
 - Decide whether the guest is more plausibly a man or a woman, weighted by the realistic gender mix of people who actually do this job today. Lean into the demographic majority unless the role is genuinely balanced.
-- Invent a credible full first-and-last name for the guest. Avoid stereotypical or alliterative names. Avoid names that match the topic (no "Brick" for a bricklayer). Pick something a real person could plausibly be called.
+- Invent a credible full first-and-last name for the guest. Avoid stereotypical or alliterative names. Avoid names that match the topic (no "Brick" for a bricklayer). Pick something a real person could plausibly be called.${forbiddenBlock}
 - Invent a one-line guest description: their current title, place, and rough years of experience. Example shape: "Senior bricklayer in Sheffield, eighteen years in the trade." Keep it specific.
 
 Themes to weave in (pick the ones that fit the conversation, do not force all of them):
@@ -106,5 +120,5 @@ export function buildSpeakerPrompt(args: {
   guestName: string;
   guestRole: string;
 }): string {
-  return `Voice this as a candid, warm podcast conversation between two people who actually like each other: ${HOST_NAME}, the host of the Career Steer podcast, and her guest, ${args.guestName} (${args.guestRole}). Easy rhythm, genuine reactions, comfortable pauses where they belong. ${HOST_NAME} sounds welcoming, curious, dry-humoured. ${args.guestName} sounds grounded and unhurried, with the easy authority of someone who has done the job for years and isn't trying to impress anyone. Where the script contains [laughs], react with a real amused laugh fitting the moment, never forced. Where it contains [sigh] or [uhm], deliver a small natural beat. Where it contains [short pause], [medium pause], or [long pause], hold the silence. Read everything else as continuous, conversational speech — never broadcast voice, never stiff.`;
+  return `Voice this as a candid, warm podcast conversation between two people who actually like each other: ${HOST_NAME}, the host of Career Cast, and her guest, ${args.guestName} (${args.guestRole}). Easy rhythm, genuine reactions, comfortable pauses where they belong. ${HOST_NAME} sounds welcoming, curious, dry-humoured. ${args.guestName} sounds grounded and unhurried, with the easy authority of someone who has done the job for years and isn't trying to impress anyone. Where the script contains [laughs], react with a real amused laugh fitting the moment, never forced. Where it contains [sigh] or [uhm], deliver a small natural beat. Where it contains [short pause], [medium pause], or [long pause], hold the silence. Read everything else as continuous, conversational speech — never broadcast voice, never stiff.`;
 }

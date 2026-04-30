@@ -48,7 +48,7 @@ function PendingCard() {
   return (
     <section
       id="podcast"
-      aria-label="Podcast generating"
+      aria-label="Career Cast generating"
       className="mt-10 mb-12 flex items-center gap-4 rounded-surface border border-hairline bg-paper-raised px-5 py-5"
     >
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-pill border border-hairline bg-paper">
@@ -56,7 +56,7 @@ function PendingCard() {
       </div>
       <div className="min-w-0">
         <p className="text-[10px] uppercase tracking-[0.18em] font-medium text-mute">
-          Podcast
+          Career Cast
         </p>
         <p className="mt-1 text-[15px] leading-relaxed text-ink/85">
           Recording a five-minute conversation about this career.
@@ -132,7 +132,7 @@ function ReadyCard({
   return (
     <section
       id="podcast"
-      aria-label="Career podcast"
+      aria-label="Career Cast episode"
       className="mt-10 mb-12 overflow-hidden rounded-surface border border-hairline bg-paper-raised"
     >
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
@@ -154,7 +154,7 @@ function ReadyCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-medium text-mute">
             <Headphones className="h-3 w-3" aria-hidden />
-            <span>Career Steer Podcast</span>
+            <span>Career Cast</span>
           </div>
           <h2 className="mt-1.5 text-[18px] leading-snug text-ink [font-family:var(--font-serif)]">
             {HOST_NAME} talks with {guestName}
