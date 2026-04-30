@@ -25,6 +25,7 @@ import { MobileTableOfContents } from "./MobileTableOfContents";
 import { FieldCitation, type CitationSource } from "./FieldCitation";
 import { CareerGuidePodcast } from "./CareerGuidePodcast";
 import { AllSourcesPanel } from "./AllSourcesPanel";
+import { GoDeeper } from "./GoDeeper";
 
 export type Region = "us" | "uk";
 
@@ -89,6 +90,8 @@ export function CareerGuideArticle({
   const r = c.regional[region];
   const cite = (path: string): CitationSource[] | undefined =>
     guide.citations?.[path];
+  const followUpsFor = (sectionId: string): string[] | undefined =>
+    guide.followUps?.[sectionId];
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 pb-32 sm:px-10">
@@ -131,6 +134,15 @@ export function CareerGuideArticle({
               id="overview"
               eyebrow="Section one"
               title={`What is a ${guide.title}?`}
+              footer={
+                followUpsFor("overview") ? (
+                  <GoDeeper
+                    guideId={guide._id}
+                    sectionId="overview"
+                    followUps={followUpsFor("overview")!}
+                  />
+                ) : undefined
+              }
             >
               <div className="max-w-2xl space-y-5">
                 {c.overview.split("\n").map((para, i) => (
@@ -190,6 +202,15 @@ export function CareerGuideArticle({
               eyebrow="Section three"
               title="What does the day look like?"
               lead="What the work actually looks like, beyond the job description."
+              footer={
+                followUpsFor("day-to-day") ? (
+                  <GoDeeper
+                    guideId={guide._id}
+                    sectionId="day-to-day"
+                    followUps={followUpsFor("day-to-day")!}
+                  />
+                ) : undefined
+              }
             >
               <div className="max-w-2xl space-y-5">
                 {c.dayToDay.split("\n").map((para, i) => (
@@ -209,6 +230,15 @@ export function CareerGuideArticle({
               title="What's the career outlook?"
               lead="Where the demand is heading and what the market looks like today."
               meta={<RegionBadge region={region} />}
+              footer={
+                followUpsFor(`outlook-${region}`) ? (
+                  <GoDeeper
+                    guideId={guide._id}
+                    sectionId={`outlook-${region}`}
+                    followUps={followUpsFor(`outlook-${region}`)!}
+                  />
+                ) : undefined
+              }
             >
               <div className="max-w-2xl space-y-5">
                 {r.careerOutlook.split("\n").map((para, i, arr) => (
@@ -233,6 +263,15 @@ export function CareerGuideArticle({
               title="How do you get there?"
               lead="A practical path from interest to competence, step by step."
               meta={<RegionBadge region={region} />}
+              footer={
+                followUpsFor(`learning-path-${region}`) ? (
+                  <GoDeeper
+                    guideId={guide._id}
+                    sectionId={`learning-path-${region}`}
+                    followUps={followUpsFor(`learning-path-${region}`)!}
+                  />
+                ) : undefined
+              }
             >
               <ol className="max-w-2xl space-y-7">
                 {r.learningPath.map((step, i, arr) => (
@@ -259,6 +298,15 @@ export function CareerGuideArticle({
                 eyebrow="Section six"
                 title="Worth knowing."
                 lead="Honest considerations to weigh before you commit."
+                footer={
+                  followUpsFor("considerations") ? (
+                    <GoDeeper
+                      guideId={guide._id}
+                      sectionId="considerations"
+                      followUps={followUpsFor("considerations")!}
+                    />
+                  ) : undefined
+                }
               >
                 <ul className="max-w-2xl space-y-5">
                   {c.riskFactors.map((item, i, arr) => (
@@ -401,6 +449,7 @@ function ArticleSection({
   title,
   lead,
   meta,
+  footer,
   children,
 }: {
   id: string;
@@ -408,6 +457,7 @@ function ArticleSection({
   title: string;
   lead?: string;
   meta?: React.ReactNode;
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -427,6 +477,7 @@ function ArticleSection({
         </p>
       )}
       <div className="mt-6">{children}</div>
+      {footer && <div className="mt-12">{footer}</div>}
     </section>
   );
 }

@@ -12,6 +12,7 @@ import type * as careerGuides from "../careerGuides.js";
 import type * as careerPaths from "../careerPaths.js";
 import type * as embeddings from "../embeddings.js";
 import type * as enrichments from "../enrichments.js";
+import type * as guideBranches from "../guideBranches.js";
 import type * as http from "../http.js";
 import type * as lib_dedup from "../lib/dedup.js";
 import type * as lib_imagePrompts from "../lib/imagePrompts.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   careerPaths: typeof careerPaths;
   embeddings: typeof embeddings;
   enrichments: typeof enrichments;
+  guideBranches: typeof guideBranches;
   http: typeof http;
   "lib/dedup": typeof lib_dedup;
   "lib/imagePrompts": typeof lib_imagePrompts;

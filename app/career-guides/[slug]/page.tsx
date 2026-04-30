@@ -89,6 +89,28 @@ export default async function CareerGuidePage({
   );
 }
 
+type CitationLike = {
+  url: string;
+  title: string;
+  publisher?: string;
+};
+
+function uniqueCitations(
+  byField: Record<string, CitationLike[]> | undefined,
+  limit = 25,
+): CitationLike[] {
+  if (!byField) return [];
+  const seen = new Map<string, CitationLike>();
+  for (const list of Object.values(byField)) {
+    for (const c of list) {
+      if (!c?.url) continue;
+      if (!seen.has(c.url)) seen.set(c.url, c);
+      if (seen.size >= limit) return Array.from(seen.values());
+    }
+  }
+  return Array.from(seen.values());
+}
+
 function ArticleJsonLd({
   guide,
   region,
@@ -100,6 +122,15 @@ function ArticleJsonLd({
   const r = guide.content.regional[region];
   const url = `/career-guides/${guide.slug}`;
 
+  const citations = uniqueCitations(guide.citations).map((c) => ({
+    "@type": "CreativeWork" as const,
+    url: c.url,
+    name: c.title,
+    ...(c.publisher?.trim()
+      ? { publisher: { "@type": "Organization" as const, name: c.publisher.trim() } }
+      : {}),
+  }));
+
   const article = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -110,6 +141,7 @@ function ArticleJsonLd({
     dateModified: new Date(guide.updatedAt).toISOString(),
     author: { "@type": "Organization", name: "Career Steer" },
     mainEntityOfPage: url,
+    ...(citations.length > 0 ? { citation: citations } : {}),
   };
 
   const breadcrumbs = {

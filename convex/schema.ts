@@ -350,6 +350,20 @@ export default defineSchema({
       v.literal("complete"),
       v.literal("failed"),
     ),
+    // "Go Deeper" follow-up questions per section. Keys mirror GoDeeper
+    // sectionIds: "overview", "day-to-day", "outlook-us", "outlook-uk",
+    // "learning-path-us", "learning-path-uk", "considerations". Each value
+    // is a short list of curiosity-driven questions a reader might click.
+    // Optional: legacy guides have no followUps and the UI hides the block.
+    followUps: v.optional(v.record(v.string(), v.array(v.string()))),
+    followUpsStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("generating"),
+        v.literal("complete"),
+        v.literal("failed"),
+      ),
+    ),
     // Per-field citation map. Field paths like "regional.us.salary",
     // "typicalSkills", "riskFactors". Only enriched fields appear here.
     citations: v.optional(
@@ -424,6 +438,49 @@ export default defineSchema({
     .index("by_content_status", ["contentStatus"])
     .index("by_created", ["createdAt"])
     .searchIndex("search_title", { searchField: "title" }),
+
+  // "Go Deeper" branches: per-section follow-up questions a reader clicks
+  // to expand a passage with new prose (and optionally fresh Exa-grounded
+  // citations). Branches are deduped per (guideId, questionNormalized) so
+  // the same question never re-runs.
+  career_guide_branches: defineTable({
+    guideId: v.id("career_guides"),
+    sectionId: v.string(),
+    question: v.string(),
+    questionNormalized: v.string(),
+    status: v.union(
+      v.literal("generating"),
+      v.literal("researching"),
+      v.literal("complete"),
+      v.literal("failed"),
+    ),
+    // "exa" for fact-heavy sections (outlook, learning paths, risks) —
+    // we run an Exa grounded query first. "inherited" reuses the parent
+    // guide's section prose + citations without new retrieval.
+    groundingMode: v.union(v.literal("exa"), v.literal("inherited")),
+    answer: v.optional(
+      v.object({
+        title: v.string(),
+        body: v.string(),
+      }),
+    ),
+    citations: v.optional(
+      v.array(
+        v.object({
+          url: v.string(),
+          title: v.string(),
+          publisher: v.optional(v.string()),
+          fetchedAt: v.number(),
+        }),
+      ),
+    ),
+    error: v.optional(v.string()),
+    flagged: v.optional(v.boolean()),
+    createdAt: v.number(),
+  })
+    .index("by_guide_question", ["guideId", "questionNormalized"])
+    .index("by_guide_section", ["guideId", "sectionId"])
+    .index("by_guide_status_created", ["guideId", "status", "createdAt"]),
 
   career_validations: defineTable({
     careerNormalized: v.string(),
