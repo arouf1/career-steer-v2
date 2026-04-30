@@ -6,10 +6,26 @@ import { CareerGuidesIndexClient } from "@/components/career-guides/CareerGuides
 
 export const revalidate = 60;
 
+const description =
+  "Honest, in-depth guides to real career paths — what the work involves, the skills that matter, realistic salary ranges, and how to get started.";
+
 export const metadata: Metadata = {
-  title: "Career guides — Career Steer",
-  description:
-    "Honest, in-depth guides to real career paths — what the work involves, the skills that matter, realistic salary ranges, and how to get started.",
+  title: "Career guides",
+  description,
+  alternates: { canonical: "/career-guides" },
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: "website",
+    url: "/career-guides",
+    title: "Career guides · Career Steer",
+    description,
+    siteName: "Career Steer",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Career guides · Career Steer",
+    description,
+  },
 };
 
 export default async function CareerGuidesIndexPage() {

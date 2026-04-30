@@ -143,13 +143,13 @@ export function CareerGuideSearchHero() {
   return (
     <section className="border-b border-hairline">
       <div className="mx-auto max-w-4xl px-6 py-20 text-center sm:py-28">
-        <p className="type-label mb-6 text-mute">Career guides</p>
+        <p className="type-label mb-6 text-mute">Career guides, written on demand</p>
         <h1 className="type-display text-ink">
-          Search <span className="text-ink-soft">any</span> career.
+          The honest guide to <span className="text-ink-soft">any</span> job.
         </h1>
         <p className="type-body-lg mx-auto mt-6 max-w-prose text-body">
-          What does the role actually involve, what does it pay, and how do
-          you get in. Type a job title and we will write you a guide.
+          What it pays. What the day actually looks like. How people get in.
+          Type a title and we&rsquo;ll research it live.
         </p>
 
         <form onSubmit={onSubmit} className="mx-auto mt-12 w-full max-w-2xl">

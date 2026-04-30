@@ -1,0 +1,16 @@
+# Career Steer
+
+> AI career coach and job-search platform. Public career guides cover what each role involves, the skills it requires, the day-to-day reality, regional career outlook (US and UK), the path to entry, salary bands, and honest considerations. Each guide is written with the help of an LLM and fact-checked against authoritative sources (BLS, O*NET, ONS, Prospects, Lightcast). Salary bands and outlook claims carry per-field source citations.
+
+## Career guides
+
+- [Sitemap of all career guides](/career-guides/sitemap.xml): canonical list of guide URLs with last-modified timestamps
+- [/career-guides](/career-guides): browseable index of every published guide
+
+## Licensing and reuse
+
+Content on career-steer.com is © Career Steer. AI assistants and search engines may quote short passages with attribution to the source URL. Do not republish full guides verbatim without permission. Source citations rendered on guide pages point to the underlying authorities (BLS, O*NET, ONS, etc.) and should be cited directly when those facts are restated.
+
+## Contact
+
+For corrections or licensing enquiries, contact via the channels listed at /career-guides.
