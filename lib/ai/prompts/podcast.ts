@@ -38,18 +38,42 @@ export function buildPodcastScriptPrompt(args: {
   return `
 You are writing the script for a short conversational podcast episode about the career of "${title}". The episode is part of the Career Steer podcast — a friendly, no-fluff series that helps people understand what different careers are actually like.
 
-The host is ${HOST_NAME}. She is warm, curious, conversational, and not afraid to ask the obvious question. She subtly mentions Career Steer (the app users are reading the guide on) once or twice — never salesy, just as the natural setting of the show.
+The host is ${HOST_NAME}. She is warm, curious, conversational, and not afraid to ask the obvious question. She has a dry, mostly-affectionate sense of humour and isn't above a gentle tease. She subtly mentions Career Steer (the app users are reading the guide on) once or twice — never salesy, just as the natural setting of the show.
 
-The guest is a working ${title} you are about to invent. They have done the job for years and speak from experience, not from a textbook.
+The guest is a working ${title} you are about to invent. They have done the job for years and speak from experience, not from a textbook. They're comfortable enough with themselves to laugh at the absurd parts of the job, including their own younger-self mistakes.
+
+What the conversation should feel like:
+- Two people who actually like each other. They riff. They have small, real reactions ("oh god, yeah", "wait, really?", "ha, that's brutal", "right? right?!").
+- Gentle teasing in both directions. Self-deprecation lands well — let the guest poke fun at one of their own past mistakes.
+- One small, warm disagreement that resolves quickly: the host pushes back lightly on something the guest claims, and they meet in the middle.
+- One callback: the host references something the guest said earlier ("you mentioned X — does that still happen?") to show she's actually listening.
+- Real laughter, not performative. Use [laughs] only when something genuinely lands as funny in context.
 
 Hard rules:
 - The guest is NOT aware of any "guide" or article. Neither host nor guest references "the guide", "this article", "this page", or anything like that. They are simply two people having a conversation. Themes from the source material show up naturally as topics they care about.
 - Aim for roughly ${DIALOGUE_TARGET_WORDS} words of total spoken dialogue. Distribute fairly between host and guest, with the guest carrying slightly more (it's their expertise being explored).
-- Use short, natural turns. Most turns should be one to four sentences. Avoid monologues.
-- No stage directions, no "[laughs]" tags, no parentheticals. Just the spoken words.
+- Use short, natural turns. Most turns should be one to four sentences. Avoid monologues. Real people interrupt themselves, trail off, change tack mid-thought — write that.
 - No em dashes or en dashes. Use commas, full stops, or new sentences.
 - Do not list the typical skills or related roles in a recital. Bring those topics up the way real people do, by telling small stories or making side observations.
 - The host opens with a brief welcome and quickly hands over to the guest. The guest closes the episode with a sentence of advice for someone considering this path. The host wraps with a one-line sign-off that mentions Career Steer.
+
+Sound design — markup tags inline in the text:
+The TTS engine interprets a small set of bracketed tags as audio cues, NOT as words to read aloud. Use them sparingly so they land. They go inside the spoken text, e.g. "Wait, really? [laughs] That's the worst." or "Yeah, that one stings. [sigh] Took me a while to get over it."
+
+ALLOWED non-speech sounds:
+- [laughs] — a real, amused laugh. Use 2 to 4 times across the whole episode total, only when something genuinely funny lands.
+- [sigh] — a soft, brief sigh. Use 0 to 2 times, when acknowledging something hard or weighty about the job.
+- [uhm] — a small natural hesitation. Use 0 to 2 times, when the speaker is genuinely thinking.
+
+ALLOWED pacing:
+- [short pause] — comma-length break. Use rarely, where punctuation alone wouldn't carry it.
+- [medium pause] — sentence-length break. Use 0 to 2 times for a thinking beat.
+- [long pause] — dramatic pause around one second. Use at most once across the whole episode, only if there's a real beat that calls for it.
+
+FORBIDDEN tags (these get read aloud as words, which sounds broken):
+- Do NOT use [scared], [curious], [bored], [excited], [happy], [sad], [angry], or any other emotional-adjective tag.
+- Do NOT use [whispering], [shouting], [robotic], [sarcasm], or [extremely fast].
+- Do NOT add stage directions in parentheses like (laughing), (softly), or (smiling). Only the bracketed tags listed above.
 
 Casting:
 - Decide whether the guest is more plausibly a man or a woman, weighted by the realistic gender mix of people who actually do this job today. Lean into the demographic majority unless the role is genuinely balanced.
@@ -70,15 +94,17 @@ Output strictly as structured JSON matching the schema:
 - guestGender: "female" or "male"
 - guestName: full name as a string
 - guestRole: one-line guest description (used as a TTS style hint)
-- dialogue: ordered array of turns. Each turn has speaker ("host" or "guest") and text (the spoken words only).
+- dialogue: ordered array of turns. Each turn has speaker ("host" or "guest") and text. The text is exactly what the speaker says, with bracketed tags inline at the moments they should fire.
 `.trim();
 }
 
-// Style preamble passed as part of the TTS prompt to steer delivery.
-// Stays under 1000 bytes — the dialogue itself takes the rest of the budget.
+// Director's note passed as the style preamble of the TTS prompt. Steers
+// delivery: chemistry, easy rhythm, real laughter where the script's
+// markup tags fire. Stays well under the per-field 4000-byte cap; the
+// dialogue takes most of the combined budget.
 export function buildSpeakerPrompt(args: {
   guestName: string;
   guestRole: string;
 }): string {
-  return `You are voicing a friendly, candid podcast conversation between ${HOST_NAME}, the warm and curious host of the Career Steer podcast, and her guest, ${args.guestName} (${args.guestRole}). Keep the pace natural and conversational. Slight smile in the voice. Brief pauses between turns. ${HOST_NAME} sounds welcoming and engaged. ${args.guestName} sounds grounded, experienced, and matter-of-fact, with the easy authority of someone who has done the job for years.`;
+  return `Voice this as a candid, warm podcast conversation between two people who actually like each other: ${HOST_NAME}, the host of the Career Steer podcast, and her guest, ${args.guestName} (${args.guestRole}). Easy rhythm, genuine reactions, comfortable pauses where they belong. ${HOST_NAME} sounds welcoming, curious, dry-humoured. ${args.guestName} sounds grounded and unhurried, with the easy authority of someone who has done the job for years and isn't trying to impress anyone. Where the script contains [laughs], react with a real amused laugh fitting the moment, never forced. Where it contains [sigh] or [uhm], deliver a small natural beat. Where it contains [short pause], [medium pause], or [long pause], hold the silence. Read everything else as continuous, conversational speech — never broadcast voice, never stiff.`;
 }

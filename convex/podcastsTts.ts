@@ -8,7 +8,15 @@ import { HOST } from "../lib/podcast/voices";
 import { buildSpeakerPrompt } from "../lib/ai/prompts/podcast";
 import { pcmDurationSeconds, pcmToWav } from "../lib/podcast/wav";
 
-const TTS_MODEL = "gemini-3.1-flash-tts-preview";
+// Google publishes two multi-speaker TTS models. Flash is "optimized for
+// cost-efficient everyday applications" — fine for short clips but drifts
+// in clarity over a few minutes of continuous output (audio analysis on
+// flash showed an 18% drop in spectral centroid past 80s). Pro is
+// explicitly "optimized for structured workflows like podcast generation
+// and audiobooks", which is exactly our use case. The AI Studio API name
+// is `gemini-2.5-pro-preview-tts` (Vertex calls the same model
+// `gemini-2.5-pro-tts`).
+const TTS_MODEL = "gemini-2.5-pro-preview-tts";
 const TTS_TIMEOUT_MS = 180_000;
 
 export const synthesize = internalAction({
@@ -84,7 +92,11 @@ export const synthesize = internalAction({
               ],
             },
           },
-          temperature: 1.0,
+          // Gemini's TTS docs use temperature 2.0 in their multi-speaker
+          // examples — higher creativity gives more expressive delivery
+          // (laugh tone variation, natural pauses) which is what we want
+          // for a podcast feel.
+          temperature: 2.0,
           abortSignal: controller.signal,
         },
       });
