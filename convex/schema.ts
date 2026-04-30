@@ -520,4 +520,68 @@ export default defineSchema({
     count: v.number(),
     windowStartMs: v.number(),
   }).index("by_key", ["key"]),
+
+  // Geographic locations (countries, provinces, cities, neighborhoods, etc.)
+  // sourced from a Google Ads geo-target dump. Imported once via
+  // `npx convex import --table locations`. The future public locations API
+  // will filter to targetType === "City" for profile location autocomplete.
+  locations: defineTable({
+    externalId: v.string(),
+    googleId: v.number(),
+    googleParentId: v.optional(v.number()),
+    name: v.string(),
+    canonicalName: v.string(),
+    countryCode: v.string(),
+    targetType: v.union(
+      v.literal("Airport"),
+      v.literal("Autonomous Community"),
+      v.literal("Barrio"),
+      v.literal("Borough"),
+      v.literal("Canton"),
+      v.literal("City"),
+      v.literal("City Region"),
+      v.literal("Congressional District"),
+      v.literal("Country"),
+      v.literal("County"),
+      v.literal("DMA Region"),
+      v.literal("Department"),
+      v.literal("District"),
+      v.literal("Governorate"),
+      v.literal("Municipality"),
+      v.literal("Municipality District"),
+      v.literal("National Park"),
+      v.literal("Neighborhood"),
+      v.literal("Okrug"),
+      v.literal("Postal Code"),
+      v.literal("Prefecture"),
+      v.literal("Province"),
+      v.literal("Quarter"),
+      v.literal("Region"),
+      v.literal("State"),
+      v.literal("Sub-District"),
+      v.literal("Sub-Ward"),
+      v.literal("TV Region"),
+      v.literal("Territory"),
+      v.literal("Union Territory"),
+      v.literal("University"),
+    ),
+    reach: v.number(),
+    gps: v.object({ lat: v.number(), lon: v.number() }),
+    // Lowercased `name`, used by the typeahead search to do prefix range
+    // queries via `by_target_nameLower`. Convex full-text search ranks by
+    // BM25 only and has no popularity signal, so for ambiguous 3-char
+    // prefixes (Par, Ber, Mad) it doesn't surface the canonical big city.
+    // The range index lets us pull every prefix-matching row cheaply, then
+    // sort by `reach` desc in code.
+    nameLower: v.optional(v.string()),
+  })
+    .index("by_external_id", ["externalId"])
+    .index("by_google_id", ["googleId"])
+    .index("by_country_target", ["countryCode", "targetType"])
+    .index("by_target_reach", ["targetType", "reach"])
+    .index("by_target_nameLower", ["targetType", "nameLower"])
+    .searchIndex("search_name", {
+      searchField: "name",
+      filterFields: ["targetType", "countryCode"],
+    }),
 });

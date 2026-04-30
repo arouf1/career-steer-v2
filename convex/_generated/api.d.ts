@@ -20,6 +20,7 @@ import type * as lib_imagePrompts from "../lib/imagePrompts.js";
 import type * as lib_imageReference from "../lib/imageReference.js";
 import type * as lib_normalize from "../lib/normalize.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
+import type * as locations from "../locations.js";
 import type * as matching from "../matching.js";
 import type * as podcasts from "../podcasts.js";
 import type * as podcastsTts from "../podcastsTts.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   "lib/imageReference": typeof lib_imageReference;
   "lib/normalize": typeof lib_normalize;
   "lib/rateLimit": typeof lib_rateLimit;
+  locations: typeof locations;
   matching: typeof matching;
   podcasts: typeof podcasts;
   podcastsTts: typeof podcastsTts;
