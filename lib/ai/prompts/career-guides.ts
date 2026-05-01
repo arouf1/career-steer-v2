@@ -118,6 +118,13 @@ export type ContentMeta = z.infer<typeof ContentMetaSchema>;
 export const ContentResponseSchema = z.object({
   overview: z.string(),
   typicalSkills: z.array(z.string()),
+  typicalSkillsDetail: z.array(
+    z.object({
+      name: z.string(),
+      rationale: z.string(),
+      tier: z.enum(["must", "nice"]),
+    }),
+  ),
   dayToDay: z.string(),
   riskFactors: z.array(z.string()),
   whyConsider: z.string(),
@@ -141,7 +148,11 @@ For any industry acronym in the title, use the standard, widely-accepted expansi
 
 Field guidance:
 - overview: 200 to 300 words. What the role involves, its place in the industry, and why it matters. Warm and authoritative.
-- typicalSkills: 8 to 12 specific skills, ordered most-important first. Avoid generic soft skills.
+- typicalSkills: 8 to 12 specific skills, ordered most-important first. Avoid generic soft skills. Must be the same names that appear in typicalSkillsDetail (in the same order).
+- typicalSkillsDetail: the same skills as typicalSkills, each expanded into an object with three fields:
+  - name: the skill name (concise, 1 to 5 words; matches the corresponding entry in typicalSkills exactly).
+  - rationale: 1 to 2 sentences (max ~25 words) explaining concretely why this skill matters for the role — what it unlocks day-to-day, what fails without it, or what employers screen for. Be specific to "${title}", not generic. Avoid restating the skill name.
+  - tier: "must" for non-negotiable / employer-screened capabilities a candidate cannot get hired without; "nice" for capabilities that strongly differentiate but are not table-stakes. Aim for 4 to 6 must and 3 to 5 nice. Order within each tier from most to least important.
 - dayToDay: 100 to 150 words. Specific and vivid description of a typical working day or week.
 - riskFactors: 3 to 5 honest considerations or challenges someone should know before pursuing this path. Include automation exposure and market volatility where relevant.
 - whyConsider: 80 to 120 words. Genuine and specific reasons to consider this career, not salesy.
@@ -743,4 +754,43 @@ export function buildBranchExaQuery(args: {
     query: `In the context of working as a ${args.guideTitle}: ${args.question}`,
     systemPrompt: `You are researching a follow-up question for a public career guide. Cite recent, reputable sources. Today's date is ${today}.`,
   };
+}
+
+// ── Skills-detail backfill ────────────────────────────────────────────────
+//
+// Retroactively produces typicalSkillsDetail for guides created before the
+// rich tiered-skills shape existed. Takes the existing typicalSkills array
+// as input and returns a same-length array enriched with rationale + tier.
+
+export const SkillsDetailOnlySchema = z.object({
+  typicalSkillsDetail: z.array(
+    z.object({
+      name: z.string(),
+      rationale: z.string(),
+      tier: z.enum(["must", "nice"]),
+    }),
+  ),
+});
+export type SkillsDetailOnly = z.infer<typeof SkillsDetailOnlySchema>;
+
+export function buildSkillsDetailPrompt(args: {
+  title: string;
+  typicalSkills: string[];
+}): string {
+  return `
+You are enriching the skills section of an existing public career guide for "${args.title}". The guide already lists the skills below in importance order. Your job is to expand each into a tiered, rationale-backed entry.
+
+EXISTING SKILLS (in importance order)
+${args.typicalSkills.map((s, i) => `${i + 1}. ${s}`).join("\n")}
+
+Return a typicalSkillsDetail array that:
+- Contains exactly the same names as the input, in the same order. Do not rename, add, remove, merge, or reword any entry. Match each input string verbatim in the "name" field.
+- For each skill, write a rationale of 1 to 2 sentences (max ~25 words) explaining concretely why this skill matters specifically for "${args.title}" — what it unlocks day-to-day, what fails without it, or what employers screen for. Be specific, not generic. Do not restate the skill name as the rationale.
+- Tag each skill with a tier:
+  - "must" = non-negotiable / employer-screened capabilities a candidate cannot get hired without.
+  - "nice" = capabilities that strongly differentiate but are not table-stakes.
+  - The earlier-listed skills are more likely to be must-haves; later-listed skills are more likely to be nice-to-haves. Use judgment, but aim for 4 to 6 must and 3 to 5 nice across the full list.
+
+Style: British English. Avoid em dashes and en dashes. Be concrete and insightful.
+`.trim();
 }

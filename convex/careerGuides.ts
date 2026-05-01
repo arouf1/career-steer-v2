@@ -21,6 +21,7 @@ import {
   JUDGE_MODEL_ID,
   MetaOnlySchema,
   SalaryJudgeSchema,
+  SkillsDetailOnlySchema,
   ValidationResponseSchema,
   buildContentPrompt,
   buildDedupPrompt,
@@ -28,6 +29,7 @@ import {
   buildGroundedContentPrompt,
   buildMetaPrompt,
   buildSalaryJudgePrompt,
+  buildSkillsDetailPrompt,
   buildValidationPrompt,
 } from "../lib/ai/prompts/career-guides";
 import type {
@@ -117,6 +119,15 @@ const metaValidator = v.object({
 const contentValidator = v.object({
   overview: v.string(),
   typicalSkills: v.array(v.string()),
+  typicalSkillsDetail: v.optional(
+    v.array(
+      v.object({
+        name: v.string(),
+        rationale: v.string(),
+        tier: v.union(v.literal("must"), v.literal("nice")),
+      }),
+    ),
+  ),
   dayToDay: v.string(),
   riskFactors: v.array(v.string()),
   whyConsider: v.string(),
@@ -1008,6 +1019,134 @@ export const triggerMetaBackfill = mutation({
   },
 });
 
+// ── Skills-detail backfill ────────────────────────────────────────────────
+//
+// Retroactively produces content.typicalSkillsDetail for guides created
+// before the rich tiered-skills shape existed. Takes the existing
+// typicalSkills array as input and returns a same-length, same-order array
+// enriched with rationale + tier. Idempotent: skips guides that already
+// have a non-empty typicalSkillsDetail.
+
+export const _setSkillsDetail = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    typicalSkillsDetail: v.array(
+      v.object({
+        name: v.string(),
+        rationale: v.string(),
+        tier: v.union(v.literal("must"), v.literal("nice")),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide?.content) return;
+    await ctx.db.patch(args.guideId, {
+      content: {
+        ...guide.content,
+        typicalSkillsDetail: args.typicalSkillsDetail,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const _backfillSkillsDetail = internalAction({
+  args: { guideId: v.id("career_guides") },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const guide = await ctx.runQuery(internal.careerGuides._getById, {
+      guideId: args.guideId,
+    });
+    if (!guide?.content || guide.contentStatus !== "complete") return null;
+    if (
+      guide.content.typicalSkillsDetail &&
+      guide.content.typicalSkillsDetail.length > 0
+    ) {
+      return null;
+    }
+    if (guide.content.typicalSkills.length === 0) return null;
+
+    try {
+      const { output } = await generateText({
+        model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+        output: Output.object({ schema: SkillsDetailOnlySchema }),
+        prompt: buildSkillsDetailPrompt({
+          title: guide.title,
+          typicalSkills: guide.content.typicalSkills,
+        }),
+      });
+      await ctx.runMutation(internal.careerGuides._setSkillsDetail, {
+        guideId: args.guideId,
+        typicalSkillsDetail: output.typicalSkillsDetail,
+      });
+    } catch (err) {
+      console.error("careerGuides:backfill-skills-detail-failed", {
+        guideId: args.guideId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return null;
+  },
+});
+
+// Ops read: count complete guides that have / don't have typicalSkillsDetail.
+// Used to monitor backfill progress without scraping the full dataset.
+export const countSkillsDetailStatus = query({
+  args: {},
+  returns: v.object({
+    total: v.number(),
+    withDetail: v.number(),
+    missingDetail: v.number(),
+    pendingTitles: v.array(v.string()),
+  }),
+  handler: async (ctx) => {
+    const guides = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "complete"))
+      .collect();
+    let withDetail = 0;
+    const pendingTitles: string[] = [];
+    for (const g of guides) {
+      const detail = g.content?.typicalSkillsDetail;
+      if (detail && detail.length > 0) withDetail++;
+      else pendingTitles.push(g.title);
+    }
+    return {
+      total: guides.length,
+      withDetail,
+      missingDetail: guides.length - withDetail,
+      pendingTitles,
+    };
+  },
+});
+
+// Ops trigger: schedule skills-detail backfill across every complete guide.
+// 5s stagger keeps the chat-model concurrency bounded, mirroring the meta
+// backfill cadence.
+export const triggerSkillsDetailBackfill = mutation({
+  args: {},
+  returns: v.object({ scheduled: v.number() }),
+  handler: async (ctx) => {
+    const guides = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "complete"))
+      .collect();
+
+    let i = 0;
+    for (const guide of guides) {
+      await ctx.scheduler.runAfter(
+        i * 5000,
+        internal.careerGuides._backfillSkillsDetail,
+        { guideId: guide._id },
+      );
+      i++;
+    }
+
+    return { scheduled: guides.length };
+  },
+});
+
 // ── Enrichment state mutations ─────────────────────────────────────────────
 
 export const _beginEnrichment = internalMutation({
@@ -1372,6 +1511,7 @@ export const generateContent = internalAction({
             content: {
               overview: output.overview,
               typicalSkills: output.typicalSkills,
+              typicalSkillsDetail: output.typicalSkillsDetail,
               dayToDay: output.dayToDay,
               riskFactors: output.riskFactors,
               whyConsider: output.whyConsider,
@@ -1415,6 +1555,7 @@ export const generateContent = internalAction({
         content: {
           overview: output.overview,
           typicalSkills: output.typicalSkills,
+          typicalSkillsDetail: output.typicalSkillsDetail,
           dayToDay: output.dayToDay,
           riskFactors: output.riskFactors,
           whyConsider: output.whyConsider,
