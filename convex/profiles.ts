@@ -1,9 +1,23 @@
-import { query, internalMutation, action, mutation } from "./_generated/server";
+import {
+  query,
+  internalQuery,
+  internalMutation,
+  action,
+  mutation,
+} from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import { v } from "convex/values";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, Output } from "ai";
 import { ProfileSchema } from "../lib/profiles/schema";
+import type { Id } from "./_generated/dataModel";
+
+export const getById = internalQuery({
+  args: { profileId: v.id("profiles") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.profileId);
+  },
+});
 
 export const current = query({
   args: {},
@@ -144,31 +158,39 @@ export const parseUpload = action({
     // ProfileSchema uses z.string().nullable() for optional string fields.
     // Convex upsert uses v.optional(v.string()), which expects undefined — not null.
     // Strip nulls here so the mutation validator accepts the data.
-    await ctx.runMutation(internal.profiles.upsert, {
+    const profileId: Id<"profiles"> = await ctx.runMutation(
+      internal.profiles.upsert,
+      {
+        userId,
+        sourceFormat: args.sourceFormat,
+        rawText: args.text,
+        parsedAt: now,
+        rateLimit,
+        name: parsed.name ?? undefined,
+        headline: parsed.headline ?? undefined,
+        summary: parsed.summary ?? undefined,
+        location: parsed.location ?? undefined,
+        experience: parsed.experience.map((e) => ({
+          title: e.title,
+          company: e.company,
+          startDate: e.startDate ?? undefined,
+          endDate: e.endDate ?? undefined,
+          description: e.description ?? undefined,
+        })),
+        education: parsed.education.map((e) => ({
+          school: e.school,
+          degree: e.degree ?? undefined,
+          field: e.field ?? undefined,
+          startDate: e.startDate ?? undefined,
+          endDate: e.endDate ?? undefined,
+        })),
+        skills: parsed.skills,
+      },
+    );
+
+    await ctx.scheduler.runAfter(0, internal.enrichments.run, {
+      profileId,
       userId,
-      sourceFormat: args.sourceFormat,
-      rawText: args.text,
-      parsedAt: now,
-      rateLimit,
-      name: parsed.name ?? undefined,
-      headline: parsed.headline ?? undefined,
-      summary: parsed.summary ?? undefined,
-      location: parsed.location ?? undefined,
-      experience: parsed.experience.map((e) => ({
-        title: e.title,
-        company: e.company,
-        startDate: e.startDate ?? undefined,
-        endDate: e.endDate ?? undefined,
-        description: e.description ?? undefined,
-      })),
-      education: parsed.education.map((e) => ({
-        school: e.school,
-        degree: e.degree ?? undefined,
-        field: e.field ?? undefined,
-        startDate: e.startDate ?? undefined,
-        endDate: e.endDate ?? undefined,
-      })),
-      skills: parsed.skills,
     });
 
     return { ok: true };
@@ -215,11 +237,30 @@ const ProfilePatch = v.object({
   skills: v.optional(v.array(v.string())),
 });
 
+const RE_ENRICH_DEBOUNCE_MS = 5_000;
+
 export const update = mutation({
   args: { patch: ProfilePatch },
   handler: async (ctx, args) => {
     const profile = await userOwnedProfile(ctx);
     await ctx.db.patch(profile._id, args.patch);
+
+    const enrichment = await ctx.db
+      .query("profile_enrichments")
+      .withIndex("by_profileId", (q) => q.eq("profileId", profile._id))
+      .unique();
+    if (enrichment) {
+      await ctx.db.patch(enrichment._id, { status: "stale" });
+    }
+
+    await ctx.scheduler.runAfter(
+      RE_ENRICH_DEBOUNCE_MS,
+      internal.enrichments.run,
+      {
+        profileId: profile._id,
+        userId: profile.userId,
+      },
+    );
   },
 });
 
@@ -235,6 +276,29 @@ export const clear = mutation({
   args: {},
   handler: async (ctx) => {
     const profile = await userOwnedProfile(ctx);
+
+    const enrichment = await ctx.db
+      .query("profile_enrichments")
+      .withIndex("by_profileId", (q) => q.eq("profileId", profile._id))
+      .unique();
+    if (enrichment) await ctx.db.delete(enrichment._id);
+
+    const embedding = await ctx.db
+      .query("profile_embeddings")
+      .withIndex("by_profileId", (q) => q.eq("profileId", profile._id))
+      .unique();
+    if (embedding) await ctx.db.delete(embedding._id);
+
+    const paths = await ctx.db
+      .query("career_paths")
+      .withIndex("by_profileId_and_kind", (q) =>
+        q.eq("profileId", profile._id),
+      )
+      .collect();
+    for (const row of paths) {
+      await ctx.db.delete(row._id);
+    }
+
     await ctx.db.delete(profile._id);
   },
 });

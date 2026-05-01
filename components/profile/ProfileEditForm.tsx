@@ -1,12 +1,13 @@
 "use client";
 
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { ProfileSchema, type Profile } from "@/lib/profiles/schema";
 import type { Doc } from "@/convex/_generated/dataModel";
+import { LocationCombobox } from "./LocationCombobox";
 
 type Props = { profile: Doc<"profiles">; onDone: () => void };
 
@@ -93,10 +94,17 @@ export function ProfileEditForm({ profile, onDone }: Props) {
           placeholder="Headline"
           {...form.register("headline")}
         />
-        <input
-          className={inputCls}
-          placeholder="Location"
-          {...form.register("location")}
+        <Controller
+          control={form.control}
+          name="location"
+          render={({ field }) => (
+            <LocationCombobox
+              value={field.value ?? null}
+              onChange={field.onChange}
+              placeholder="Location"
+              className={inputCls}
+            />
+          )}
         />
         <textarea
           className={inputCls}

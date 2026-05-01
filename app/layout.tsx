@@ -18,8 +18,15 @@ const figtree = Figtree({
   display: "swap",
 });
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Career Steer",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Career Steer",
+    template: "%s · Career Steer",
+  },
   description: "AI career coach for people in transition.",
 };
 

@@ -15,12 +15,13 @@ import { UploadCard } from "@/components/profile/UploadCard";
 import { ProfileView } from "@/components/profile/ProfileView";
 import { ProfileEditForm } from "@/components/profile/ProfileEditForm";
 import { ReviewCallout } from "@/components/profile/ReviewCallout";
+import { GuidesForYou } from "@/components/profile/GuidesForYou";
 
 export default function ProfilePage() {
   return (
     <>
       <SiteNav />
-      <main className="mx-auto w-full max-w-3xl px-6 py-12 md:py-20">
+      <main className="mx-auto w-full max-w-5xl px-6 py-12 md:py-20">
         <AuthLoading>
           <p className="type-body text-mute">Loading…</p>
         </AuthLoading>
@@ -94,6 +95,7 @@ function ProfileShell() {
         />
       )}
       <ProfileView profile={profile} onEdit={() => setEditing(true)} />
+      <GuidesForYou />
     </div>
   );
 }

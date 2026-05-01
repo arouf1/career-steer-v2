@@ -8,6 +8,24 @@
  * @module
  */
 
+import type * as careerGuides from "../careerGuides.js";
+import type * as careerPaths from "../careerPaths.js";
+import type * as crons from "../crons.js";
+import type * as embeddings from "../embeddings.js";
+import type * as enrichments from "../enrichments.js";
+import type * as guideBranches from "../guideBranches.js";
+import type * as guideEmbeddings from "../guideEmbeddings.js";
+import type * as http from "../http.js";
+import type * as lib_dedup from "../lib/dedup.js";
+import type * as lib_imagePrompts from "../lib/imagePrompts.js";
+import type * as lib_imageReference from "../lib/imageReference.js";
+import type * as lib_normalize from "../lib/normalize.js";
+import type * as lib_rateLimit from "../lib/rateLimit.js";
+import type * as locations from "../locations.js";
+import type * as matching from "../matching.js";
+import type * as podcasts from "../podcasts.js";
+import type * as podcastsTts from "../podcastsTts.js";
+import type * as profiles from "../profiles.js";
 import type * as users from "../users.js";
 
 import type {
@@ -17,6 +35,24 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  careerGuides: typeof careerGuides;
+  careerPaths: typeof careerPaths;
+  crons: typeof crons;
+  embeddings: typeof embeddings;
+  enrichments: typeof enrichments;
+  guideBranches: typeof guideBranches;
+  guideEmbeddings: typeof guideEmbeddings;
+  http: typeof http;
+  "lib/dedup": typeof lib_dedup;
+  "lib/imagePrompts": typeof lib_imagePrompts;
+  "lib/imageReference": typeof lib_imageReference;
+  "lib/normalize": typeof lib_normalize;
+  "lib/rateLimit": typeof lib_rateLimit;
+  locations: typeof locations;
+  matching: typeof matching;
+  podcasts: typeof podcasts;
+  podcastsTts: typeof podcastsTts;
+  profiles: typeof profiles;
   users: typeof users;
 }>;
 
