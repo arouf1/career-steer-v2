@@ -17,6 +17,7 @@ export function MobileTableOfContents({
 }) {
   const [active, setActive] = useState<string>("");
   const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const mounted = useSyncExternalStore(
@@ -42,6 +43,31 @@ export function MobileTableOfContents({
     els.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [sections]);
+
+  useEffect(() => {
+    let lastY = window.scrollY;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const delta = y - lastY;
+        if (Math.abs(delta) > 6) {
+          if (delta > 0 && y > 160) {
+            setHidden(true);
+            setOpen(false);
+          } else {
+            setHidden(false);
+          }
+          lastY = y;
+        }
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -79,10 +105,14 @@ export function MobileTableOfContents({
         <motion.div
           ref={containerRef}
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{
+            opacity: hidden && !open ? 0 : 1,
+            y: hidden && !open ? 28 : 0,
+          }}
           exit={{ opacity: 0, y: 20 }}
-          transition={{ duration: 0.4, ease: [0.2, 0.65, 0.3, 1] }}
-          className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 pb-[env(safe-area-inset-bottom)] lg:hidden"
+          transition={{ duration: 0.28, ease: [0.2, 0.65, 0.3, 1] }}
+          style={{ pointerEvents: hidden && !open ? "none" : "auto" }}
+          className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
           <AnimatePresence>
             {open && (
@@ -94,7 +124,7 @@ export function MobileTableOfContents({
                 transition={{ duration: 0.18, ease: [0.2, 0.65, 0.3, 1] }}
                 role="listbox"
                 aria-label="Article sections"
-                className="mb-3 max-h-[60vh] w-[min(20rem,calc(100vw-2rem))] overflow-auto rounded-card border border-hairline bg-paper-raised p-1.5 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.25)]"
+                className="mb-3 max-h-[60vh] w-[min(20rem,calc(100vw-2rem))] overflow-auto overscroll-contain rounded-card border border-hairline bg-paper-raised p-1.5 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.25)]"
               >
                 <ul>
                   {sections.map((s) => {
@@ -112,10 +142,12 @@ export function MobileTableOfContents({
                               : "text-body hover:bg-ink/[0.04] hover:text-ink"
                           }`}
                         >
-                          <span>{s.label}</span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {s.label}
+                          </span>
                           {isActive && (
                             <Check
-                              className="h-3.5 w-3.5 text-ink"
+                              className="h-3.5 w-3.5 shrink-0 text-ink"
                               aria-hidden="true"
                               strokeWidth={2}
                             />
@@ -138,11 +170,11 @@ export function MobileTableOfContents({
             className="inline-flex items-center gap-2 rounded-pill bg-ink px-4 py-2.5 text-[14px] font-medium text-paper shadow-[0_8px_30px_-12px_rgba(0,0,0,0.35)] transition-colors hover:bg-ink-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/30 focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
           >
             <List
-              className="h-3.5 w-3.5 text-paper/70"
+              className="h-3.5 w-3.5 shrink-0 text-paper/70"
               aria-hidden="true"
               strokeWidth={1.75}
             />
-            <span className="max-w-[14rem] truncate">{activeLabel}</span>
+            <span className="max-w-[12rem] truncate">{activeLabel}</span>
           </button>
         </motion.div>
       )}
