@@ -2,6 +2,10 @@ import { z } from "zod";
 
 export const CONTENT_MODEL_ID = "google/gemini-3.1-pro-preview";
 export const JUDGE_MODEL_ID = "google/gemini-2.5-flash";
+// Gemini 3 Flash — used for short-form, latency-sensitive surfaces where the
+// user is actively waiting (Go Deeper Q&A expansions). The full pro-tier
+// model is reserved for the heavier upfront guide generation.
+export const BRANCH_MODEL_ID = "google/gemini-3-flash-preview";
 
 // ── Validation ──────────────────────────────────────────────────────────────
 

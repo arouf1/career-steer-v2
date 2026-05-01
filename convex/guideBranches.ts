@@ -12,7 +12,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { chatModel } from "../lib/ai/providers";
 import {
-  CONTENT_MODEL_ID,
+  BRANCH_MODEL_ID,
   DeepenAnswerSchema,
   DeepenAnswerGroundedSchema,
   FollowUpsBackfillSchema,
@@ -352,7 +352,7 @@ export const _backfillOneGuide = internalAction({
     if (!guide.followUps) {
       try {
         const { output } = await generateText({
-          model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+          model: chatModel(BRANCH_MODEL_ID, { zdr: true }),
           output: Output.object({ schema: FollowUpsBackfillSchema }),
           prompt: buildFollowUpsBackfillPrompt({
             title: guide.title,
@@ -488,7 +488,7 @@ export const _runBranchGeneration = internalAction({
 
       if (branch.groundingMode === "inherited") {
         const { output } = await generateText({
-          model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+          model: chatModel(BRANCH_MODEL_ID, { zdr: true }),
           output: Output.object({ schema: DeepenAnswerSchema }),
           prompt: buildDeepenPrompt({
             guideTitle: guide.title,
@@ -535,7 +535,7 @@ export const _runBranchGeneration = internalAction({
       }
 
       const { output } = await generateText({
-        model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+        model: chatModel(BRANCH_MODEL_ID, { zdr: true }),
         output: Output.object({ schema: DeepenAnswerGroundedSchema }),
         prompt: buildDeepenPromptGrounded({
           guideTitle: guide.title,
