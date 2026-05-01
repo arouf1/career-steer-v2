@@ -18,31 +18,35 @@ export function CareerGuideCard({
   return (
     <Link
       href={`/career-guides/${guide.slug}`}
-      className={`group h-full overflow-hidden rounded-card border border-hairline bg-paper-raised transition-colors hover:border-hairline-strong flex flex-col${
-        isLead ? " lg:grid lg:grid-rows-[1fr_auto]" : ""
+      className={`group relative flex flex-col overflow-hidden rounded-surface border border-hairline bg-paper-raised transition-colors hover:border-hairline-strong${
+        isLead ? " aspect-[3/4] lg:aspect-auto lg:h-full" : " aspect-[3/4]"
       }`}
     >
+      {guide.illustrationUrl ? (
+        <Image
+          src={guide.illustrationUrl}
+          alt={`Illustration for ${guide.title}`}
+          fill
+          sizes={
+            isLead
+              ? "(min-width: 1024px) 50vw, (min-width: 768px) 100vw, 100vw"
+              : "(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+          }
+          className="object-cover"
+          priority={isLead}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-paper" aria-hidden />
+      )}
+
       <div
-        className={`aspect-[16/9] w-full overflow-hidden bg-paper${
-          isLead ? " lg:aspect-auto lg:min-h-0" : ""
-        }`}
-      >
-        {guide.illustrationUrl ? (
-          <Image
-            src={guide.illustrationUrl}
-            alt={`Illustration for ${guide.title}`}
-            width={isLead ? 960 : 640}
-            height={isLead ? 540 : 360}
-            className="h-full w-full object-cover"
-            priority={isLead}
-          />
-        ) : (
-          <div className="h-full w-full bg-paper-raised" />
-        )}
-      </div>
+        aria-hidden
+        className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-paper-raised via-paper-raised to-transparent"
+      />
+
       <div
-        className={`flex flex-1 flex-col gap-3 p-6${
-          isLead ? " lg:flex-none lg:gap-4 lg:p-8" : ""
+        className={`relative z-10 mt-auto flex flex-col gap-2 px-6 pb-6${
+          isLead ? " lg:gap-3 lg:px-8 lg:pb-8" : ""
         }`}
       >
         <h3
@@ -52,8 +56,8 @@ export function CareerGuideCard({
         >
           {guide.title}
         </h3>
-        {dek && <p className="type-body text-body line-clamp-2">{dek}</p>}
-        <p className="type-caption mt-auto text-mute">{dateline}</p>
+        {dek && <p className="type-body line-clamp-2 text-body">{dek}</p>}
+        <p className="type-caption text-mute">{dateline}</p>
       </div>
     </Link>
   );

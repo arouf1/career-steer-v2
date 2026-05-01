@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { GuideWithUrl } from "@/convex/careerGuides";
+import { CareerGuideCard } from "./CareerGuideCard";
 
 const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -326,7 +327,7 @@ export function CareerGuidesIndexClient({
       </motion.div>
 
       {/* List */}
-      <div className="border-t border-hairline">
+      <div className="border-t border-hairline pt-10">
         <AnimatePresence mode="popLayout">
           {filtered.length === 0 ? (
             <NoResultsBlock
@@ -338,77 +339,32 @@ export function CareerGuidesIndexClient({
               onGenerate={handleGenerate}
             />
           ) : (
-            filtered.map((g, i) => (
-              <motion.div
-                key={g.slug}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{
-                  duration: 0.4,
-                  delay: Math.min(i * 0.04, 0.24),
-                  ease,
-                }}
-              >
-                <GuideRow guide={g} />
-              </motion.div>
-            ))
+            <motion.ul
+              key="grid"
+              layout
+              className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {filtered.map((g, i) => (
+                <motion.li
+                  key={g.slug}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{
+                    duration: 0.4,
+                    delay: Math.min(i * 0.04, 0.24),
+                    ease,
+                  }}
+                >
+                  <CareerGuideCard guide={g} variant="medium" />
+                </motion.li>
+              ))}
+            </motion.ul>
           )}
         </AnimatePresence>
       </div>
     </>
-  );
-}
-
-function GuideRow({ guide }: { guide: GuideWithUrl }) {
-  const overview = guide.content?.overview ?? "";
-  const salary = guide.content?.regional?.us?.salary;
-  const salarySnippet = salary
-    ? `Entry ${salary.entry} · Mid ${salary.mid} · Senior ${salary.senior}`
-    : null;
-
-  return (
-    <Link
-      href={`/career-guides/${guide.slug}`}
-      className="group block border-b border-hairline px-6 py-10 transition-colors duration-300 hover:bg-ink/[0.02] focus-visible:bg-ink/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/10 focus-visible:ring-offset-4 sm:px-10 sm:py-14"
-    >
-      <div className="flex flex-col sm:flex-row sm:items-start sm:gap-8">
-        <div className="min-w-0 flex-1">
-          <h2 className="type-headline text-balance text-ink">
-            {guide.title}
-          </h2>
-          {overview && (
-            <p className="mt-3 line-clamp-2 max-w-2xl text-[15px] leading-relaxed text-body">
-              {overview}
-            </p>
-          )}
-          {salarySnippet && (
-            <p className="mt-3 max-w-lg truncate text-[13px] text-mute">
-              {salarySnippet}
-            </p>
-          )}
-          <div className="mt-5 flex items-center justify-between">
-            {guide.createdAt > 0 && (
-              <time
-                dateTime={new Date(guide.createdAt).toISOString()}
-                className={eyebrowCls}
-              >
-                {new Date(guide.createdAt).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </time>
-            )}
-            <span className="inline-flex items-center gap-2 text-[13px] font-medium text-ink-soft transition-all duration-300 group-hover:gap-2.5 group-hover:text-ink">
-              Read guide
-              <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-            </span>
-          </div>
-        </div>
-      </div>
-    </Link>
   );
 }
 

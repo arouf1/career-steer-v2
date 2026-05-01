@@ -34,7 +34,7 @@ export default async function CareerGuidesIndexPage() {
   return (
     <>
       <SiteNav />
-      <main className="mx-auto w-full max-w-4xl px-6 pb-24 pt-12 sm:px-10 sm:pt-20">
+      <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-12 sm:px-10 sm:pt-20">
         <header className="space-y-4">
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             Career guides

@@ -42,25 +42,29 @@ function RelatedGuideCard({ guide }: { guide: RelatedGuide }) {
   return (
     <Link
       href={`/career-guides/${guide.slug}`}
-      className="group flex h-full flex-col overflow-hidden rounded-card border border-hairline bg-paper-raised transition-colors hover:border-hairline-strong"
+      className="group relative flex aspect-[3/4] flex-col overflow-hidden rounded-surface border border-hairline bg-paper-raised transition-colors hover:border-hairline-strong"
     >
-      <div className="aspect-[16/9] w-full overflow-hidden bg-paper">
-        {guide.illustrationUrl ? (
-          <Image
-            src={guide.illustrationUrl}
-            alt={`Illustration for ${guide.title}`}
-            width={640}
-            height={360}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="h-full w-full bg-paper-raised" />
-        )}
-      </div>
-      <div className="flex flex-1 flex-col gap-3 p-5">
+      {guide.illustrationUrl ? (
+        <Image
+          src={guide.illustrationUrl}
+          alt={`Illustration for ${guide.title}`}
+          fill
+          sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+          className="object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-paper" aria-hidden />
+      )}
+
+      <div
+        aria-hidden
+        className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-paper-raised via-paper-raised to-transparent"
+      />
+
+      <div className="relative z-10 mt-auto flex flex-col gap-2 px-5 pb-5">
         <h3 className="type-title text-ink">{guide.title}</h3>
         {guide.overviewSnippet && (
-          <p className="type-body text-body line-clamp-3">
+          <p className="type-body line-clamp-3 text-body">
             {guide.overviewSnippet}
           </p>
         )}
