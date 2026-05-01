@@ -24,6 +24,8 @@ import type * as lib_normalize from "../lib/normalize.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as locations from "../locations.js";
 import type * as matching from "../matching.js";
+import type * as people from "../people.js";
+import type * as peopleOutreach from "../peopleOutreach.js";
 import type * as podcasts from "../podcasts.js";
 import type * as podcastsTts from "../podcastsTts.js";
 import type * as profiles from "../profiles.js";
@@ -52,6 +54,8 @@ declare const fullApi: ApiFromModules<{
   "lib/rateLimit": typeof lib_rateLimit;
   locations: typeof locations;
   matching: typeof matching;
+  people: typeof people;
+  peopleOutreach: typeof peopleOutreach;
   podcasts: typeof podcasts;
   podcastsTts: typeof podcastsTts;
   profiles: typeof profiles;
@@ -84,4 +88,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  agent: import("@convex-dev/agent/_generated/component.js").ComponentApi<"agent">;
+};

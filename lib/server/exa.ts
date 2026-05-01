@@ -98,3 +98,106 @@ export async function exaAnswer(
     ? lastError
     : new Error(`Exa answer failed: ${String(lastError)}`);
 }
+
+// ── LinkedIn-targeted search ──────────────────────────────────────────────
+// Used by the "people in this field" feature on career-guide detail pages.
+// Returns LinkedIn profile pages with snippet text we feed to a model for
+// structured extraction. The exa-js SDK does not yet expose `costDollars`
+// on its typed response, so we read it through `unknown` rather than
+// asserting it on the SDK shape.
+
+export type ExaLinkedInResult = {
+  url: string;
+  title: string;
+  text: string;
+  // Profile photo URL if Exa happened to surface one in the page text
+  // (LinkedIn embeds a `profile-displayphoto-shrink_*` URL alongside
+  // most public profiles).
+  imageUrl?: string;
+};
+
+export type ExaSearchResponse = {
+  results: ExaLinkedInResult[];
+  costCents: number;
+};
+
+const PROFILE_PHOTO_PATTERN = "profile-displayphoto-shrink_";
+const PROFILE_PHOTO_URL_RE =
+  /https:\/\/media\.licdn\.com\/dms\/image\/[^"\s)]*profile-displayphoto-shrink_[^"\s)]*/;
+
+export async function exaSearchLinkedIn(
+  query: string,
+  opts?: {
+    numResults?: number;
+    signal?: AbortSignal;
+  },
+): Promise<ExaSearchResponse> {
+  const exa = getClient();
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    if (opts?.signal?.aborted) throw new Error("aborted");
+    try {
+      const res = await exa.searchAndContents(query, {
+        type: "auto",
+        numResults: opts?.numResults ?? 10,
+        includeDomains: ["linkedin.com"],
+        text: { maxCharacters: 2000 },
+      });
+
+      const rawCost =
+        (res as unknown as { costDollars?: { total?: number } })?.costDollars
+          ?.total ?? 0;
+      const costCents = Math.round(rawCost * 100 * 100) / 100;
+
+      const results: ExaLinkedInResult[] = (res.results ?? [])
+        .filter(
+          (r): r is typeof r & { url: string; text: string } =>
+            typeof r.url === "string" &&
+            typeof r.text === "string" &&
+            r.text.length >= 50,
+        )
+        .map((r) => {
+          let imageUrl: string | undefined;
+          if (r.text.includes(PROFILE_PHOTO_PATTERN)) {
+            const m = r.text.match(PROFILE_PHOTO_URL_RE);
+            if (m) imageUrl = m[0];
+          }
+          if (!imageUrl) {
+            for (const val of Object.values(r)) {
+              if (
+                typeof val === "string" &&
+                val.includes(PROFILE_PHOTO_PATTERN)
+              ) {
+                const m = val.match(PROFILE_PHOTO_URL_RE);
+                if (m) {
+                  imageUrl = m[0];
+                  break;
+                }
+              }
+            }
+          }
+          return {
+            url: r.url,
+            title: typeof r.title === "string" ? r.title : r.url,
+            text: r.text,
+            imageUrl,
+          };
+        });
+
+      return { results, costCents };
+    } catch (err) {
+      lastError = err;
+      if (attempt === RETRY_ATTEMPTS) break;
+      const base = isRateLimit(err)
+        ? RATE_LIMIT_BACKOFF_MS
+        : TRANSIENT_BACKOFF_MS;
+      const jitter = Math.floor(Math.random() * 200);
+      await sleep(base * attempt + jitter, opts?.signal);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Exa search failed: ${String(lastError)}`);
+}
