@@ -2,11 +2,15 @@
 // play that without a RIFF/WAV header in front of it, so we stitch one on.
 // Buffer-free / globalThis-safe so this works in Convex actions and in Node.
 
-type WavOptions = {
+export type WavOptions = {
   numChannels: number;
   sampleRate: number;
   bitsPerSample: number;
 };
+
+export function parseAudioMimeType(mimeType: string): WavOptions {
+  return parseMimeType(mimeType);
+}
 
 function parseMimeType(mimeType: string): WavOptions {
   const [fileType, ...params] = mimeType.split(";").map((s) => s.trim());

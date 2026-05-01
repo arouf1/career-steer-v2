@@ -6,7 +6,12 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { HOST } from "../lib/podcast/voices";
 import { buildSpeakerPrompt } from "../lib/ai/prompts/podcast";
-import { base64ToBytes, pcmBytesToWav, pcmDurationSeconds } from "../lib/podcast/wav";
+import {
+  base64ToBytes,
+  parseAudioMimeType,
+  pcmBytesToWav,
+  pcmDurationSeconds,
+} from "../lib/podcast/wav";
 import {
   JINGLE_BITS_PER_SAMPLE,
   JINGLE_CHANNELS,
@@ -126,13 +131,18 @@ export const synthesize = internalAction({
 
         // The bundled jingle is pre-rendered to 24 kHz mono 16-bit PCM. If
         // Gemini ever returns a different format we can't safely concatenate
-        // raw PCM, so fail loud rather than ship corrupted audio.
-        const expectedMime = `audio/L${JINGLE_BITS_PER_SAMPLE};rate=${JINGLE_SAMPLE_RATE}`;
-        if (mimeType.replace(/\s+/g, "") !== expectedMime) {
-          throw new Error(`unexpected_tts_mime:${mimeType}`);
-        }
-        if (JINGLE_CHANNELS !== 1) {
-          throw new Error(`unexpected_jingle_channels:${JINGLE_CHANNELS}`);
+        // raw PCM, so fail loud rather than ship corrupted audio. Parse the
+        // mime so we tolerate extra parameters Gemini may add (e.g. observed
+        // `audio/L16;codec=pcm;rate=24000` after a model update).
+        const fmt = parseAudioMimeType(mimeType);
+        if (
+          fmt.sampleRate !== JINGLE_SAMPLE_RATE ||
+          fmt.numChannels !== JINGLE_CHANNELS ||
+          fmt.bitsPerSample !== JINGLE_BITS_PER_SAMPLE
+        ) {
+          throw new Error(
+            `unexpected_tts_format:${fmt.sampleRate}Hz/${fmt.numChannels}ch/${fmt.bitsPerSample}bit (mime=${mimeType})`,
+          );
         }
 
         const jinglePcm = base64ToBytes(JINGLE_PCM_BASE64);
