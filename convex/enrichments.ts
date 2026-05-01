@@ -506,28 +506,55 @@ export const run = internalAction({
         }),
       ]);
     } catch (error) {
-      const reason =
-        error instanceof Error ? error.message.slice(0, 500) : "unknown error";
-      const cause =
-        error instanceof Error && "cause" in error
-          ? JSON.stringify(error.cause).slice(0, 2000)
-          : undefined;
-      const responseBody =
-        error instanceof Error && "responseBody" in error
-          ? String(
-              (error as { responseBody: unknown }).responseBody,
-            ).slice(0, 2000)
-          : undefined;
+      // Defensive: each diagnostic step here was previously crashing the
+      // catch handler when its input was unexpectedly undefined (e.g.
+      // `JSON.stringify(undefined)` returns the value `undefined`, not the
+      // string "undefined", so `.slice` then throws). When the catch
+      // handler crashes, `markFailed` never runs and the row sits in
+      // `pending` forever. Wrap each step so a single bad shape can't
+      // prevent the row from transitioning to "failed".
+      let reason = "unknown error";
+      let cause: string | undefined;
+      let responseBody: string | undefined;
+      try {
+        if (error instanceof Error && typeof error.message === "string") {
+          reason = error.message.slice(0, 500);
+        }
+      } catch {}
+      try {
+        if (error instanceof Error && "cause" in error) {
+          const stringified = JSON.stringify(error.cause);
+          if (typeof stringified === "string") {
+            cause = stringified.slice(0, 2000);
+          }
+        }
+      } catch {}
+      try {
+        if (error instanceof Error && "responseBody" in error) {
+          const body = (error as { responseBody: unknown }).responseBody;
+          if (body !== undefined && body !== null) {
+            responseBody = String(body).slice(0, 2000);
+          }
+        }
+      } catch {}
       console.error("enrichments.run:failed", {
         profileId: args.profileId,
         reason,
         cause,
         responseBody,
       });
-      await ctx.runMutation(internal.enrichments.markFailed, {
-        profileId: args.profileId,
-        reason,
-      });
+      try {
+        await ctx.runMutation(internal.enrichments.markFailed, {
+          profileId: args.profileId,
+          reason,
+        });
+      } catch (markErr) {
+        console.error("enrichments.run:markFailed_threw", {
+          profileId: args.profileId,
+          markErrMessage:
+            markErr instanceof Error ? markErr.message : "unknown",
+        });
+      }
     } finally {
       clearTimeout(timeout);
     }
