@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
-import {
-  SignInButton,
-  SignOutButton,
-  SignUpButton,
-  UserButton,
-} from "@clerk/nextjs";
+import { SignOutButton, UserButton } from "@clerk/nextjs";
 
 export function SiteNav() {
   return (
@@ -44,30 +39,18 @@ export function SiteNav() {
           </AuthLoading>
 
           <Unauthenticated>
-            <SignInButton
-              mode="modal"
-              fallbackRedirectUrl="/profile"
-              signUpFallbackRedirectUrl="/profile"
+            <Link
+              href="/sign-in"
+              className="type-label rounded-pill px-4 py-2 text-ink transition-colors hover:text-ink-deep"
             >
-              <button
-                type="button"
-                className="type-label rounded-pill px-4 py-2 text-ink transition-colors hover:text-ink-deep"
-              >
-                Sign In
-              </button>
-            </SignInButton>
-            <SignUpButton
-              mode="modal"
-              fallbackRedirectUrl="/profile"
-              signInFallbackRedirectUrl="/profile"
+              Sign In
+            </Link>
+            <Link
+              href="/sign-up"
+              className="type-label rounded-pill bg-ink px-5 py-2.5 text-paper transition-colors hover:bg-ink-deep"
             >
-              <button
-                type="button"
-                className="type-label rounded-pill bg-ink px-5 py-2.5 text-paper transition-colors hover:bg-ink-deep"
-              >
-                Sign Up
-              </button>
-            </SignUpButton>
+              Sign Up
+            </Link>
           </Unauthenticated>
 
           <Authenticated>

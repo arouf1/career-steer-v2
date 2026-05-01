@@ -21,21 +21,26 @@
 }
 
 @theme inline {
-  /* Color palette — warm paper system. See DESIGN.md for the rules. */
-  --color-paper: oklch(96% 0.012 85);
-  --color-paper-raised: oklch(94% 0.014 85);
-  --color-ink: oklch(22% 0.015 70);
-  --color-ink-deep: oklch(15% 0.015 70);
-  --color-ink-soft: oklch(68% 0.005 75);
-  --color-body: oklch(40% 0.01 70);
-  --color-mute: oklch(60% 0.008 75);
-  --color-hairline: oklch(88% 0.008 80);
-  --color-hairline-strong: oklch(80% 0.008 80);
+  /* Color palette — Warm Sunset (ported from v1). Hue 30–35 cream + warm brown ink. */
+  --color-paper: hsl(35 30% 97%);
+  --color-paper-raised: hsl(35 25% 94%);
+  --color-paper-lifted: hsl(35 30% 99%);
+  --color-ink: oklch(0.25 0.015 30);
+  --color-ink-deep: oklch(0.18 0.015 30);
+  --color-ink-soft: oklch(0.6 0.015 35);
+  --color-body: oklch(0.4 0.015 30);
+  --color-mute: oklch(0.55 0.015 35);
+  --color-hairline: hsl(35 18% 86%);
+  --color-hairline-strong: hsl(35 18% 80%);
+
+  /* Optional accent — v1's dark olive primary. Use sparingly; resting palette is still ink. */
+  --color-accent: oklch(0.45 0.08 120);
+  --color-accent-on: hsl(35 30% 97%);
 
   /* State colors — used per-surface only, never in the resting palette. */
-  --color-state-error: oklch(45% 0.18 25);
-  --color-state-success: oklch(55% 0.12 145);
-  --color-state-warning: oklch(70% 0.14 75);
+  --color-state-error: oklch(0.65 0.18 20);
+  --color-state-success: oklch(0.58 0.15 140);
+  --color-state-warning: oklch(0.7 0.14 75);
 
   /* Font families — wired to next/font CSS variables in app/layout.tsx. */
   --font-serif: var(--font-eb-garamond), Georgia, "Times New Roman", serif;
