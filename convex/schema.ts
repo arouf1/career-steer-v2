@@ -552,6 +552,85 @@ export default defineSchema({
     .index("by_guide_section", ["guideId", "sectionId"])
     .index("by_guide_status_created", ["guideId", "status", "createdAt"]),
 
+  // Per-(user, guide) personalization. Generated lazily when an authed user
+  // with a ready profile views a guide. The fit narrative + 3-bucket skills
+  // assessment land on the guide page above the generic article. Stamp fields
+  // let the trigger detect when the user's profile/enrichment has moved on
+  // since this row was generated, in which case we regenerate.
+  career_guide_personalizations: defineTable({
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+    status: v.union(
+      v.literal("generating"),
+      v.literal("complete"),
+      v.literal("failed"),
+    ),
+    content: v.optional(
+      v.object({
+        whyYoureAFit: v.string(),
+        skillsAssessment: v.object({
+          strengths: v.array(v.string()),
+          transferable: v.array(v.string()),
+          gaps: v.array(v.string()),
+          summary: v.string(),
+        }),
+        // Per-user regional content. Generated only when the user's country
+        // is neither US nor UK (those reuse the existing public regional
+        // blocks). Null/undefined when not generated. The country code is
+        // the discriminator — currencySymbol drives the salary band.
+        regional: v.optional(
+          v.union(
+            v.null(),
+            v.object({
+              countryCode: v.string(),
+              countryName: v.string(),
+              currencySymbol: v.string(),
+              salary: v.object({
+                entry: v.string(),
+                mid: v.string(),
+                senior: v.string(),
+                note: v.optional(v.union(v.string(), v.null())),
+              }),
+              careerOutlook: v.string(),
+              learningPath: v.array(v.string()),
+              relatedRoles: v.array(v.string()),
+              // Citations from Exa fan-out used to ground salary, outlook,
+              // and learning-path content. Empty when no Exa fan-out ran
+              // (legacy rows + future US/UK paths).
+              citations: v.optional(
+                v.array(
+                  v.object({
+                    url: v.string(),
+                    title: v.string(),
+                    publisher: v.optional(v.string()),
+                    fetchedAt: v.number(),
+                  }),
+                ),
+              ),
+            }),
+          ),
+        ),
+      }),
+    ),
+    // Snapshot of profile_enrichments.enrichedAt at generation time. The
+    // trigger compares this against the live enrichment row; a newer
+    // enrichedAt forces a regenerate.
+    enrichmentEnrichedAtStamp: v.optional(v.number()),
+    locationAtGeneration: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    generatedAt: v.optional(v.number()),
+    attempts: v.number(),
+    // Monotonic counter bumped by every `trigger` mutation that schedules a
+    // new generate. The action carries the token through and `_writeResult`
+    // refuses to write unless the token matches the row's current value.
+    // This guarantees that when multiple generates race, only the latest
+    // one's output lands — no flash/disappear/reappear of stale content.
+    generationToken: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+  })
+    .index("by_user_and_guide", ["userId", "guideId"])
+    .index("by_userId", ["userId"]),
+
   career_validations: defineTable({
     careerNormalized: v.string(),
     status: v.union(

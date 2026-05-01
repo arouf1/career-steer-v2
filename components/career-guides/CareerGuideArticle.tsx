@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { useQuery } from "convex/react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,7 +17,8 @@ import {
   RotateCw,
   Sparkles,
 } from "lucide-react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { GuideWithUrl } from "@/convex/careerGuides";
@@ -27,8 +27,36 @@ import { FieldCitation, type CitationSource } from "./FieldCitation";
 import { CareerGuidePodcast } from "./CareerGuidePodcast";
 import { AllSourcesPanel } from "./AllSourcesPanel";
 import { GoDeeper } from "./GoDeeper";
+import { PersonalizationFitCard } from "./PersonalizationFitCard";
+import { PersonalizationSkillsCard } from "./PersonalizationSkillsCard";
+import { LoopingFeather } from "./LoopingFeather";
 
 export type Region = "us" | "uk";
+
+/**
+ * Region keys used inside the article. Adds a "user" variant for the
+ * per-user personalized regional block (any country other than US/UK).
+ */
+type RegionKey = "us" | "uk" | "user";
+
+type Salary = {
+  entry: string;
+  mid: string;
+  senior: string;
+  note?: string | null;
+};
+
+type RegionalView = {
+  key: RegionKey;
+  label: string; // "United States" / "United Kingdom" / "Canada"
+  shortLabel: string; // "US" / "UK" / "CA"
+  currencySymbol: string;
+  salary: Salary;
+  careerOutlook: string;
+  learningPath: string[];
+  relatedRoles: string[];
+  isPersonalized: boolean;
+};
 
 const eyebrowCls =
   "text-[10px] uppercase tracking-[0.18em] font-medium text-mute";
@@ -57,12 +85,20 @@ function buildSections(
   title: string,
   hasRisks: boolean,
   hasPodcast: boolean,
+  showFitChapter: boolean,
+  personalizedSkillsActive: boolean,
 ): SectionLink[] {
   const sections: SectionLink[] = [];
   if (hasPodcast) sections.push({ id: "podcast", label: "Listen" });
+  sections.push({ id: "overview", label: `What is a ${title}?` });
+  // "Your fit" chapter sits directly after Overview when the personalization
+  // slot is showing anything visible (CTA, skeleton, or the real card).
+  if (showFitChapter) sections.push({ id: "your-fit", label: "Your fit" });
   sections.push(
-    { id: "overview", label: `What is a ${title}?` },
-    { id: "skills", label: "Skills you need" },
+    {
+      id: "skills",
+      label: personalizedSkillsActive ? "Where you stand" : "Skills you need",
+    },
     { id: "day-to-day", label: "Day to day" },
     { id: "outlook", label: "Career outlook" },
     { id: "learning-path", label: "How to get there" },
@@ -79,8 +115,64 @@ export function CareerGuideArticle({
   initialBranches,
 }: ArticleProps) {
   const searchParams = useSearchParams();
-  const region: Region =
-    searchParams.get("region") === "uk" ? "uk" : defaultRegion;
+
+  // Clerk auth state — used to suppress the inline "general guide / upload
+  // your CV" callout for signed-in users (the personalization fit slot
+  // handles their CTA in every state). While Clerk is loading we err on the
+  // side of hiding the inline CTA to avoid a flash of redundant content for
+  // returning signed-in users.
+  const { isLoaded: clerkLoaded, isSignedIn } = useUser();
+  const showInlineCvCta = clerkLoaded && !isSignedIn;
+
+  // Personalization state — also subscribed to inside the fit + skills cards.
+  // Convex dedupes useQuery subscriptions on the same query+args, so this
+  // costs nothing extra and lets the TOC mirror the article's actual sections.
+  const personalization = useQuery(
+    api.careerGuidePersonalizations.getForGuide,
+    { guideId: guide._id },
+  );
+  const fitSlotVisible =
+    personalization?.state === "no-profile" ||
+    personalization?.state === "profile-pending" ||
+    personalization?.state === "enrichment-failed" ||
+    (personalization?.state === "ready" &&
+      personalization.row !== null &&
+      personalization.row.status !== "failed");
+  // The personalised "Where you stand" label only applies when the live row
+  // is actually complete and current. During regen we revert to the generic
+  // "Skills you need" label rather than risk showing a stale label tied to
+  // the old profile.
+  const personalizedSkillsActive =
+    personalization?.state === "ready" &&
+    personalization.row?.status === "complete";
+  // Regional content: only honour the live, fresh personalization. When the
+  // profile or enrichment has moved on, the previous regional block is by
+  // definition stale (wrong country, wrong currency) — fall back to the
+  // public US/UK content rather than mislead.
+  const personalizedRegional =
+    personalization?.state === "ready" &&
+    personalization.row?.status === "complete"
+      ? personalization.row.content?.regional ?? null
+      : null;
+  // True while we're waiting on enrichment or generation for a logged-in
+  // user with a profile. Used by the sidebar to show a "personalising your
+  // region" hint instead of silently falling back to public US/UK content.
+  const personalizationPending =
+    personalization?.state === "profile-pending" ||
+    (personalization?.state === "ready" &&
+      personalization.row?.status === "generating");
+
+  // Resolve the active region key:
+  //   - explicit URL param wins ("us" / "uk" / "user")
+  //   - else default to the user's personalized region when available
+  //   - else fall back to the server-derived US/UK default (IP geolocation)
+  const regionParam = searchParams.get("region");
+  const regionKey: RegionKey = (() => {
+    if (regionParam === "us" || regionParam === "uk") return regionParam;
+    if (regionParam === "user" && personalizedRegional) return "user";
+    if (personalizedRegional) return "user";
+    return defaultRegion;
+  })();
 
   const c = guide.content;
   const hasPodcast = guide.podcast?.status !== undefined && guide.podcast.status !== "failed";
@@ -90,16 +182,94 @@ export function CareerGuideArticle({
         guide.title,
         (c?.riskFactors.length ?? 0) > 0,
         hasPodcast,
+        !!fitSlotVisible,
+        !!personalizedSkillsActive,
       ),
-    [guide.title, c?.riskFactors.length, hasPodcast],
+    [
+      guide.title,
+      c?.riskFactors.length,
+      hasPodcast,
+      fitSlotVisible,
+      personalizedSkillsActive,
+    ],
   );
 
   if (!c) return null;
-  const r = c.regional[region];
-  const cite = (path: string): CitationSource[] | undefined =>
-    guide.citations?.[path];
+
+  // Build the active regional view (used by the article body + sidebar).
+  // For "user" we read from personalization; for "us"/"uk" we read from the
+  // public guide content. The currency symbol and country label flow with
+  // the data so the sidebar's salary band always renders correctly.
+  const r: RegionalView = (() => {
+    if (regionKey === "user" && personalizedRegional) {
+      return {
+        key: "user",
+        label: personalizedRegional.countryName,
+        shortLabel: personalizedRegional.countryCode,
+        currencySymbol: personalizedRegional.currencySymbol,
+        salary: personalizedRegional.salary,
+        careerOutlook: personalizedRegional.careerOutlook,
+        learningPath: personalizedRegional.learningPath,
+        relatedRoles: personalizedRegional.relatedRoles,
+        isPersonalized: true,
+      };
+    }
+    const fallbackKey: "us" | "uk" =
+      regionKey === "user" ? defaultRegion : (regionKey as "us" | "uk");
+    const block = c.regional[fallbackKey];
+    return {
+      key: fallbackKey,
+      label: fallbackKey === "us" ? "United States" : "United Kingdom",
+      shortLabel: fallbackKey === "us" ? "US" : "UK",
+      currencySymbol: fallbackKey === "us" ? "$" : "£",
+      salary: block.salary,
+      careerOutlook: block.careerOutlook,
+      learningPath: block.learningPath,
+      relatedRoles: block.relatedRoles,
+      isPersonalized: false,
+    };
+  })();
+
+  // Build the list of region tabs the sidebar should expose. We use the
+  // ISO country code (CA, AU, DE, JP, ...) for the tab label so all three
+  // tabs stay compact and consistent at the same character width. The full
+  // country name still appears on the section badges in the article body.
+  const availableRegions: Array<{ key: RegionKey; label: string }> = [];
+  if (personalizedRegional) {
+    availableRegions.push({
+      key: "user",
+      label:
+        personalizedRegional.countryCode?.toUpperCase() ||
+        personalizedRegional.countryName,
+    });
+  }
+  availableRegions.push({ key: "us", label: "US" }, { key: "uk", label: "UK" });
+
+  // Citations: public US/UK fields come from `guide.citations`; the
+  // personalized "user" region carries Exa-fetched citations on the
+  // personalization row itself (under content.regional.citations). Map
+  // requested paths so the same `cite("regional.user.salary")` etc.
+  // resolves to the personalized sources.
+  const personalizedRegionalCitations: CitationSource[] | undefined =
+    personalizedRegional?.citations && personalizedRegional.citations.length > 0
+      ? personalizedRegional.citations
+      : undefined;
+  const cite = (path: string): CitationSource[] | undefined => {
+    if (!r.isPersonalized) return guide.citations?.[path];
+    // For the "user" region, the same Exa citation set covers all three
+    // grounded fields (salary, outlook, learning-path). Hand them back for
+    // any of those paths so the FieldCitation pill renders.
+    if (
+      path === `regional.user.salary` ||
+      path === `regional.user.careerOutlook` ||
+      path === `regional.user.learningPath`
+    ) {
+      return personalizedRegionalCitations;
+    }
+    return undefined;
+  };
   const followUpsFor = (sectionId: string): string[] | undefined =>
-    guide.followUps?.[sectionId];
+    r.isPersonalized ? undefined : guide.followUps?.[sectionId];
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 pb-32 sm:px-10">
@@ -155,19 +325,21 @@ export function CareerGuideArticle({
                 ))}
               </div>
 
-              <div className="mt-10 max-w-2xl rounded-surface bg-ink px-6 py-5">
-                <p className="text-[15px] leading-relaxed text-paper/85">
-                  This is a general guide.{" "}
-                  <Link
-                    href="/profile"
-                    className="font-medium text-paper underline underline-offset-4 transition-colors hover:text-paper/80"
-                  >
-                    Upload your CV
-                  </Link>{" "}
-                  to see how your specific skills and experience align with
-                  this career path.
-                </p>
-              </div>
+              {showInlineCvCta && (
+                <div className="mt-10 max-w-2xl rounded-surface bg-ink px-6 py-5">
+                  <p className="text-[15px] leading-relaxed text-paper/85">
+                    This is a general guide.{" "}
+                    <Link
+                      href="/profile"
+                      className="font-medium text-paper underline underline-offset-4 transition-colors hover:text-paper/80"
+                    >
+                      Upload your CV
+                    </Link>{" "}
+                    to see how your specific skills and experience align with
+                    this career path.
+                  </p>
+                </div>
+              )}
             </ArticleSection>
 
             {followUpsFor("overview") && (
@@ -181,32 +353,42 @@ export function CareerGuideArticle({
               </DeepDiveBand>
             )}
 
-            <ArticleSection
-              id="skills"
-              eyebrow="Section two"
-              title="What skills do you need?"
-              lead="The capabilities that matter most for this role, from core to complementary."
-            >
-              <ul className="max-w-2xl space-y-2.5">
-                {c.typicalSkills.map((skill, i, arr) => (
-                  <li
-                    key={skill}
-                    className="flex items-start gap-3 text-[15px] leading-relaxed text-ink/85"
-                  >
-                    <span
-                      aria-hidden
-                      className="mt-[0.55rem] h-1 w-1 shrink-0 rounded-pill bg-ink-soft"
-                    />
-                    <span>
-                      {skill}
-                      {i === arr.length - 1 && (
-                        <FieldCitation citations={cite("typicalSkills")} />
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </ArticleSection>
+            <PersonalizationFitCard
+              guideId={guide._id}
+              guideTitle={guide.title}
+            />
+
+            <PersonalizationSkillsCard
+              guideId={guide._id}
+              fallback={
+                <ArticleSection
+                  id="skills"
+                  eyebrow="Section two"
+                  title="What skills do you need?"
+                  lead="The capabilities that matter most for this role, from core to complementary."
+                >
+                  <ul className="max-w-2xl space-y-2.5">
+                    {c.typicalSkills.map((skill, i, arr) => (
+                      <li
+                        key={skill}
+                        className="flex items-start gap-3 text-[15px] leading-relaxed text-ink/85"
+                      >
+                        <span
+                          aria-hidden
+                          className="mt-[0.55rem] h-1 w-1 shrink-0 rounded-pill bg-ink-soft"
+                        />
+                        <span>
+                          {skill}
+                          {i === arr.length - 1 && (
+                            <FieldCitation citations={cite("typicalSkills")} />
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </ArticleSection>
+              }
+            />
 
             <ArticleSection
               id="day-to-day"
@@ -243,7 +425,7 @@ export function CareerGuideArticle({
               eyebrow="Section four"
               title="What's the career outlook?"
               lead="Where the demand is heading and what the market looks like today."
-              meta={<RegionBadge region={region} />}
+              meta={<RegionBadge view={r} />}
               illustration={<SectionIllustration guide={guide} slot="outlook" />}
             >
               <div className="max-w-2xl space-y-5">
@@ -255,7 +437,7 @@ export function CareerGuideArticle({
                     {para}
                     {i === arr.length - 1 && (
                       <FieldCitation
-                        citations={cite(`regional.${region}.careerOutlook`)}
+                        citations={cite(`regional.${r.key}.careerOutlook`)}
                       />
                     )}
                   </p>
@@ -263,12 +445,12 @@ export function CareerGuideArticle({
               </div>
             </ArticleSection>
 
-            {followUpsFor(`outlook-${region}`) && (
+            {followUpsFor(`outlook-${r.key}`) && (
               <DeepDiveBand>
                 <GoDeeper
                   guideId={guide._id}
-                  sectionId={`outlook-${region}`}
-                  followUps={followUpsFor(`outlook-${region}`)!}
+                  sectionId={`outlook-${r.key}`}
+                  followUps={followUpsFor(`outlook-${r.key}`)!}
                   initialBranches={initialBranches}
                 />
               </DeepDiveBand>
@@ -279,7 +461,7 @@ export function CareerGuideArticle({
               eyebrow="Section five"
               title="How do you get there?"
               lead="A practical path from interest to competence, step by step."
-              meta={<RegionBadge region={region} />}
+              meta={<RegionBadge view={r} />}
               illustration={<SectionIllustration guide={guide} slot="learning-path" />}
             >
               <ol className="max-w-2xl space-y-7">
@@ -292,7 +474,7 @@ export function CareerGuideArticle({
                       {step}
                       {i === arr.length - 1 && (
                         <FieldCitation
-                          citations={cite(`regional.${region}.learningPath`)}
+                          citations={cite(`regional.${r.key}.learningPath`)}
                         />
                       )}
                     </p>
@@ -301,12 +483,12 @@ export function CareerGuideArticle({
               </ol>
             </ArticleSection>
 
-            {followUpsFor(`learning-path-${region}`) && (
+            {followUpsFor(`learning-path-${r.key}`) && (
               <DeepDiveBand>
                 <GoDeeper
                   guideId={guide._id}
-                  sectionId={`learning-path-${region}`}
-                  followUps={followUpsFor(`learning-path-${region}`)!}
+                  sectionId={`learning-path-${r.key}`}
+                  followUps={followUpsFor(`learning-path-${r.key}`)!}
                   initialBranches={initialBranches}
                 />
               </DeepDiveBand>
@@ -354,7 +536,7 @@ export function CareerGuideArticle({
               eyebrow="Section seven"
               title="Related roles."
               lead="Other career paths that share common ground with this one."
-              meta={<RegionBadge region={region} />}
+              meta={<RegionBadge view={r} />}
             >
               <ul className="max-w-2xl space-y-1">
                 {r.relatedRoles.map((role) => {
@@ -379,9 +561,12 @@ export function CareerGuideArticle({
           <div className="lg:sticky lg:top-12">
             <Sidebar
               slug={guide.slug}
-              region={region}
+              regionKey={r.key}
+              availableRegions={availableRegions}
+              currencySymbol={r.currencySymbol}
               salary={r.salary}
-              salaryCitations={cite(`regional.${region}.salary`)}
+              salaryCitations={cite(`regional.${r.key}.salary`)}
+              personalizationPending={personalizationPending}
             />
           </div>
         </aside>
@@ -679,82 +864,93 @@ function WikiTableOfContents({ sections }: { sections: SectionLink[] }) {
   );
 }
 
-function RegionBadge({ region }: { region: Region }) {
+function RegionBadge({ view }: { view: RegionalView }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
       <MapPin className="h-3 w-3" aria-hidden="true" strokeWidth={1.75} />
-      {region === "us" ? "United States" : "United Kingdom"}
+      {view.label}
     </span>
   );
 }
 
-type Salary = {
-  entry: string;
-  mid: string;
-  senior: string;
-  note?: string;
-};
-
-// Compacts six-figure salary strings for display:
-//   "$300,000 to $400,000" -> "300k to 400k"
-//   "£28,000 to £38,000"   -> "28k to 38k"
-//   "$600,000+"            -> "600k+"
-//   "$50,500 to $63,500"   -> "50.5k to 63.5k"
-// Currency symbol is stripped because the active region is already shown
-// in the sidebar's segmented toggle directly above.
-function formatSalaryBand(s: string): string {
+// Compacts salary strings for display, normalising the currency symbol so
+// it always renders consistently before each number:
+//   $/USD: "$300,000 to $400,000" -> "$300k to $400k"
+//   £/GBP: "£28,000 to £38,000"   -> "£28k to £38k"
+//   CA$:   "60,000 to 80,000"     -> "CA$60k to CA$80k"
+//   €/EUR: "€55,000+"             -> "€55k+"
+//   ¥/JPY: "8,500,000"            -> "¥8.5m"
+// Any pre-existing currency glyph in the source string is stripped first so
+// we don't double up; the caller-supplied symbol is the source of truth.
+function formatSalaryBand(s: string, currencySymbol: string): string {
   return s
-    .replace(/[$£€]/g, "")
+    .replace(/[$£€¥₹]|CA\$|A\$|S\$|HK\$|NZ\$/g, "")
     .replace(/\b\d{1,3}(?:,\d{3})+\b/g, (m) => {
       const n = Number.parseInt(m.replace(/,/g, ""), 10);
       if (!Number.isFinite(n)) return m;
       if (n >= 1_000_000) {
         const v = n / 1_000_000;
-        return `${v % 1 === 0 ? v : v.toFixed(1)}m`;
+        return `${currencySymbol}${v % 1 === 0 ? v : v.toFixed(1)}m`;
       }
       if (n >= 1_000) {
         const v = n / 1_000;
-        return `${v % 1 === 0 ? v : v.toFixed(1)}k`;
+        return `${currencySymbol}${v % 1 === 0 ? v : v.toFixed(1)}k`;
       }
-      return m;
+      return `${currencySymbol}${m}`;
     })
     .trim();
 }
 
 function Sidebar({
   slug,
-  region,
+  regionKey,
+  availableRegions,
+  currencySymbol,
   salary,
   salaryCitations,
+  personalizationPending,
 }: {
   slug: string;
-  region: Region;
+  regionKey: RegionKey;
+  availableRegions: Array<{ key: RegionKey; label: string }>;
+  currencySymbol: string;
   salary: Salary;
   salaryCitations?: CitationSource[];
+  personalizationPending?: boolean;
 }) {
   const bands: Array<[string, string]> = [
-    ["Entry", formatSalaryBand(salary.entry)],
-    ["Mid", formatSalaryBand(salary.mid)],
-    ["Senior", formatSalaryBand(salary.senior)],
+    ["Entry", formatSalaryBand(salary.entry, currencySymbol)],
+    ["Mid", formatSalaryBand(salary.mid, currencySymbol)],
+    ["Senior", formatSalaryBand(salary.senior, currencySymbol)],
   ];
 
   return (
     <div className="flex flex-col gap-6">
       <FactCheckCard slug={slug} />
       <div className="rounded-card border border-hairline bg-paper-raised p-6">
-        <p className={eyebrowCls}>Region</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className={eyebrowCls}>Region</p>
+          {personalizationPending && (
+            <span
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-mute"
+              aria-live="polite"
+            >
+              <LoopingFeather size={11} className="text-mute" />
+              Personalising
+            </span>
+          )}
+        </div>
         <div
           role="group"
           aria-label="Switch region"
           className="mt-3 inline-flex w-full items-center gap-0.5 rounded-pill border border-hairline bg-paper p-1"
         >
-          {(["us", "uk"] as const).map((opt) => {
-            const active = region === opt;
-            const label = opt === "us" ? "US" : "UK";
+          {availableRegions.map((opt) => {
+            const active = regionKey === opt.key;
             return (
               <Link
-                key={opt}
-                href={`?region=${opt}`}
+                key={opt.key}
+                href={`?region=${opt.key}`}
                 replace
                 scroll={false}
                 aria-current={active ? "page" : undefined}
@@ -764,7 +960,7 @@ function Sidebar({
                     : "text-mute hover:text-ink"
                 }`}
               >
-                {label}
+                {opt.label}
               </Link>
             );
           })}

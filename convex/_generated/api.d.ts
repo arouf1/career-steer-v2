@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as careerGuidePersonalizations from "../careerGuidePersonalizations.js";
 import type * as careerGuides from "../careerGuides.js";
 import type * as careerPaths from "../careerPaths.js";
 import type * as crons from "../crons.js";
@@ -35,6 +36,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  careerGuidePersonalizations: typeof careerGuidePersonalizations;
   careerGuides: typeof careerGuides;
   careerPaths: typeof careerPaths;
   crons: typeof crons;

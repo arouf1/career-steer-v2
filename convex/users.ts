@@ -87,6 +87,12 @@ const cascadeDeleteUser = async (
     await ctx.db.delete(profile._id);
   }
 
+  const personalizations = await ctx.db
+    .query("career_guide_personalizations")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .collect();
+  for (const row of personalizations) await ctx.db.delete(row._id);
+
   await ctx.db.delete(userId);
 };
 
