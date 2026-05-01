@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex/react";
-import { CornerDownRight, Loader2, Plus, Minus } from "lucide-react";
+import { ChevronDown, CornerDownRight, Loader2, Plus, Minus } from "lucide-react";
 import { motion } from "motion/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { FieldCitation } from "./FieldCitation";
+import { TelescopeIcon, type TelescopeIconHandle } from "@/components/icons/animated-telescope";
 
 const eyebrowCls =
   "text-[10px] uppercase tracking-[0.18em] font-medium text-mute";
@@ -24,11 +25,13 @@ const normalize = (q: string): string =>
 export function GoDeeper({
   guideId,
   sectionId,
+  sectionLabel,
   followUps,
   initialBranches,
 }: {
   guideId: Id<"career_guides">;
   sectionId: string;
+  sectionLabel: string;
   followUps: string[];
   /**
    * Server-fetched branches passed from the route. Used during SSR (when
@@ -43,11 +46,33 @@ export function GoDeeper({
     | undefined;
   const branches = liveBranches ?? initialBranches;
 
-  // All branches start collapsed. Pre-warmed answers are still rendered into
-  // the DOM (via the always-mounted motion.div below, animated to height 0)
-  // so crawlers and AI engines can extract the Q&A even when visually closed.
+  // Outer disclosure (the whole module) and inner per-question state. Both
+  // collapsed by default. Question DOM is height-0-mounted so pre-warmed
+  // answers stay crawler-visible even when the outer trigger is closed.
+  const [outerOpen, setOuterOpen] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<Set<string>>(new Set());
+
+  const telescopeRef = useRef<TelescopeIconHandle>(null);
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = (next: "animate" | "normal") => {
+      if (cancelled) return;
+      if (next === "animate") {
+        telescopeRef.current?.startAnimation();
+        timer = setTimeout(() => tick("normal"), 1100);
+      } else {
+        telescopeRef.current?.stopAnimation();
+        timer = setTimeout(() => tick("animate"), 2200);
+      }
+    };
+    timer = setTimeout(() => tick("animate"), 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
 
   if (!followUps || followUps.length === 0) return null;
 
@@ -95,16 +120,28 @@ export function GoDeeper({
   };
 
   return (
-    <>
-      <span className="inline-flex items-center gap-1.5 rounded-pill border border-hairline/70 bg-paper px-2.5 py-1">
-        <CornerDownRight
-          className="h-3 w-3 text-mute"
+    <div className="my-6">
+      <button
+        type="button"
+        onClick={() => setOuterOpen((v) => !v)}
+        aria-expanded={outerOpen}
+        className="group inline-flex items-center gap-1.5 rounded-pill border border-hairline/70 bg-paper px-2.5 py-1 text-mute transition-colors hover:border-hairline hover:text-ink"
+      >
+        <TelescopeIcon
+          ref={telescopeRef}
+          size={12}
+          className="inline-flex shrink-0"
+          aria-hidden="true"
+        />
+        <span className={eyebrowCls}>Go deeper on {sectionLabel}</span>
+        <ChevronDown
+          className={`h-3 w-3 shrink-0 transition-transform ${outerOpen ? "rotate-180" : ""}`}
           aria-hidden="true"
           strokeWidth={1.75}
         />
-        <span className={eyebrowCls}>Go deeper</span>
-      </span>
-      <ul className="mt-5 max-w-2xl divide-y divide-hairline/70">
+      </button>
+      <AnswerPanel isOpen={outerOpen}>
+      <ul className="mt-4 max-w-2xl divide-y divide-hairline/70">
         {followUps.map((question) => {
           const key = normalize(question);
           const branch = branchByQuestion.get(key);
@@ -206,7 +243,8 @@ export function GoDeeper({
           );
         })}
       </ul>
-    </>
+      </AnswerPanel>
+    </div>
   );
 }
 

@@ -11,6 +11,8 @@ import {
   ArrowUpRight,
   BadgeCheck,
   BookOpen,
+  Check,
+  ChevronDown,
   CircleAlert,
   Loader2,
   MapPin,
@@ -29,6 +31,7 @@ import { AllSourcesPanel } from "./AllSourcesPanel";
 import { GoDeeper } from "./GoDeeper";
 import { PersonalizationFitCard } from "./PersonalizationFitCard";
 import { PersonalizationSkillsCard } from "./PersonalizationSkillsCard";
+import { PeopleInFieldSection } from "./PeopleInFieldSection";
 import { LoopingFeather } from "./LoopingFeather";
 
 export type Region = "us" | "uk";
@@ -104,6 +107,11 @@ function buildSections(
     { id: "learning-path", label: "How to get there" },
   );
   if (hasRisks) sections.push({ id: "considerations", label: "Worth knowing" });
+  // "People in this field" sits before Related roles so signed-in users see
+  // their network nudge before the next-best-guide list. The section also
+  // renders for signed-out users (as a blurred teaser with a sign-up CTA),
+  // so it always appears in the TOC.
+  sections.push({ id: "people", label: "People in this field" });
   sections.push({ id: "related", label: "Related roles" });
   return sections;
 }
@@ -234,16 +242,24 @@ export function CareerGuideArticle({
   // ISO country code (CA, AU, DE, JP, ...) for the tab label so all three
   // tabs stay compact and consistent at the same character width. The full
   // country name still appears on the section badges in the article body.
-  const availableRegions: Array<{ key: RegionKey; label: string }> = [];
+  const availableRegions: Array<{
+    key: RegionKey;
+    shortLabel: string;
+    longLabel: string;
+  }> = [];
   if (personalizedRegional) {
     availableRegions.push({
       key: "user",
-      label:
+      shortLabel:
         personalizedRegional.countryCode?.toUpperCase() ||
         personalizedRegional.countryName,
+      longLabel: personalizedRegional.countryName,
     });
   }
-  availableRegions.push({ key: "us", label: "US" }, { key: "uk", label: "UK" });
+  availableRegions.push(
+    { key: "us", shortLabel: "US", longLabel: "United States" },
+    { key: "uk", shortLabel: "UK", longLabel: "United Kingdom" },
+  );
 
   // Citations: public US/UK fields come from `guide.citations`; the
   // personalized "user" region carries Exa-fetched citations on the
@@ -300,6 +316,22 @@ export function CareerGuideArticle({
             lead={c.whyConsider}
           />
 
+          {showInlineCvCta && (
+            <div className="mt-10 max-w-2xl rounded-surface bg-ink px-6 py-5">
+              <p className="text-[15px] leading-relaxed text-paper/85">
+                This is a general guide.{" "}
+                <Link
+                  href="/profile"
+                  className="font-medium text-paper underline underline-offset-4 transition-colors hover:text-paper/80"
+                >
+                  Upload your CV
+                </Link>{" "}
+                to see how your specific skills and experience align with this
+                career path.
+              </p>
+            </div>
+          )}
+
           <Illustration
             url={guide.illustrationUrl}
             status={guide.illustrationStatus}
@@ -325,32 +357,16 @@ export function CareerGuideArticle({
                 ))}
               </div>
 
-              {showInlineCvCta && (
-                <div className="mt-10 max-w-2xl rounded-surface bg-ink px-6 py-5">
-                  <p className="text-[15px] leading-relaxed text-paper/85">
-                    This is a general guide.{" "}
-                    <Link
-                      href="/profile"
-                      className="font-medium text-paper underline underline-offset-4 transition-colors hover:text-paper/80"
-                    >
-                      Upload your CV
-                    </Link>{" "}
-                    to see how your specific skills and experience align with
-                    this career path.
-                  </p>
-                </div>
-              )}
             </ArticleSection>
 
             {followUpsFor("overview") && (
-              <DeepDiveBand>
-                <GoDeeper
-                  guideId={guide._id}
-                  sectionId="overview"
-                  followUps={followUpsFor("overview")!}
-                  initialBranches={initialBranches}
-                />
-              </DeepDiveBand>
+              <GoDeeper
+                guideId={guide._id}
+                sectionId="overview"
+                sectionLabel="the overview"
+                followUps={followUpsFor("overview")!}
+                initialBranches={initialBranches}
+              />
             )}
 
             <PersonalizationFitCard
@@ -367,25 +383,11 @@ export function CareerGuideArticle({
                   title="What skills do you need?"
                   lead="The capabilities that matter most for this role, from core to complementary."
                 >
-                  <ul className="max-w-2xl space-y-2.5">
-                    {c.typicalSkills.map((skill, i, arr) => (
-                      <li
-                        key={skill}
-                        className="flex items-start gap-3 text-[15px] leading-relaxed text-ink/85"
-                      >
-                        <span
-                          aria-hidden
-                          className="mt-[0.55rem] h-1 w-1 shrink-0 rounded-pill bg-ink-soft"
-                        />
-                        <span>
-                          {skill}
-                          {i === arr.length - 1 && (
-                            <FieldCitation citations={cite("typicalSkills")} />
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <SkillsList
+                    detail={c.typicalSkillsDetail}
+                    fallback={c.typicalSkills}
+                    citations={cite("typicalSkills")}
+                  />
                 </ArticleSection>
               }
             />
@@ -410,14 +412,13 @@ export function CareerGuideArticle({
             </ArticleSection>
 
             {followUpsFor("day-to-day") && (
-              <DeepDiveBand>
-                <GoDeeper
-                  guideId={guide._id}
-                  sectionId="day-to-day"
-                  followUps={followUpsFor("day-to-day")!}
-                  initialBranches={initialBranches}
-                />
-              </DeepDiveBand>
+              <GoDeeper
+                guideId={guide._id}
+                sectionId="day-to-day"
+                sectionLabel="the day-to-day"
+                followUps={followUpsFor("day-to-day")!}
+                initialBranches={initialBranches}
+              />
             )}
 
             <ArticleSection
@@ -425,7 +426,13 @@ export function CareerGuideArticle({
               eyebrow="Section four"
               title="What's the career outlook?"
               lead="Where the demand is heading and what the market looks like today."
-              meta={<RegionBadge view={r} />}
+              meta={
+                <RegionPicker
+                  view={r}
+                  regionKey={r.key}
+                  availableRegions={availableRegions}
+                />
+              }
               illustration={<SectionIllustration guide={guide} slot="outlook" />}
             >
               <div className="max-w-2xl space-y-5">
@@ -446,14 +453,13 @@ export function CareerGuideArticle({
             </ArticleSection>
 
             {followUpsFor(`outlook-${r.key}`) && (
-              <DeepDiveBand>
-                <GoDeeper
-                  guideId={guide._id}
-                  sectionId={`outlook-${r.key}`}
-                  followUps={followUpsFor(`outlook-${r.key}`)!}
-                  initialBranches={initialBranches}
-                />
-              </DeepDiveBand>
+              <GoDeeper
+                guideId={guide._id}
+                sectionId={`outlook-${r.key}`}
+                sectionLabel="the outlook"
+                followUps={followUpsFor(`outlook-${r.key}`)!}
+                initialBranches={initialBranches}
+              />
             )}
 
             <ArticleSection
@@ -461,7 +467,13 @@ export function CareerGuideArticle({
               eyebrow="Section five"
               title="How do you get there?"
               lead="A practical path from interest to competence, step by step."
-              meta={<RegionBadge view={r} />}
+              meta={
+                <RegionPicker
+                  view={r}
+                  regionKey={r.key}
+                  availableRegions={availableRegions}
+                />
+              }
               illustration={<SectionIllustration guide={guide} slot="learning-path" />}
             >
               <ol className="max-w-2xl space-y-7">
@@ -484,14 +496,13 @@ export function CareerGuideArticle({
             </ArticleSection>
 
             {followUpsFor(`learning-path-${r.key}`) && (
-              <DeepDiveBand>
-                <GoDeeper
-                  guideId={guide._id}
-                  sectionId={`learning-path-${r.key}`}
-                  followUps={followUpsFor(`learning-path-${r.key}`)!}
-                  initialBranches={initialBranches}
-                />
-              </DeepDiveBand>
+              <GoDeeper
+                guideId={guide._id}
+                sectionId={`learning-path-${r.key}`}
+                sectionLabel="the learning path"
+                followUps={followUpsFor(`learning-path-${r.key}`)!}
+                initialBranches={initialBranches}
+              />
             )}
 
             {c.riskFactors.length > 0 && (
@@ -521,22 +532,32 @@ export function CareerGuideArticle({
             )}
 
             {c.riskFactors.length > 0 && followUpsFor("considerations") && (
-              <DeepDiveBand>
-                <GoDeeper
-                  guideId={guide._id}
-                  sectionId="considerations"
-                  followUps={followUpsFor("considerations")!}
-                  initialBranches={initialBranches}
-                />
-              </DeepDiveBand>
+              <GoDeeper
+                guideId={guide._id}
+                sectionId="considerations"
+                sectionLabel="what to weigh"
+                followUps={followUpsFor("considerations")!}
+                initialBranches={initialBranches}
+              />
             )}
+
+            <PeopleInFieldSection
+              guideId={guide._id}
+              guideTitle={guide.title}
+            />
 
             <ArticleSection
               id="related"
-              eyebrow="Section seven"
+              eyebrow="Section eight"
               title="Related roles."
               lead="Other career paths that share common ground with this one."
-              meta={<RegionBadge view={r} />}
+              meta={
+                <RegionPicker
+                  view={r}
+                  regionKey={r.key}
+                  availableRegions={availableRegions}
+                />
+              }
             >
               <ul className="max-w-2xl space-y-1">
                 {r.relatedRoles.map((role) => {
@@ -611,16 +632,7 @@ function Byline({
       <h1 className="mt-6 text-balance text-5xl leading-[1.02] tracking-tight text-ink [font-family:var(--font-serif)] sm:text-6xl lg:text-[4.25rem]">
         {title}
       </h1>
-      {lead && (
-        <p className="mt-7 max-w-2xl text-balance text-[19px] leading-[1.55] text-ink/70 sm:text-[20px]">
-          {lead}
-        </p>
-      )}
-      <div className="mt-9 flex flex-wrap items-center gap-x-2 gap-y-2 text-[13px] text-mute">
-        <span>Career guide</span>
-        <span aria-hidden className="text-mute/40">
-          ·
-        </span>
+      <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-2 text-[13px] text-mute">
         <span>
           Published{" "}
           <time dateTime={new Date(publishedAt).toISOString()}>
@@ -641,6 +653,11 @@ function Byline({
           </>
         )}
       </div>
+      {lead && (
+        <p className="mt-7 max-w-2xl text-balance text-[19px] leading-[1.55] text-ink/70 sm:text-[20px]">
+          {lead}
+        </p>
+      )}
     </motion.header>
   );
 }
@@ -789,14 +806,6 @@ function SectionIllustration({
   );
 }
 
-function DeepDiveBand({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="-my-6 rounded-card border border-hairline/60 bg-paper-raised px-6 py-7 sm:px-10 sm:py-9 lg:-my-8">
-      {children}
-    </div>
-  );
-}
-
 function WikiTableOfContents({ sections }: { sections: SectionLink[] }) {
   const [activeSection, setActiveSection] = useState<string>("");
 
@@ -864,12 +873,204 @@ function WikiTableOfContents({ sections }: { sections: SectionLink[] }) {
   );
 }
 
-function RegionBadge({ view }: { view: RegionalView }) {
+type SkillDetail = {
+  name: string;
+  rationale: string;
+  tier: "must" | "nice";
+};
+
+function SkillsList({
+  detail,
+  fallback,
+  citations,
+}: {
+  detail?: SkillDetail[];
+  fallback: string[];
+  citations?: CitationSource[];
+}) {
+  const must = (detail ?? []).filter((s) => s.tier === "must");
+  const nice = (detail ?? []).filter((s) => s.tier === "nice");
+  const hasDetail = must.length > 0 || nice.length > 0;
+  const [tab, setTab] = useState<"must" | "nice">("must");
+
+  if (!hasDetail) {
+    return (
+      <ul className="max-w-2xl space-y-2.5">
+        {fallback.map((skill, i, arr) => (
+          <li
+            key={skill}
+            className="flex items-start gap-3 text-[15px] leading-relaxed text-ink/85"
+          >
+            <span
+              aria-hidden
+              className="mt-[0.55rem] h-1 w-1 shrink-0 rounded-pill bg-ink-soft"
+            />
+            <span>
+              {skill}
+              {i === arr.length - 1 && <FieldCitation citations={citations} />}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  const tiers = {
+    must: {
+      label: "Must-haves",
+      helper: "Non-negotiable. Employers screen for these.",
+      items: must,
+    },
+    nice: {
+      label: "Nice-to-haves",
+      helper: "Strong differentiators, not table-stakes.",
+      items: nice,
+    },
+  } as const;
+
+  const tabKeys: Array<"must" | "nice"> = [];
+  if (must.length > 0) tabKeys.push("must");
+  if (nice.length > 0) tabKeys.push("nice");
+  const activeTab = tiers[tab].items.length > 0 ? tab : tabKeys[0];
+  const active = tiers[activeTab];
+
   return (
-    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
-      <MapPin className="h-3 w-3" aria-hidden="true" strokeWidth={1.75} />
-      {view.label}
-    </span>
+    <div className="max-w-2xl">
+      {tabKeys.length > 1 ? (
+        <div
+          role="tablist"
+          aria-label="Skill tier"
+          className="inline-flex w-full items-center gap-0.5 rounded-pill border border-hairline bg-paper p-1"
+        >
+          {tabKeys.map((key) => {
+            const isActive = activeTab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setTab(key)}
+                className={`type-label flex-1 rounded-pill px-3 py-2 text-center transition-colors ${
+                  isActive
+                    ? "bg-paper-raised text-ink"
+                    : "text-mute hover:text-ink"
+                }`}
+              >
+                {tiers[key].label}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className={eyebrowCls}>{active.label}</p>
+      )}
+      <p className="mt-3 text-[14px] leading-relaxed text-mute">
+        {active.helper}
+      </p>
+      <ul className="mt-5 divide-y divide-hairline/70">
+        {active.items.map((s, i, arr) => (
+          <li key={s.name} className="py-4 first:pt-0 last:pb-0">
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-[16px] font-medium text-ink">{s.name}</h3>
+              {activeTab === "must" && i === arr.length - 1 && (
+                <FieldCitation citations={citations} />
+              )}
+            </div>
+            <p className="mt-1.5 text-[15px] leading-[1.6] text-ink/75">
+              {s.rationale}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RegionPicker({
+  view,
+  regionKey,
+  availableRegions,
+}: {
+  view: RegionalView;
+  regionKey: RegionKey;
+  availableRegions: Array<{ key: RegionKey; shortLabel: string; longLabel: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-pill text-[10px] font-medium uppercase tracking-[0.18em] text-mute transition-colors hover:text-ink"
+      >
+        <MapPin className="h-3 w-3" aria-hidden="true" strokeWidth={1.75} />
+        <span>{view.label}</span>
+        <ChevronDown
+          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
+          strokeWidth={1.75}
+        />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Switch region"
+          className="absolute right-0 top-full z-20 mt-2 min-w-[180px] rounded-card border border-hairline bg-paper-raised p-1 shadow-md"
+        >
+          {availableRegions.map((opt) => {
+            const active = regionKey === opt.key;
+            return (
+              <Link
+                key={opt.key}
+                href={`?region=${opt.key}`}
+                replace
+                scroll={false}
+                role="option"
+                aria-selected={active}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-2 rounded-pill px-3 py-2 text-[12px] tracking-tight transition-colors ${
+                  active
+                    ? "bg-paper text-ink"
+                    : "text-mute hover:bg-paper hover:text-ink"
+                }`}
+              >
+                <span className="flex-1 normal-case">{opt.longLabel}</span>
+                {active && (
+                  <Check
+                    className="h-3.5 w-3.5"
+                    aria-hidden="true"
+                    strokeWidth={2}
+                  />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -912,7 +1113,7 @@ function Sidebar({
 }: {
   slug: string;
   regionKey: RegionKey;
-  availableRegions: Array<{ key: RegionKey; label: string }>;
+  availableRegions: Array<{ key: RegionKey; shortLabel: string; longLabel: string }>;
   currencySymbol: string;
   salary: Salary;
   salaryCitations?: CitationSource[];
@@ -960,7 +1161,7 @@ function Sidebar({
                     : "text-mute hover:text-ink"
                 }`}
               >
-                {opt.label}
+                {opt.shortLabel}
               </Link>
             );
           })}
