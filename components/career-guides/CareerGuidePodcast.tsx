@@ -37,6 +37,9 @@ export function CareerGuidePodcast({ guide }: Props) {
     <ReadyCard
       audioUrl={current.podcastAudioUrl}
       transcript={podcast.transcript ?? []}
+      // Prefer the LLM-generated hook; fall back to a template for podcasts
+      // synthesized before episodeTitle was added.
+      episodeTitle={podcast.episodeTitle ?? `${current.title}, unfiltered`}
       guestName={podcast.guestName ?? "Guest"}
       guestRole={podcast.guestRole ?? ""}
       durationSeconds={podcast.durationSeconds}
@@ -69,12 +72,14 @@ function PendingCard() {
 function ReadyCard({
   audioUrl,
   transcript,
+  episodeTitle,
   guestName,
   guestRole,
   durationSeconds,
 }: {
   audioUrl: string;
   transcript: { speaker: "host" | "guest"; text: string }[];
+  episodeTitle: string;
   guestName: string;
   guestRole: string;
   durationSeconds?: number;
@@ -157,11 +162,12 @@ function ReadyCard({
             <span>Career Cast</span>
           </div>
           <h2 className="mt-1.5 text-[18px] leading-snug text-ink [font-family:var(--font-serif)]">
-            {HOST_NAME} talks with {guestName}
+            {episodeTitle}
           </h2>
-          {guestRole && (
-            <p className="mt-1 truncate text-[13px] text-mute">{guestRole}</p>
-          )}
+          <p className="mt-1 truncate text-[13px] text-mute">
+            {guestName}
+            {guestRole ? ` — ${guestRole}` : ""}
+          </p>
 
           <div className="mt-4 flex items-center gap-3">
             <div
@@ -212,7 +218,9 @@ function ReadyCard({
                         : "text-state-warning/80"
                     }`}
                   >
-                    {turn.speaker === "host" ? "Alice" : guestName.split(" ")[0]}
+                    {turn.speaker === "host"
+                      ? HOST_NAME.split(" ")[0]
+                      : guestName.split(" ")[0]}
                   </span>
                   <p className="flex-1 text-[15px] leading-[1.65] text-ink/85">
                     {turn.text}

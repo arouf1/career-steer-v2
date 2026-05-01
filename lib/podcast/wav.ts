@@ -59,20 +59,23 @@ function createWavHeader(dataLength: number, opts: WavOptions): Uint8Array {
   return header;
 }
 
-function base64ToBytes(base64: string): Uint8Array {
+export function base64ToBytes(base64: string): Uint8Array {
   const bin = atob(base64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
 }
 
-export function pcmToWav(base64Pcm: string, mimeType: string): Uint8Array {
-  const pcm = base64ToBytes(base64Pcm);
+export function pcmBytesToWav(pcm: Uint8Array, mimeType: string): Uint8Array {
   const header = createWavHeader(pcm.length, parseMimeType(mimeType));
   const out = new Uint8Array(header.length + pcm.length);
   out.set(header, 0);
   out.set(pcm, header.length);
   return out;
+}
+
+export function pcmToWav(base64Pcm: string, mimeType: string): Uint8Array {
+  return pcmBytesToWav(base64ToBytes(base64Pcm), mimeType);
 }
 
 // Sample rate * channels * (bits/8) bytes per second.

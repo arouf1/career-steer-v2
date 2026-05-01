@@ -3,6 +3,7 @@ import { z } from "zod";
 // Per project memory: Gemini structured output rejects bound/array-length
 // constraints — keep this schema simple and enforce ranges in the prompt.
 export const PodcastScriptSchema = z.object({
+  episodeTitle: z.string(),
   guestGender: z.enum(["female", "male"]),
   guestName: z.string(),
   guestRole: z.string(),
@@ -104,11 +105,53 @@ Themes to weave in (pick the ones that fit the conversation, do not force all of
 - Where the field is going (UK perspective): ${content.regional.uk.careerOutlook}
 - How people typically get into it: ${[...content.regional.us.learningPath, ...content.regional.uk.learningPath].slice(0, 6).join(" | ")}
 
+Episode title:
+- Write an episode title that hooks. Three to seven words, no quotes, no colon-prefix like "Career Cast:" (the show name is already shown above the title).
+- It should sound like a magazine teaser or a podcast tile, not a textbook chapter. It can be a fragment, a question, or a punchy statement. It should imply a story, a tension, or a behind-the-scenes angle.
+- Avoid the words "career", "guide", "interview", and "everything you need to know". Avoid the literal job title as the entire title (e.g., do NOT just write the role name). The job title may appear inside the hook if it earns its place.
+- Examples of the right register (for unrelated jobs, just to calibrate tone): "The job behind the smile", "Why I almost quit at thirty", "Eighteen years of broken backs", "What the brochure leaves out", "The shift no one warns you about".
+
 Output strictly as structured JSON matching the schema:
+- episodeTitle: short hook string (see "Episode title" rules above)
 - guestGender: "female" or "male"
 - guestName: full name as a string
 - guestRole: one-line guest description (used as a TTS style hint)
 - dialogue: ordered array of turns. Each turn has speaker ("host" or "guest") and text. The text is exactly what the speaker says, with bracketed tags inline at the moments they should fire.
+`.trim();
+}
+
+// Backfill helper: produces just an episodeTitle for podcasts that were
+// synthesized before episodeTitle existed in the schema. Grounded in the
+// already-recorded transcript so the hook actually reflects what was said.
+export const EpisodeTitleSchema = z.object({
+  episodeTitle: z.string(),
+});
+
+export function buildEpisodeTitleBackfillPrompt(args: {
+  title: string;
+  guestName: string;
+  guestRole: string;
+  transcript: { speaker: "host" | "guest"; text: string }[];
+}): string {
+  const dialogue = args.transcript
+    .map((t) => `${t.speaker === "host" ? HOST_NAME : args.guestName}: ${t.text}`)
+    .join("\n");
+  return `
+Below is a recorded podcast episode of Career Cast — a friendly, no-fluff series about what different careers are actually like. The episode is about the career of "${args.title}" with guest ${args.guestName} (${args.guestRole}).
+
+Your job is to write a hook-y episode title for it.
+
+Title rules:
+- Three to seven words. No quotes. No colon-prefix like "Career Cast:" — the show name is shown above the title in the UI.
+- Sound like a magazine teaser or a podcast tile, not a textbook chapter. A fragment, a question, or a punchy statement. Imply a story, a tension, or a behind-the-scenes angle.
+- Avoid the words "career", "guide", "interview", and "everything you need to know".
+- Avoid the literal job title as the entire title. The job title may appear inside the hook only if it earns its place.
+- The title MUST reflect something that actually happens in the conversation below — a moment, a tension, a memorable line. Do not invent angles that aren't in the transcript.
+
+Transcript:
+${dialogue}
+
+Output strictly as structured JSON with a single field "episodeTitle".
 `.trim();
 }
 

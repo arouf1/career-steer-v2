@@ -1,10 +1,17 @@
 import { ConvexError, v } from "convex/values";
 import { generateText, Output } from "ai";
-import { internalAction, internalMutation, mutation } from "./_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { chatModel } from "../lib/ai/providers";
 import {
+  EpisodeTitleSchema,
   PodcastScriptSchema,
+  buildEpisodeTitleBackfillPrompt,
   buildPodcastScriptPrompt,
 } from "../lib/ai/prompts/podcast";
 import { HOST, pickGuestVoice } from "../lib/podcast/voices";
@@ -56,6 +63,8 @@ export const _beginPodcast = internalMutation({
         // them — useful when the synthesize step retries on its own.
         audioStorageId: prev?.audioStorageId,
         durationSeconds: prev?.durationSeconds,
+        episodeTitle: prev?.episodeTitle,
+        hasJingle: prev?.hasJingle,
         guestVoice: prev?.guestVoice,
         guestName: prev?.guestName,
         guestRole: prev?.guestRole,
@@ -71,6 +80,7 @@ export const _beginPodcast = internalMutation({
 export const _savePodcastScript = internalMutation({
   args: {
     guideId: v.id("career_guides"),
+    episodeTitle: v.string(),
     guestName: v.string(),
     guestRole: v.string(),
     guestGender: v.union(v.literal("female"), v.literal("male")),
@@ -107,10 +117,12 @@ export const _savePodcastScript = internalMutation({
         guestName: args.guestName,
         guestRole: args.guestRole,
         guestGender: args.guestGender,
+        episodeTitle: args.episodeTitle,
         transcript: args.transcript,
         attempts: prev?.attempts ?? 1,
         audioStorageId: prev?.audioStorageId,
         durationSeconds: prev?.durationSeconds,
+        hasJingle: prev?.hasJingle,
       },
       updatedAt: Date.now(),
     });
@@ -157,6 +169,8 @@ export const _failPodcast = internalMutation({
         attempts: prev?.attempts ?? 1,
         audioStorageId: prev?.audioStorageId,
         durationSeconds: prev?.durationSeconds,
+        episodeTitle: prev?.episodeTitle,
+        hasJingle: prev?.hasJingle,
         guestVoice: prev?.guestVoice,
         guestName: prev?.guestName,
         guestRole: prev?.guestRole,
@@ -203,6 +217,8 @@ export const triggerPodcastBySlug = mutation({
         // Drop stale audio/transcript so the UI shows the pending state.
         audioStorageId: undefined,
         durationSeconds: undefined,
+        episodeTitle: undefined,
+        hasJingle: undefined,
         guestVoice: undefined,
         guestName: undefined,
         guestRole: undefined,
@@ -286,6 +302,7 @@ export const generateScript = internalAction({
 
         await ctx.runMutation(internal.podcasts._savePodcastScript, {
           guideId: args.guideId,
+          episodeTitle: output.episodeTitle,
           guestName: output.guestName,
           guestRole: output.guestRole,
           guestGender: output.guestGender,
@@ -333,5 +350,221 @@ export const generateScript = internalAction({
       });
     }
     return null;
+  },
+});
+
+// ── Backfill: invent an episodeTitle for podcasts recorded before the field
+//    existed. LLM-only, no TTS regen. Skips guides that already have a title
+//    unless `force` is true.
+
+// Marks a guide's podcast as jingled. Called by both synthesize (always true
+// post-jingle-rollout) and the prependJingleToExisting backfill, so the
+// hasJingle flag is the single source of truth for "is the jingle in this
+// audio file already".
+export const _markJingled = internalMutation({
+  args: { guideId: v.id("career_guides") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide?.podcast) return null;
+    await ctx.db.patch(args.guideId, {
+      podcast: { ...guide.podcast, hasJingle: true },
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+export const _listGuidesNeedingJingleBackfill = internalQuery({
+  args: { force: v.boolean() },
+  returns: v.array(v.object({ id: v.id("career_guides"), slug: v.string() })),
+  handler: async (ctx, args) => {
+    const all = await ctx.db.query("career_guides").collect();
+    return all
+      .filter(
+        (g) =>
+          g.podcast?.status === "complete" &&
+          g.podcast?.audioStorageId &&
+          (args.force || !g.podcast?.hasJingle),
+      )
+      .map((g) => ({ id: g._id, slug: g.slug }));
+  },
+});
+
+// One-shot ops helper: prepends the jingle to every complete-podcast guide
+// that hasn't been jingled yet. Fans out in parallel; per-guide failures are
+// surfaced in the result list rather than aborting the batch.
+export const backfillAllJingles = internalAction({
+  args: { force: v.optional(v.boolean()) },
+  returns: v.array(
+    v.object({
+      slug: v.string(),
+      ok: v.boolean(),
+      result: v.string(),
+    }),
+  ),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Array<{ slug: string; ok: boolean; result: string }>> => {
+    const targets: Array<{ id: string; slug: string }> = await ctx.runQuery(
+      internal.podcasts._listGuidesNeedingJingleBackfill,
+      { force: args.force ?? false },
+    );
+    const results = await Promise.all(
+      targets.map(async (t): Promise<{ slug: string; ok: boolean; result: string }> => {
+        try {
+          const r: { previousDurationSeconds: number; newDurationSeconds: number } =
+            await ctx.runAction(internal.podcastsTts.prependJingleToExisting, {
+              guideId: t.id as never,
+            });
+          return {
+            slug: t.slug,
+            ok: true,
+            result: `${r.previousDurationSeconds.toFixed(1)}s → ${r.newDurationSeconds.toFixed(1)}s`,
+          };
+        } catch (err) {
+          return {
+            slug: t.slug,
+            ok: false,
+            result: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+    return results;
+  },
+});
+
+export const _patchEpisodeTitle = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    episodeTitle: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide?.podcast) return null;
+    await ctx.db.patch(args.guideId, {
+      podcast: { ...guide.podcast, episodeTitle: args.episodeTitle },
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// One-shot ops helper: finds every complete-podcast guide still missing an
+// episodeTitle and fans the per-guide backfill out in parallel. Returns a
+// per-guide outcome list. Force=true regenerates titles even when present.
+export const backfillAllEpisodeTitles = internalAction({
+  args: { force: v.optional(v.boolean()) },
+  returns: v.array(
+    v.object({
+      slug: v.string(),
+      ok: v.boolean(),
+      result: v.string(),
+    }),
+  ),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Array<{ slug: string; ok: boolean; result: string }>> => {
+    const targets: Array<{ id: string; slug: string }> = await ctx.runQuery(
+      internal.podcasts._listGuidesNeedingTitleBackfill,
+      { force: args.force ?? false },
+    );
+    const results = await Promise.all(
+      targets.map(async (t): Promise<{ slug: string; ok: boolean; result: string }> => {
+        try {
+          const r: { ok: boolean; episodeTitle?: string; reason?: string } =
+            await ctx.runAction(internal.podcasts.backfillEpisodeTitle, {
+              guideId: t.id as never,
+              force: args.force,
+            });
+          return r.ok
+            ? { slug: t.slug, ok: true, result: r.episodeTitle ?? "" }
+            : { slug: t.slug, ok: false, result: r.reason ?? "unknown" };
+        } catch (err) {
+          return {
+            slug: t.slug,
+            ok: false,
+            result: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+    return results;
+  },
+});
+
+export const _listGuidesNeedingTitleBackfill = internalQuery({
+  args: { force: v.boolean() },
+  returns: v.array(v.object({ id: v.id("career_guides"), slug: v.string() })),
+  handler: async (ctx, args) => {
+    const all = await ctx.db.query("career_guides").collect();
+    return all
+      .filter(
+        (g) =>
+          g.podcast?.status === "complete" &&
+          (args.force || !g.podcast?.episodeTitle),
+      )
+      .map((g) => ({ id: g._id, slug: g.slug }));
+  },
+});
+
+export const backfillEpisodeTitle = internalAction({
+  args: {
+    guideId: v.id("career_guides"),
+    force: v.optional(v.boolean()),
+  },
+  returns: v.union(
+    v.object({ ok: v.literal(true), episodeTitle: v.string() }),
+    v.object({ ok: v.literal(false), reason: v.string() }),
+  ),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    | { ok: true; episodeTitle: string }
+    | { ok: false; reason: string }
+  > => {
+    const guide: {
+      title: string;
+      podcast?: {
+        episodeTitle?: string;
+        guestName?: string;
+        guestRole?: string;
+        transcript?: { speaker: "host" | "guest"; text: string }[];
+      };
+    } | null = await ctx.runQuery(internal.careerGuides._getById, {
+      guideId: args.guideId,
+    });
+    if (!guide?.podcast?.transcript || !guide.podcast.guestName || !guide.podcast.guestRole) {
+      return { ok: false as const, reason: "podcast_not_ready" };
+    }
+    if (guide.podcast.episodeTitle && !args.force) {
+      return { ok: false as const, reason: "already_has_title" };
+    }
+
+    const prompt = buildEpisodeTitleBackfillPrompt({
+      title: guide.title,
+      guestName: guide.podcast.guestName,
+      guestRole: guide.podcast.guestRole,
+      transcript: guide.podcast.transcript,
+    });
+    const { output } = await generateText({
+      model: chatModel(SCRIPT_MODEL_ID, { zdr: true }),
+      output: Output.object({ schema: EpisodeTitleSchema }),
+      prompt,
+    });
+    const episodeTitle = output.episodeTitle.trim().replace(/^"|"$/g, "");
+    if (!episodeTitle) {
+      return { ok: false as const, reason: "empty_title" };
+    }
+    await ctx.runMutation(internal.podcasts._patchEpisodeTitle, {
+      guideId: args.guideId,
+      episodeTitle,
+    });
+    return { ok: true as const, episodeTitle };
   },
 });
