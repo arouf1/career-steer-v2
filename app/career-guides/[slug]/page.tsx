@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { fetchQuery } from "convex/nextjs";
+import { fetchAction, fetchQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import { SiteNav } from "@/components/site/SiteNav";
 import {
@@ -9,6 +9,7 @@ import {
   CareerGuidePending,
   type Region,
 } from "@/components/career-guides/CareerGuideArticle";
+import { RelatedGuides } from "@/components/career-guides/RelatedGuides";
 
 export const revalidate = 300;
 
@@ -113,6 +114,14 @@ export default async function CareerGuidePage({
     guideId: guide._id,
   });
 
+  // Related guides via vector search on the guide's wholeVector. Returns []
+  // if this guide hasn't been embedded yet (legacy guides until the backfill
+  // catches up); the section is hidden in that case.
+  const relatedGuides =
+    guide.contentStatus === "complete"
+      ? await fetchAction(api.careerGuides.relatedBySlug, { slug, limit: 4 })
+      : [];
+
   const region = await resolveRegion(sp.region);
   const existingByTitle: Record<string, string> = Object.fromEntries(
     allGuides.map((g) => [g.title.toLowerCase().trim(), g.slug]),
@@ -130,6 +139,7 @@ export default async function CareerGuidePage({
               existingByTitle={existingByTitle}
               initialBranches={initialBranches}
             />
+            <RelatedGuides guides={relatedGuides} sourceTitle={guide.title} />
             <ArticleJsonLd
               guide={guide}
               region={region}

@@ -294,3 +294,203 @@ export const embeddingsByIds = internalQuery({
     return out;
   },
 });
+
+// ── Guides for you: user → career guide matching ────────────────────────────
+//
+// Mirrors `peerMatches` but matches a user's profile facet vector against
+// the corresponding facet on `career_guide_embeddings`. Three lenses:
+//   mirror   → currentState↔currentState ("guides for who I am now")
+//   stretch  → arc↔arc                    ("guides for where I could go")
+//   adjacent → domain↔domain              ("guides in my skill domain")
+// vectorSearch top-50 → Cohere rerank with framing prompt → top-N.
+
+const GuideLens = v.union(
+  v.literal("mirror"),
+  v.literal("stretch"),
+  v.literal("adjacent"),
+);
+
+type GuideLens = "mirror" | "stretch" | "adjacent";
+
+const GUIDE_SEARCH_LIMIT = 50;
+const GUIDE_RESULT_LIMIT_DEFAULT = 8;
+const GUIDE_RESULT_LIMIT_MAX = 24;
+const GUIDE_OVERVIEW_SNIPPET_LENGTH = 240;
+
+const guideIndexForLens = (
+  lens: GuideLens,
+): "by_currentState" | "by_arc" | "by_domain" => {
+  switch (lens) {
+    case "mirror":
+      return "by_currentState";
+    case "stretch":
+      return "by_arc";
+    case "adjacent":
+      return "by_domain";
+  }
+};
+
+const userVectorForGuideLens = (
+  lens: GuideLens,
+  embeddings: Doc<"profile_embeddings">,
+): number[] => {
+  switch (lens) {
+    case "mirror":
+      return embeddings.currentStateVector;
+    case "stretch":
+      return embeddings.arcVector;
+    case "adjacent":
+      return embeddings.domainVector;
+  }
+};
+
+const guideRerankFraming = (
+  lens: GuideLens,
+  selfNarrative: string,
+  selfArc: string,
+): string => {
+  switch (lens) {
+    case "mirror":
+      return `Recommend career guides relevant to who I am right now and the work I'm doing today. About me: ${selfNarrative}`;
+    case "stretch":
+      return `Recommend career guides for roles I could grow into next, given my trajectory. About my arc: ${selfArc}`;
+    case "adjacent":
+      return `Recommend career guides for roles that share my skill domain — adjacent functions or industries that build on what I already do. About me: ${selfNarrative}`;
+  }
+};
+
+export type GuideMatchSummary = {
+  slug: string;
+  title: string;
+  illustrationUrl: string | null;
+  overviewSnippet: string;
+  vectorScore: number;
+  fitScore: number;
+};
+
+const guideRerankDocument = (g: {
+  title: string;
+  overview: string;
+  whyConsider: string;
+  typicalSkills: string[];
+}): string => {
+  const lines: string[] = [g.title];
+  if (g.overview) lines.push(g.overview);
+  if (g.whyConsider) lines.push(`Why: ${g.whyConsider}`);
+  if (g.typicalSkills.length > 0)
+    lines.push(`Skills: ${g.typicalSkills.slice(0, 12).join(", ")}`);
+  return lines.join("\n");
+};
+
+export const _expandGuideCandidates = internalQuery({
+  args: { embeddingIds: v.array(v.id("career_guide_embeddings")) },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    Array<{
+      embeddingId: Id<"career_guide_embeddings">;
+      slug: string;
+      title: string;
+      overview: string;
+      whyConsider: string;
+      typicalSkills: string[];
+      illustrationStorageId: Id<"_storage"> | null;
+    }>
+  > => {
+    const out: Array<{
+      embeddingId: Id<"career_guide_embeddings">;
+      slug: string;
+      title: string;
+      overview: string;
+      whyConsider: string;
+      typicalSkills: string[];
+      illustrationStorageId: Id<"_storage"> | null;
+    }> = [];
+    for (const id of args.embeddingIds) {
+      const embedding = await ctx.db.get(id);
+      if (!embedding) continue;
+      const guide = await ctx.db.get(embedding.guideId);
+      if (!guide || guide.contentStatus !== "complete" || !guide.content)
+        continue;
+      out.push({
+        embeddingId: id,
+        slug: guide.slug,
+        title: guide.title,
+        overview: guide.content.overview,
+        whyConsider: guide.content.whyConsider,
+        typicalSkills: guide.content.typicalSkills,
+        illustrationStorageId: guide.illustrationStorageId ?? null,
+      });
+    }
+    return out;
+  },
+});
+
+export const guidesForMe = action({
+  args: {
+    lens: v.optional(GuideLens),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<GuideMatchSummary[]> => {
+    const me = await ctx.runQuery(internal.matching.meWithEmbedding, {});
+    if (!me) return [];
+
+    const lens = (args.lens ?? "mirror") as GuideLens;
+    const limit = Math.min(
+      args.limit ?? GUIDE_RESULT_LIMIT_DEFAULT,
+      GUIDE_RESULT_LIMIT_MAX,
+    );
+
+    const queryVector = userVectorForGuideLens(lens, me.embedding);
+    const searchResults = await ctx.vectorSearch(
+      "career_guide_embeddings",
+      guideIndexForLens(lens),
+      { vector: queryVector, limit: GUIDE_SEARCH_LIMIT },
+    );
+    if (searchResults.length === 0) return [];
+
+    const expanded = await ctx.runQuery(
+      internal.matching._expandGuideCandidates,
+      { embeddingIds: searchResults.map((r) => r._id) },
+    );
+    if (expanded.length === 0) return [];
+
+    const documents = expanded.map(guideRerankDocument);
+
+    const ranking = await rerank({
+      query: guideRerankFraming(
+        lens,
+        me.enrichment.narrativeSummary ?? me.profile.headline ?? "",
+        buildSelfArcText(me.enrichment),
+      ),
+      documents,
+      topN: Math.min(limit, expanded.length),
+    });
+
+    const scoreById = new Map<Id<"career_guide_embeddings">, number>();
+    for (const r of searchResults) scoreById.set(r._id, r._score);
+
+    const out: GuideMatchSummary[] = [];
+    for (const r of ranking) {
+      const item = expanded[r.index];
+      if (!item) continue;
+      const url = item.illustrationStorageId
+        ? await ctx.storage.getUrl(item.illustrationStorageId)
+        : null;
+      const snippet =
+        item.overview.length > GUIDE_OVERVIEW_SNIPPET_LENGTH
+          ? `${item.overview.slice(0, GUIDE_OVERVIEW_SNIPPET_LENGTH).trimEnd()}…`
+          : item.overview;
+      out.push({
+        slug: item.slug,
+        title: item.title,
+        illustrationUrl: url,
+        overviewSnippet: snippet,
+        vectorScore: scoreById.get(item.embeddingId) ?? 0,
+        fitScore: r.relevanceScore,
+      });
+    }
+    return out;
+  },
+});

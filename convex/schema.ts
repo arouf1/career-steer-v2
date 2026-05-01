@@ -360,6 +360,24 @@ export default defineSchema({
       v.literal("complete"),
       v.literal("failed"),
     ),
+    // Per-section illustrations that complement the hero. Keys are slot
+    // ids: "day-to-day", "outlook", "learning-path", "risks". Each renders
+    // at the top of its corresponding article section. Optional so legacy
+    // guides remain valid; failing slots stay in the record with status
+    // "failed" so the UI knows not to retry-render.
+    slotIllustrations: v.optional(
+      v.record(
+        v.string(),
+        v.object({
+          storageId: v.optional(v.id("_storage")),
+          status: v.union(
+            v.literal("generating"),
+            v.literal("complete"),
+            v.literal("failed"),
+          ),
+        }),
+      ),
+    ),
     // "Go Deeper" follow-up questions per section. Keys mirror GoDeeper
     // sectionIds: "overview", "day-to-day", "outlook-us", "outlook-uk",
     // "learning-path-us", "learning-path-uk", "considerations". Each value
@@ -455,6 +473,41 @@ export default defineSchema({
     .index("by_content_status", ["contentStatus"])
     .index("by_created", ["createdAt"])
     .searchIndex("search_title", { searchField: "title" }),
+
+  // Per-guide facet embeddings. Mirrors `profile_embeddings` so a user's
+  // facet vector can be matched directly against a guide's facet vector
+  // (currentState↔currentState for "guides for who I am now", arc↔arc for
+  // "where I could go", domain↔domain for "skill-overlapping roles"). The
+  // wholeVector also powers guide↔guide related-guides on the article page.
+  // Generated once when contentStatus flips to "complete" and refreshed
+  // when enrichment materially changes the guide.
+  career_guide_embeddings: defineTable({
+    guideId: v.id("career_guides"),
+    wholeVector: v.array(v.float64()),
+    arcVector: v.array(v.float64()),
+    currentStateVector: v.array(v.float64()),
+    domainVector: v.array(v.float64()),
+    dimensions: v.number(),
+    model: v.string(),
+    generatedAt: v.number(),
+  })
+    .index("by_guideId", ["guideId"])
+    .vectorIndex("by_whole", {
+      vectorField: "wholeVector",
+      dimensions: 1536,
+    })
+    .vectorIndex("by_arc", {
+      vectorField: "arcVector",
+      dimensions: 1536,
+    })
+    .vectorIndex("by_currentState", {
+      vectorField: "currentStateVector",
+      dimensions: 1536,
+    })
+    .vectorIndex("by_domain", {
+      vectorField: "domainVector",
+      dimensions: 1536,
+    }),
 
   // "Go Deeper" branches: per-section follow-up questions a reader clicks
   // to expand a passage with new prose (and optionally fresh Exa-grounded

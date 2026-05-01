@@ -213,6 +213,7 @@ export function CareerGuideArticle({
               eyebrow="Section three"
               title="What does the day look like?"
               lead="What the work actually looks like, beyond the job description."
+              illustration={<SectionIllustration guide={guide} slot="day-to-day" />}
             >
               <div className="max-w-2xl space-y-5">
                 {c.dayToDay.split("\n").map((para, i) => (
@@ -243,6 +244,7 @@ export function CareerGuideArticle({
               title="What's the career outlook?"
               lead="Where the demand is heading and what the market looks like today."
               meta={<RegionBadge region={region} />}
+              illustration={<SectionIllustration guide={guide} slot="outlook" />}
             >
               <div className="max-w-2xl space-y-5">
                 {r.careerOutlook.split("\n").map((para, i, arr) => (
@@ -278,6 +280,7 @@ export function CareerGuideArticle({
               title="How do you get there?"
               lead="A practical path from interest to competence, step by step."
               meta={<RegionBadge region={region} />}
+              illustration={<SectionIllustration guide={guide} slot="learning-path" />}
             >
               <ol className="max-w-2xl space-y-7">
                 {r.learningPath.map((step, i, arr) => (
@@ -315,6 +318,7 @@ export function CareerGuideArticle({
                 eyebrow="Section six"
                 title="Worth knowing."
                 lead="Honest considerations to weigh before you commit."
+                illustration={<SectionIllustration guide={guide} slot="risks" />}
               >
                 <ul className="max-w-2xl space-y-5">
                   {c.riskFactors.map((item, i, arr) => (
@@ -496,6 +500,7 @@ function ArticleSection({
   title,
   lead,
   meta,
+  illustration,
   footer,
   children,
 }: {
@@ -504,6 +509,7 @@ function ArticleSection({
   title: string;
   lead?: string;
   meta?: React.ReactNode;
+  illustration?: React.ReactNode;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -526,9 +532,75 @@ function ArticleSection({
           {lead}
         </p>
       )}
+      {illustration}
       <div className="mt-6">{children}</div>
       {footer && <div className="mt-12">{footer}</div>}
     </section>
+  );
+}
+
+type SectionSlot = "day-to-day" | "outlook" | "learning-path" | "risks";
+
+const aOrAn = (word: string): string =>
+  /^[aeiou]/i.test(word.trim()) ? "an" : "a";
+
+const pluraliseRole = (title: string): string => {
+  const words = title.trim().split(/\s+/);
+  if (words.length === 0) return title;
+  const last = words[words.length - 1];
+  let pluralLast: string;
+  if (/[^aeiou]y$/i.test(last)) {
+    pluralLast = last.slice(0, -1) + "ies";
+  } else if (/(s|x|z|ch|sh)$/i.test(last)) {
+    pluralLast = last + "es";
+  } else {
+    pluralLast = last + "s";
+  }
+  words[words.length - 1] = pluralLast;
+  return words.join(" ");
+};
+
+const SLOT_ALT: Record<SectionSlot, (title: string) => string> = {
+  "day-to-day": (t) => `Illustration of ${aOrAn(t)} ${t}'s working environment`,
+  outlook: (t) =>
+    `Illustration of the career outlook for ${pluraliseRole(t)}`,
+  "learning-path": (t) =>
+    `Illustration of the path to becoming ${aOrAn(t)} ${t}`,
+  risks: (t) =>
+    `Illustration weighing the trade-offs of being ${aOrAn(t)} ${t}`,
+};
+
+function SectionIllustration({
+  guide,
+  slot,
+}: {
+  guide: GuideWithUrl;
+  slot: SectionSlot;
+}) {
+  const slotData = guide.slotIllustrations?.[slot];
+  if (!slotData) return null;
+  const url = guide.slotIllustrationUrls?.[slot];
+  if (slotData.status === "generating") {
+    return (
+      <div className="mt-8 aspect-[16/9] w-full max-w-3xl animate-pulse rounded-card border border-hairline bg-paper-raised" />
+    );
+  }
+  if (slotData.status === "failed" || !url) return null;
+  return (
+    <motion.figure
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.1, ease: [0.2, 0.65, 0.3, 1] }}
+      className="mt-8 max-w-3xl overflow-hidden rounded-card border border-hairline"
+    >
+      <Image
+        src={url}
+        alt={SLOT_ALT[slot](guide.title)}
+        width={1280}
+        height={720}
+        className="h-auto w-full"
+      />
+    </motion.figure>
   );
 }
 
