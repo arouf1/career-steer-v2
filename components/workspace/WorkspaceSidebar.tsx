@@ -1,17 +1,18 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, Compass, Bookmark, BookOpen, ArrowUpRight, ShipWheel } from "lucide-react";
+import { User, Compass, Bookmark, BookOpen, ArrowUpRight } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarHeader,
   SidebarFooter,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 
 const items = [
@@ -25,16 +26,14 @@ export function WorkspaceSidebar() {
   const pathname = usePathname();
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <Link href="/" className="flex items-center gap-2 px-2 py-2">
-          <ShipWheel className="size-5 text-ink" />
-          <span className="font-logo text-lg font-medium text-ink group-data-[collapsible=icon]:hidden">
-            Career Steer
-          </span>
-        </Link>
+      {/* h-14 spacer aligns nav items with the topbar baseline. The trigger
+          appears only when collapsed — when expanded, the topbar carries the
+          collapse affordance instead. */}
+      <SidebarHeader className="h-14 flex items-center justify-center px-2">
+        <SidebarTrigger className="group-data-[state=expanded]:hidden" />
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="pt-1">
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
@@ -43,7 +42,11 @@ export function WorkspaceSidebar() {
                   (pathname === item.url || pathname.startsWith(item.url + "/"));
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.title}
+                    >
                       <Link href={item.url}>
                         <item.icon />
                         <span>{item.title}</span>
