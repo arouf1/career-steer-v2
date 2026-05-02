@@ -2439,3 +2439,161 @@ describe("discover.fanOutGuideUpdate (Task 4.2)", () => {
     expect(reasons).toHaveLength(0);
   });
 });
+
+describe("discover.sweepFailedSnapshots (Task 4.3)", () => {
+  // Helper: seed user + profile + 4-dim profile_embedding for sweep tests.
+  // The (profileId, profileEmbeddingId) FKs need to point at real upstream
+  // rows so the downstream regen chain (scheduled by the sweep) doesn't
+  // short-circuit on a missing-profile guard.
+  async function seedUserProfileEmbedding(
+    t: ReturnType<typeof convexTest>,
+    tokenIdentifier: string,
+  ) {
+    return await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier,
+        email: `${tokenIdentifier}@example.com`,
+      });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      const embeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "sweep test",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      return { userId, profileId, embeddingId };
+    });
+  }
+
+  // Witness for the sweep's downstream effect: count pending/in-flight/
+  // completed runs of scheduleSnapshotRegeneration in the convex-test
+  // `_scheduled_functions` system table. The sweep `runAfter(0, ...)`s into
+  // this function for every eligible row. Asserting on the schedule rather
+  // than the row status sidesteps convex-test's known multi-hop transaction
+  // rollback race (action → scheduler → mutation → action → runMutation
+  // sometimes blows up with "Transaction already committed"; the sweep's
+  // own scheduling call is what we're verifying here, not the regen chain
+  // it kicks off — the regen chain is exercised by other Phase 2/3 tests).
+  async function countRegenSchedules(t: ReturnType<typeof convexTest>) {
+    return await t.run(async (ctx) => {
+      const rows = await ctx.db.system.query("_scheduled_functions").collect();
+      return rows.filter((r) =>
+        r.name.includes("scheduleSnapshotRegeneration"),
+      ).length;
+    });
+  }
+
+  it("retries failed snapshots older than 24h that are below the attempts cap", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId } = await seedUserProfileEmbedding(
+      t,
+      "u-sweep-retry",
+    );
+
+    // Seed a failed snapshot >24h old with attempts < SNAPSHOT_MAX_ATTEMPTS.
+    await t.run(async (ctx) =>
+      ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId: embeddingId,
+        generatedAt: Date.now() - 25 * 60 * 60 * 1000, // 25h ago
+        status: "failed",
+        lanes: [],
+        attempts: 1, // below SNAPSHOT_MAX_ATTEMPTS (3)
+        failureReason: "previous attempt blew up",
+      }),
+    );
+
+    expect(await countRegenSchedules(t)).toBe(0);
+    await t.action(internal.discover.sweepFailedSnapshots, {});
+    // The sweep's only direct effect is scheduling. Assert on the schedule
+    // existence; do not drain the chain (the downstream regen would race
+    // convex-test's transaction state — see helper comment above).
+    expect(await countRegenSchedules(t)).toBe(1);
+  });
+
+  it("skips failed snapshots at or above the attempts cap", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId } = await seedUserProfileEmbedding(
+      t,
+      "u-sweep-capped",
+    );
+
+    await t.run(async (ctx) =>
+      ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId: embeddingId,
+        generatedAt: Date.now() - 25 * 60 * 60 * 1000,
+        status: "failed",
+        lanes: [],
+        attempts: 3, // at SNAPSHOT_MAX_ATTEMPTS
+        failureReason: "definitely broken",
+      }),
+    );
+
+    await t.action(internal.discover.sweepFailedSnapshots, {});
+    // No regen scheduled — sweep skipped the row because attempts cap hit.
+    expect(await countRegenSchedules(t)).toBe(0);
+
+    const snap = await t.run(async (ctx) =>
+      ctx.db
+        .query("discover_canvases")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique(),
+    );
+    expect(snap!.status).toBe("failed");
+    expect(snap!.attempts).toBe(3);
+  });
+
+  it("skips failed snapshots within the 24h window (not yet stale)", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId } = await seedUserProfileEmbedding(
+      t,
+      "u-sweep-fresh",
+    );
+
+    await t.run(async (ctx) =>
+      ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId: embeddingId,
+        generatedAt: Date.now() - 1 * 60 * 60 * 1000, // 1h ago, < 24h
+        status: "failed",
+        lanes: [],
+        attempts: 1,
+        failureReason: "fresh failure",
+      }),
+    );
+
+    await t.action(internal.discover.sweepFailedSnapshots, {});
+    // No regen scheduled — sweep's _listOldFailed cutoff filtered the row out.
+    expect(await countRegenSchedules(t)).toBe(0);
+
+    const snap = await t.run(async (ctx) =>
+      ctx.db
+        .query("discover_canvases")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique(),
+    );
+    expect(snap!.status).toBe("failed");
+  });
+});

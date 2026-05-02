@@ -20,6 +20,7 @@ import {
   CANDIDATE_POOL_K,
   LANE_BUDGET,
   REGEN_DEBOUNCE_MS,
+  SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
 import { cosineSim, assignLane } from "./lib/discoverScoring";
 import { rerank as openRouterRerank, chatModel } from "../lib/ai/providers";
@@ -1218,6 +1219,79 @@ export const fanOutGuideUpdate = internalAction({
         },
       );
     }
+  },
+});
+
+/**
+ * Phase 4.3 — nightly sweep of failed snapshots.
+ *
+ * Cron-driven (registered in `convex/crons.ts`, fires daily at 03:00 UTC).
+ * Picks up `discover_canvases` rows in `status: "failed"` whose
+ * `generatedAt` is older than 24h and whose `attempts` counter is still
+ * below `SNAPSHOT_MAX_ATTEMPTS` (3), then schedules a regen for each via
+ * `scheduleSnapshotRegeneration`.
+ *
+ * Why 24h: gives transient upstream issues (OpenRouter outage, Convex
+ * deploy hiccup) time to recover before we burn another retry. Why
+ * `attempts < SNAPSHOT_MAX_ATTEMPTS`: caps total retry cost at 3 per
+ * permanently-broken snapshot — after that the row stays `failed` and the
+ * UI surfaces the failure to the user (see `getSnapshot`).
+ *
+ * `dedupKey: "sweep"` distinguishes cron-driven retries from user/
+ * embedding/guide-driven ones in logs. `forceFreshReasons: false` matches
+ * other automated triggers — cached why-match reasons are reused when
+ * possible.
+ *
+ * The sweep delegates to `scheduleSnapshotRegeneration` rather than
+ * patching the row directly, so the dedup gate (REGEN_DEBOUNCE_MS) and the
+ * insert/patch handling stay centralized in one place.
+ *
+ * Schedule pattern: per-row regen is scheduled via
+ * `ctx.scheduler.runAfter(0, ...)` (matching `refillAfterDismiss`,
+ * `manualRefresh`, and Phase 4.1/4.2 triggers) — `convex-test`'s multi-hop
+ * transaction state can race when an action `runMutation`s into a function
+ * that itself schedules. Production semantics are equivalent.
+ */
+export const sweepFailedSnapshots = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const failed = await ctx.runQuery(internal.discover._listOldFailed, {
+      cutoff,
+    });
+    for (const row of failed) {
+      if ((row.attempts ?? 0) < SNAPSHOT_MAX_ATTEMPTS) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.discover.scheduleSnapshotRegeneration,
+          {
+            userId: row.userId,
+            dedupKey: "sweep",
+            forceFreshReasons: false,
+          },
+        );
+      }
+    }
+  },
+});
+
+/**
+ * Phase 4.3 — failed-snapshot lookup for the cron sweep.
+ *
+ * Indexed on `by_status` (narrows to `status: "failed"`); the
+ * `.filter()` on `generatedAt` is a transformation on the indexed result
+ * set, not a narrowing operation — see `convex-patterns.md` "indexes over
+ * filters." Bounded by N = number of failed snapshots in the system, which
+ * stays small in practice (sweep runs daily; hard failures rare).
+ */
+export const _listOldFailed = internalQuery({
+  args: { cutoff: v.number() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("discover_canvases")
+      .withIndex("by_status", (q) => q.eq("status", "failed"))
+      .filter((q) => q.lt(q.field("generatedAt"), args.cutoff))
+      .collect();
   },
 });
 
