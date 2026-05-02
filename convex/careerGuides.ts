@@ -12,7 +12,9 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { chatModel } from "../lib/ai/providers";
 import {
+  CAREER_STAGE_MODEL_ID,
   CONTENT_MODEL_ID,
+  CareerStageSchema,
   ContentResponseGroundedSchema,
   ContentResponseSchema,
   DedupResponseSchema,
@@ -22,7 +24,9 @@ import {
   MetaOnlySchema,
   SalaryJudgeSchema,
   SkillsDetailOnlySchema,
+  VALIDATION_MODEL_ID,
   ValidationResponseSchema,
+  buildCareerStagePrompt,
   buildContentPrompt,
   buildDedupPrompt,
   buildEnrichmentQuery,
@@ -1340,7 +1344,7 @@ export const validateCareer = internalAction({
   handler: async (ctx, args) => {
     try {
       const { output } = await generateText({
-        model: chatModel(CONTENT_MODEL_ID, { zdr: true }),
+        model: chatModel(VALIDATION_MODEL_ID, { zdr: true }),
         output: Output.object({ schema: ValidationResponseSchema }),
         prompt: buildValidationPrompt(args.career),
       });
@@ -2113,5 +2117,192 @@ export const _listFailedGuidesForRetry = internalQuery({
       .filter((r) => (r.contentAttempts ?? 0) < CONTENT_MAX_ATTEMPTS)
       .filter((r) => (r.contentLastFailureAt ?? 0) < cutoff)
       .slice(0, CONTENT_RETRY_BATCH_SIZE);
+  },
+});
+
+// ── Career-stage backfill ─────────────────────────────────────────────────
+//
+// Tags every existing complete guide with a `typicalCareerStage` so the
+// discover canvas can bucket cards by seniority (next-step / sideways /
+// earlier-chapters / different-chapter). New guides include the field
+// natively via `ContentResponseSchema`; this backfill covers the legacy
+// library that pre-dates the field. Idempotent: skips guides that already
+// carry the field. Per memory `feedback_check_infra_before_model`, the LLM
+// call is cheap (flash tier, single-field schema) so we don't gate on rate
+// limits — the only failure mode is OpenRouter being out of credits.
+
+export const _setCareerStage = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    typicalCareerStage: v.union(
+      v.literal("early-career"),
+      v.literal("mid-career"),
+      v.literal("senior-IC"),
+      v.literal("manager"),
+      v.literal("director"),
+      v.literal("exec"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide?.content) return;
+    await ctx.db.patch(args.guideId, {
+      content: {
+        ...guide.content,
+        typicalCareerStage: args.typicalCareerStage,
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// List complete guides missing a typicalCareerStage. Bounded scan via
+// `by_content_status`; the JS-side filter on the optional content field is
+// a transformation, not a narrowing operation (still index-bounded).
+export const _listGuidesMissingCareerStage = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, args) => {
+    const all = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "complete"))
+      .take(1000);
+    return all
+      .filter((g) => g.content && !g.content.typicalCareerStage)
+      .slice(0, args.limit);
+  },
+});
+
+// Per-guide single-classification action. Mirrors `_backfillSkillsDetail`
+// in shape (idempotent skip on already-tagged, single try/catch around the
+// LLM call so a transient failure on one guide doesn't cancel the batch).
+// Used both directly (per-guide retry) and as the staggered unit of
+// `triggerCareerStageBackfill`.
+export const _backfillCareerStageOne = internalAction({
+  args: { guideId: v.id("career_guides") },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const guide = await ctx.runQuery(internal.careerGuides._getById, {
+      guideId: args.guideId,
+    });
+    if (!guide?.content || guide.contentStatus !== "complete") return null;
+    if (guide.content.typicalCareerStage) return null;
+
+    try {
+      const { output } = await generateText({
+        model: chatModel(CAREER_STAGE_MODEL_ID, { zdr: true }),
+        output: Output.object({ schema: CareerStageSchema }),
+        prompt: buildCareerStagePrompt({
+          title: guide.title,
+          dayToDay: guide.content.dayToDay,
+          entrySalary: guide.content.regional.us.salary.entry,
+          midSalary: guide.content.regional.us.salary.mid,
+          seniorSalary: guide.content.regional.us.salary.senior,
+        }),
+      });
+      await ctx.runMutation(internal.careerGuides._setCareerStage, {
+        guideId: args.guideId,
+        typicalCareerStage: output.typicalCareerStage,
+      });
+    } catch (err) {
+      console.error("careerGuides:backfill-career-stage-failed", {
+        guideId: args.guideId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return null;
+  },
+});
+
+// Batched backfill action. Pulls up to `batchSize` (default 20) untagged
+// guides and runs the per-guide classifier serially within the action so
+// the rate of OpenRouter calls stays bounded. Returns counts so a script
+// can loop until `processed === 0` and know it's done.
+export const _backfillCareerStage = internalAction({
+  args: { batchSize: v.optional(v.number()) },
+  returns: v.object({ processed: v.number(), requested: v.number() }),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ processed: number; requested: number }> => {
+    const batch = args.batchSize ?? 20;
+    const guides: Array<Doc<"career_guides">> = await ctx.runQuery(
+      internal.careerGuides._listGuidesMissingCareerStage,
+      { limit: batch },
+    );
+    let processed = 0;
+    for (const g of guides) {
+      try {
+        const { output } = await generateText({
+          model: chatModel(CAREER_STAGE_MODEL_ID, { zdr: true }),
+          output: Output.object({ schema: CareerStageSchema }),
+          prompt: buildCareerStagePrompt({
+            title: g.title,
+            dayToDay: g.content?.dayToDay ?? "",
+            entrySalary: g.content?.regional.us.salary.entry,
+            midSalary: g.content?.regional.us.salary.mid,
+            seniorSalary: g.content?.regional.us.salary.senior,
+          }),
+        });
+        await ctx.runMutation(internal.careerGuides._setCareerStage, {
+          guideId: g._id,
+          typicalCareerStage: output.typicalCareerStage,
+        });
+        processed++;
+      } catch (err) {
+        console.warn("careerGuides.backfillCareerStage:failed", {
+          guideId: g._id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return { processed, requested: guides.length };
+  },
+});
+
+// Ops trigger: schedule the batched backfill in one shot. Used either via
+// admin UI or `npx convex run careerGuides:triggerCareerStageBackfill`.
+export const triggerCareerStageBackfill = mutation({
+  args: { batchSize: v.optional(v.number()) },
+  returns: v.object({ scheduled: v.boolean() }),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    await ctx.scheduler.runAfter(
+      0,
+      internal.careerGuides._backfillCareerStage,
+      { batchSize: args.batchSize },
+    );
+    return { scheduled: true };
+  },
+});
+
+// Ops read: count complete guides that have / don't have typicalCareerStage.
+// Mirrors `countSkillsDetailStatus` so a single dashboard can show backfill
+// progress at a glance.
+export const countCareerStageStatus = query({
+  args: {},
+  returns: v.object({
+    total: v.number(),
+    withStage: v.number(),
+    missingStage: v.number(),
+    pendingTitles: v.array(v.string()),
+  }),
+  handler: async (ctx) => {
+    const guides = await ctx.db
+      .query("career_guides")
+      .withIndex("by_content_status", (q) => q.eq("contentStatus", "complete"))
+      .collect();
+    let withStage = 0;
+    const pendingTitles: string[] = [];
+    for (const g of guides) {
+      if (g.content?.typicalCareerStage) withStage++;
+      else pendingTitles.push(g.title);
+    }
+    return {
+      total: guides.length,
+      withStage,
+      missingStage: guides.length - withStage,
+      pendingTitles,
+    };
   },
 });

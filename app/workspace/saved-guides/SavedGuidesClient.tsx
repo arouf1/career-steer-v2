@@ -18,13 +18,19 @@ const SORT_KEY = "savedGuides.sort";
 const FILTER_KEY = "savedGuides.filter";
 
 type Sort = "recent" | "lane" | "score";
-type Filter = "all" | "linear" | "adjacent" | "transformational";
+type Filter =
+  | "all"
+  | "linear"
+  | "adjacent"
+  | "earlier"
+  | "transformational";
 
 const SORT_VALUES: ReadonlyArray<Sort> = ["recent", "lane", "score"];
 const FILTER_VALUES: ReadonlyArray<Filter> = [
   "all",
   "linear",
   "adjacent",
+  "earlier",
   "transformational",
 ];
 
@@ -53,7 +59,8 @@ function SavedGuidesClientInner() {
   // Cast through the locally-narrowed `SavedGuide` shape: the Convex query
   // returns `lane: string | null` because the canvas snapshot's lane map is
   // built with `string` keys, but the runtime values are constrained to the
-  // `"linear" | "adjacent" | "transformational"` union by the snapshot schema.
+  // `"linear" | "adjacent" | "earlier" | "transformational"` union by the
+  // snapshot schema.
   const raw = useQuery(api.discover.querySavedGuides);
   const saved = raw as SavedGuide[] | undefined;
 
@@ -125,9 +132,10 @@ function SavedGuidesClientInner() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All lanes</SelectItem>
-              <SelectItem value="linear">Linear</SelectItem>
-              <SelectItem value="adjacent">Adjacent</SelectItem>
-              <SelectItem value="transformational">Transformational</SelectItem>
+              <SelectItem value="linear">Next steps</SelectItem>
+              <SelectItem value="adjacent">Sideways</SelectItem>
+              <SelectItem value="earlier">Earlier</SelectItem>
+              <SelectItem value="transformational">Different</SelectItem>
             </SelectContent>
           </Select>
           <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>

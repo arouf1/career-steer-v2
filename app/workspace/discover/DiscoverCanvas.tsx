@@ -31,16 +31,22 @@ const nodeTypes = {
 const LANE_LABEL_TEXT = {
   linear: "Next steps",
   adjacent: "Sideways moves",
+  earlier: "Earlier chapters",
   transformational: "A different chapter",
 } as const;
 
 const LANE_LABEL_POSITION = {
   // Outer-edge label positions, ~MAX_RADIUS + 24 along each wedge centre.
-  // Wedge centres in screen coords (Y down): linear=top (270°),
-  // adjacent=lower-right (30°), transformational=lower-left (150°).
+  // 4-wedge cardinal-compass layout (matches `positionCard` WEDGE).
+  // Screen coords (Y down):
+  //   linear            top    (270°)
+  //   adjacent          right    (0°)
+  //   earlier           bottom  (90°)
+  //   transformational  left   (180°)
   linear: { angleDeg: 270, offset: MAX_RADIUS + 24 },
-  adjacent: { angleDeg: 30, offset: MAX_RADIUS + 24 },
-  transformational: { angleDeg: 150, offset: MAX_RADIUS + 24 },
+  adjacent: { angleDeg: 0, offset: MAX_RADIUS + 24 },
+  earlier: { angleDeg: 90, offset: MAX_RADIUS + 24 },
+  transformational: { angleDeg: 180, offset: MAX_RADIUS + 24 },
 };
 
 function laneLabelPos(lane: keyof typeof LANE_LABEL_POSITION) {

@@ -25,7 +25,7 @@ export type UserNodeData = {
 };
 
 export type LaneLabelData = {
-  kind: "linear" | "adjacent" | "transformational";
+  kind: "linear" | "adjacent" | "earlier" | "transformational";
   label: string;
   count: number;
 };

@@ -45,6 +45,76 @@ function guideSeed(slug: string, title: string) {
   };
 }
 
+// Career-stage suite: the discover canvas's 4-lane bucketer compares the
+// user's `profile_enrichments.careerStage` against each guide's
+// `content.typicalCareerStage` to assign a lane (forward → linear,
+// equal → adjacent, lower → earlier, missing → transformational). Tests
+// that rely on cards landing in a SPECIFIC lane (rather than just on
+// rank/floor logic) seed both sides via these helpers.
+
+type CareerStage =
+  | "early-career"
+  | "mid-career"
+  | "senior-IC"
+  | "manager"
+  | "director"
+  | "exec";
+
+// Minimal valid `profile_enrichments` seed. Used with `careerStage` set so
+// the bucketer can rank the user against guides. The required arrays/flags
+// are zero-length for compactness — the only field the discover pipeline
+// reads is `careerStage`.
+function enrichmentSeed(args: {
+  profileId: Id<"profiles">;
+  userId: Id<"users">;
+  careerStage: CareerStage;
+}) {
+  return {
+    profileId: args.profileId,
+    userId: args.userId,
+    status: "ready" as const,
+    careerStage: args.careerStage,
+    enrichedExperience: [],
+    enrichedSkills: [],
+    enrichedEducation: [],
+    confidenceFlags: [],
+    model: "test",
+    enrichedAt: Date.now(),
+  };
+}
+
+// Minimal `career_guides.content` shape with a chosen `typicalCareerStage`.
+// All other required content fields are populated with empty strings/arrays
+// so the schema validator accepts the row. Individual tests only care about
+// `typicalCareerStage` (lane bucketing) and occasionally `overview`/`title`
+// (rerank prompt + LLM reasons).
+function guideContentSeed(stage: CareerStage) {
+  const emptyRegion = {
+    salary: { entry: "", mid: "", senior: "" },
+    careerOutlook: "",
+    learningPath: [] as string[],
+    relatedRoles: [] as string[],
+  };
+  return {
+    overview: "",
+    typicalSkills: [] as string[],
+    dayToDay: "",
+    riskFactors: [] as string[],
+    whyConsider: "",
+    regional: { us: emptyRegion, uk: emptyRegion },
+    typicalCareerStage: stage,
+  };
+}
+
+// Build a guide doc with `content` already populated for a given career
+// stage. Convenience shortcut: use directly inside `ctx.db.insert("career_guides", ...)`.
+function guideSeedWithStage(slug: string, title: string, stage: CareerStage) {
+  return {
+    ...guideSeed(slug, title),
+    content: guideContentSeed(stage),
+  };
+}
+
 describe("discover.generateSnapshot — quality floor (arcSim ≥ 0.3)", () => {
   it("includes high-arcSim guides and excludes guides below the arc floor", async () => {
     const t = convexTest({
@@ -288,88 +358,119 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
     expect(ids).toContain(keptGuideId);
   });
 
-  it("buckets candidates into linear / adjacent / transformational by currentStateSim", async () => {
+  it("buckets candidates into 4 lanes by career-stage comparison + wholeSim floor", async () => {
     const t = convexTest({
       schema,
       modules: import.meta.glob("./**/*.ts"),
     });
 
-    const { userId, profileId, embeddingId, linearId, adjacentId, transId } =
-      await t.run(async (ctx) => {
-        const userId = await ctx.db.insert("users", {
-          tokenIdentifier: "u-lane-test",
-          email: "lane@example.com",
-        });
-        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
-        const embeddingId = await ctx.db.insert("profile_embeddings", {
-          profileId,
-          userId,
-          wholeVector: [1, 0, 0, 0],
-          arcVector: [1, 0, 0, 0],
-          currentStateVector: [1, 0, 0, 0],
-          domainVector: [1, 0, 0, 0],
-          dimensions: 4,
-          model: "test",
-          generatedAt: Date.now(),
-        });
-
-        // Linear: high currentStateSim (1.0 ≥ 0.75).
-        const linearId = await ctx.db.insert(
-          "career_guides",
-          guideSeed("linear-a", "Linear A"),
-        );
-        await ctx.db.insert("career_guide_embeddings", {
-          guideId: linearId,
-          wholeVector: [1, 0, 0, 0],
-          arcVector: [1, 0, 0, 0],
-          currentStateVector: [1, 0, 0, 0],
-          domainVector: [1, 0, 0, 0],
-          dimensions: 4,
-          model: "test",
-          generatedAt: Date.now(),
-        });
-
-        // Adjacent: ~0.65 currentStateSim (≥ 0.6 and < 0.75).
-        const adjacentId = await ctx.db.insert(
-          "career_guides",
-          guideSeed("adjacent-a", "Adjacent A"),
-        );
-        await ctx.db.insert("career_guide_embeddings", {
-          guideId: adjacentId,
-          wholeVector: [1, 0, 0, 0],
-          arcVector: [1, 0, 0, 0],
-          currentStateVector: [0.65, 0.7599, 0, 0],
-          domainVector: [1, 0, 0, 0],
-          dimensions: 4,
-          model: "test",
-          generatedAt: Date.now(),
-        });
-
-        // Transformational: orthogonal currentState (0 < 0.6).
-        const transId = await ctx.db.insert(
-          "career_guides",
-          guideSeed("trans-a", "Transformational A"),
-        );
-        await ctx.db.insert("career_guide_embeddings", {
-          guideId: transId,
-          wholeVector: [1, 0, 0, 0],
-          arcVector: [1, 0, 0, 0],
-          currentStateVector: [0, 1, 0, 0],
-          domainVector: [1, 0, 0, 0],
-          dimensions: 4,
-          model: "test",
-          generatedAt: Date.now(),
-        });
-
-        return {
-          userId,
-          profileId,
-          embeddingId,
-          linearId,
-          adjacentId,
-          transId,
-        };
+    // User is `manager` rank. Seed four guides:
+    //   forwardId   stage="exec"        (rank > user) → linear
+    //   sidewaysId  stage="manager"     (rank == user) → adjacent
+    //   earlierId   stage="mid-career"  (rank < user) → earlier
+    //   noStageId   stage missing       (unknown) → transformational
+    // All four guides share `wholeSim = 1.0` so they're all above the
+    // `SIDEWAYS_WHOLE_SIM_FLOOR` (0.72) — the only differentiator is stage.
+    const {
+      userId,
+      profileId,
+      embeddingId,
+      forwardId,
+      sidewaysId,
+      earlierId,
+      noStageId,
+    } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-lane-test",
+        email: "lane@example.com",
       });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      await ctx.db.insert(
+        "profile_enrichments",
+        enrichmentSeed({ profileId, userId, careerStage: "manager" }),
+      );
+      const embeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      const forwardId = await ctx.db.insert(
+        "career_guides",
+        guideSeedWithStage("forward", "Forward (exec)", "exec"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId: forwardId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      const sidewaysId = await ctx.db.insert(
+        "career_guides",
+        guideSeedWithStage("sideways", "Sideways (manager)", "manager"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId: sidewaysId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      const earlierId = await ctx.db.insert(
+        "career_guides",
+        guideSeedWithStage("earlier", "Earlier (mid-career)", "mid-career"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId: earlierId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      const noStageId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("no-stage", "No stage"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId: noStageId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      return {
+        userId,
+        profileId,
+        embeddingId,
+        forwardId,
+        sidewaysId,
+        earlierId,
+        noStageId,
+      };
+    });
 
     await t.action(internal.discover.generateSnapshot, {
       userId,
@@ -390,9 +491,10 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
       snapshot!.lanes.map((l) => [l.kind, l.cards.map((c) => c.guideId)]),
     );
 
-    expect(lanes.linear).toEqual([linearId]);
-    expect(lanes.adjacent).toEqual([adjacentId]);
-    expect(lanes.transformational).toEqual([transId]);
+    expect(lanes.linear).toEqual([forwardId]);
+    expect(lanes.adjacent).toEqual([sidewaysId]);
+    expect(lanes.earlier).toEqual([earlierId]);
+    expect(lanes.transformational).toEqual([noStageId]);
   });
 });
 
@@ -417,8 +519,12 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         email: "asp-rerank@example.com",
       });
       const profileId = await ctx.db.insert("profiles", profileSeed(userId));
-      // Profile facets — currentStateVector aligned so all candidates land
-      // in linear; arcVector aligned so arcSim drives strong picks.
+      // User stage = mid-career so guides marked `manager` land in the
+      // linear lane (forward) for the slot-curation assertions below.
+      await ctx.db.insert(
+        "profile_enrichments",
+        enrichmentSeed({ profileId, userId, careerStage: "mid-career" }),
+      );
       const embeddingId = await ctx.db.insert("profile_embeddings", {
         profileId,
         userId,
@@ -432,12 +538,13 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         generatedAt: Date.now(),
       });
 
-      // 3 strong picks: arcSim = 1.0, domainSim = 0.0.
+      // 3 strong picks: arcSim = 1.0, domainSim = 0.0. Stage = "manager"
+      // (forward of user's mid-career) → linear lane.
       const strongIds: Id<"career_guides">[] = [];
       for (let i = 0; i < 3; i++) {
         const guideId = await ctx.db.insert(
           "career_guides",
-          guideSeed(`strong-${i}`, `Strong ${i}`),
+          guideSeedWithStage(`strong-${i}`, `Strong ${i}`, "manager"),
         );
         await ctx.db.insert("career_guide_embeddings", {
           guideId,
@@ -452,12 +559,13 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         strongIds.push(guideId);
       }
 
-      // 2 bridge picks: arcSim = 0.6, domainSim = 1.0.
+      // 2 bridge picks: arcSim = 0.6, domainSim = 1.0. Stage = "manager"
+      // → linear lane.
       const bridgeIds: Id<"career_guides">[] = [];
       for (let i = 0; i < 2; i++) {
         const guideId = await ctx.db.insert(
           "career_guides",
-          guideSeed(`bridge-${i}`, `Bridge ${i}`),
+          guideSeedWithStage(`bridge-${i}`, `Bridge ${i}`, "manager"),
         );
         await ctx.db.insert("career_guide_embeddings", {
           guideId,
@@ -474,9 +582,11 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
 
       // Aspirational candidates: arcSim = 0.8 (above floor, below strong).
       // Both share the same scores, so the rerank seam decides which wins.
+      // Stage = "manager" → linear lane (so they compete for the
+      // aspirational slot within linear).
       const aspirationalId = await ctx.db.insert(
         "career_guides",
-        guideSeed("rerank-wins", "Rerank wins"),
+        guideSeedWithStage("rerank-wins", "Rerank wins", "manager"),
       );
       await ctx.db.insert("career_guide_embeddings", {
         guideId: aspirationalId,
@@ -491,7 +601,7 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
 
       const otherAspirationalId = await ctx.db.insert(
         "career_guides",
-        guideSeed("rerank-loses", "Rerank loses"),
+        guideSeedWithStage("rerank-loses", "Rerank loses", "manager"),
       );
       await ctx.db.insert("career_guide_embeddings", {
         guideId: otherAspirationalId,
@@ -504,11 +614,9 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         generatedAt: Date.now(),
       });
 
-      // Filler candidates with low currentStateSim (~0.5) so they sort
-      // BELOW the 7 expected candidates (currentStateSim = 1.0) under
-      // percentile lane bucketing. Padding to 35 total ensures top 20%
-      // (= ceil(35 * 0.2) = 7) covers exactly the 7 expected candidates,
-      // putting them all in the linear lane.
+      // Filler candidates without `typicalCareerStage`. They fall through
+      // to the transformational lane (compareStages returns "unknown"),
+      // leaving the linear lane to the 7 expected candidates above.
       for (let i = 0; i < 28; i++) {
         const guideId = await ctx.db.insert(
           "career_guides",
@@ -617,6 +725,10 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
           email: "asp-fallback@example.com",
         });
         const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        await ctx.db.insert(
+          "profile_enrichments",
+          enrichmentSeed({ profileId, userId, careerStage: "mid-career" }),
+        );
         const embeddingId = await ctx.db.insert("profile_embeddings", {
           profileId,
           userId,
@@ -630,11 +742,12 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
           generatedAt: Date.now(),
         });
 
-        // 3 strong + 2 bridge as before, plus 2 aspirational candidates.
+        // 3 strong + 2 bridge + 2 aspirational candidates, all stage="manager"
+        // (forward of user's mid-career) so they land in the linear lane.
         for (let i = 0; i < 3; i++) {
           const guideId = await ctx.db.insert(
             "career_guides",
-            guideSeed(`strong-${i}`, `Strong ${i}`),
+            guideSeedWithStage(`strong-${i}`, `Strong ${i}`, "manager"),
           );
           await ctx.db.insert("career_guide_embeddings", {
             guideId,
@@ -650,7 +763,7 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         for (let i = 0; i < 2; i++) {
           const guideId = await ctx.db.insert(
             "career_guides",
-            guideSeed(`bridge-${i}`, `Bridge ${i}`),
+            guideSeedWithStage(`bridge-${i}`, `Bridge ${i}`, "manager"),
           );
           await ctx.db.insert("career_guide_embeddings", {
             guideId,
@@ -668,7 +781,7 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         for (let i = 0; i < 2; i++) {
           const guideId = await ctx.db.insert(
             "career_guides",
-            guideSeed(`fallback-${i}`, `Fallback ${i}`),
+            guideSeedWithStage(`fallback-${i}`, `Fallback ${i}`, "manager"),
           );
           await ctx.db.insert("career_guide_embeddings", {
             guideId,
@@ -683,11 +796,8 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
           fallbackCandidateIds.push(guideId);
         }
 
-        // Filler candidates with low currentStateSim (~0.5) so they sort
-        // BELOW the 7 expected candidates (currentStateSim = 1.0) under
-        // percentile lane bucketing. Padding to 35 total ensures top 20%
-        // (= ceil(35 * 0.2) = 7) covers exactly the 7 expected candidates,
-        // putting them all in the linear lane.
+        // Filler candidates without stage → fall through to transformational
+        // lane (compareStages returns "unknown"); they don't pollute linear.
         for (let i = 0; i < 28; i++) {
           const guideId = await ctx.db.insert(
             "career_guides",
@@ -767,9 +877,13 @@ describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () =
           email: "curate@example.com",
         });
         const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        await ctx.db.insert(
+          "profile_enrichments",
+          enrichmentSeed({ profileId, userId, careerStage: "mid-career" }),
+        );
         // Profile facets:
         //   arcVector            = [1,0,0,0]
-        //   currentStateVector   = [1,0,0,0] (so all candidates land in linear)
+        //   currentStateVector   = [1,0,0,0]
         //   domainVector         = [0,0,1,0]
         const embeddingId = await ctx.db.insert("profile_embeddings", {
           profileId,
@@ -784,15 +898,15 @@ describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () =
         });
 
         // 3 "Strong i" guides:
-        //   arcVector          = [1,0,0,0]      → arcSim = 1.0
-        //   currentStateVector = [1,0,0,0]      → currentStateSim = 1.0 (linear)
-        //   domainVector       = [0,1,0,0]      → domainSim = 0.0
+        //   arcVector    = [1,0,0,0]      → arcSim = 1.0
+        //   domainVector = [0,1,0,0]      → domainSim = 0.0
+        // Stage = "manager" (forward of mid-career) → linear lane.
         // → win the strong slots on arcSim, lose the bridge race on domainSim.
         const strongIds: Id<"career_guides">[] = [];
         for (let i = 0; i < 3; i++) {
           const guideId = await ctx.db.insert(
             "career_guides",
-            guideSeed(`strong-${i}`, `Strong ${i}`),
+            guideSeedWithStage(`strong-${i}`, `Strong ${i}`, "manager"),
           );
           await ctx.db.insert("career_guide_embeddings", {
             guideId,
@@ -808,15 +922,15 @@ describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () =
         }
 
         // 3 "Bridge i" guides:
-        //   arcVector          = [0.6, 0.8, 0, 0] → arcSim = 0.6 (above floor)
-        //   currentStateVector = [1,0,0,0]        → currentStateSim = 1.0 (linear)
-        //   domainVector       = [0,0,1,0]        → domainSim = 1.0
+        //   arcVector    = [0.6, 0.8, 0, 0] → arcSim = 0.6 (above floor)
+        //   domainVector = [0,0,1,0]        → domainSim = 1.0
+        // Stage = "manager" → linear lane.
         // → top-2 by domainSim once strong picks are excluded.
         const bridgeIds: Id<"career_guides">[] = [];
         for (let i = 0; i < 3; i++) {
           const guideId = await ctx.db.insert(
             "career_guides",
-            guideSeed(`bridge-${i}`, `Bridge ${i}`),
+            guideSeedWithStage(`bridge-${i}`, `Bridge ${i}`, "manager"),
           );
           await ctx.db.insert("career_guide_embeddings", {
             guideId,
@@ -831,11 +945,8 @@ describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () =
           bridgeIds.push(guideId);
         }
 
-        // Filler candidates with low currentStateSim (~0.5) so they sort
-        // BELOW the 6 expected candidates (currentStateSim = 1.0) under
-        // percentile lane bucketing. Padding to 30 total ensures top 20%
-        // (= ceil(30 * 0.2) = 6) covers exactly the 6 expected candidates,
-        // putting them all in the linear lane.
+        // Filler candidates without stage → fall through to transformational
+        // lane (compareStages returns "unknown"); they don't pollute linear.
         for (let i = 0; i < 24; i++) {
           const guideId = await ctx.db.insert(
             "career_guides",
@@ -911,9 +1022,10 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
         email: "extras@example.com",
       });
       const profileId = await ctx.db.insert("profiles", profileSeed(userId));
-      // Profile facets — currentStateVector aligned to [1,0,0,0] so all
-      // candidates land in linear; arcVector aligned so each candidate's
-      // arcSim is just its first component.
+      await ctx.db.insert(
+        "profile_enrichments",
+        enrichmentSeed({ profileId, userId, careerStage: "mid-career" }),
+      );
       const embeddingId = await ctx.db.insert("profile_embeddings", {
         profileId,
         userId,
@@ -927,19 +1039,16 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
         generatedAt: Date.now(),
       });
 
-      // 100 linear-lane candidates with slightly varied arcVectors so each
-      // has a unique arcSim above the floor (worst-case ~0.994 for i=99).
-      // Under percentile lane bucketing, top 20% of 100 = 20 land in linear,
-      // which is exactly 6 curated (3 strong + 2 bridge + 1 aspirational) +
-      // 14 extras (capped by LANE_BUDGET.EXTRA_MAX). The remaining 80
-      // candidates spill into adjacent + transformational, but those lanes
-      // get no curated picks here (they all sit at currentStateSim = 1.0,
-      // tied with linear, so the assertion at the end allows them to be
-      // empty after curation).
+      // 100 candidates all stage="manager" (forward of user's mid-career)
+      // → all land in the linear lane. Each has a slightly varied arcVector
+      // so its arcSim is unique and above the floor (worst-case ~0.994 for
+      // i=99). Curated 6 (3 strong + 2 bridge + 1 aspirational) + 14 extras
+      // (capped at LANE_BUDGET.EXTRA_MAX) = 20-card linear lane; the
+      // remaining 80 candidates are dropped at curation (no slot left).
       for (let i = 0; i < 100; i++) {
         const guideId = await ctx.db.insert(
           "career_guides",
-          guideSeed(`extras-${i}`, `Extras ${i}`),
+          guideSeedWithStage(`extras-${i}`, `Extras ${i}`, "manager"),
         );
         await ctx.db.insert("career_guide_embeddings", {
           guideId,
@@ -1025,23 +1134,26 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
         );
       }
 
-      // Adjacent + transformational lanes also receive percentile-bucketed
-      // candidates from the same pool. We verify they too respect the
-      // EXTRA_MAX cap on their extras pools (the focus of this test is the
-      // per-lane extras-pool behavior, not lane emptiness — under percentile
-      // bucketing all three lanes get populated when the candidate pool is
-      // large enough).
+      // Other lanes still respect the EXTRA_MAX cap on their extras pools.
+      // Under stage-based bucketing they're empty here (all seeded guides
+      // are stage="manager", forward of the user's mid-career) but the cap
+      // assertion holds vacuously.
       const adjacent = snapshot!.lanes.find((l) => l.kind === "adjacent");
+      const earlier = snapshot!.lanes.find((l) => l.kind === "earlier");
       const transformational = snapshot!.lanes.find(
         (l) => l.kind === "transformational",
       );
       const adjacentExtras = (adjacent?.cards ?? []).filter(
         (c) => c.slotKind === "extra",
       );
+      const earlierExtras = (earlier?.cards ?? []).filter(
+        (c) => c.slotKind === "extra",
+      );
       const transformationalExtras = (transformational?.cards ?? []).filter(
         (c) => c.slotKind === "extra",
       );
       expect(adjacentExtras.length).toBeLessThanOrEqual(14);
+      expect(earlierExtras.length).toBeLessThanOrEqual(14);
       expect(transformationalExtras.length).toBeLessThanOrEqual(14);
     } finally {
       delete (globalThis as any).__testRerank__;
@@ -2015,6 +2127,10 @@ describe("discover queries (Task 3.3)", () => {
           email: "t@example.com",
         });
         const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        await ctx.db.insert(
+          "profile_enrichments",
+          enrichmentSeed({ profileId, userId, careerStage: "mid-career" }),
+        );
         const embeddingId = await ctx.db.insert("profile_embeddings", {
           profileId,
           userId,
@@ -2027,9 +2143,11 @@ describe("discover queries (Task 3.3)", () => {
           model: "test",
           generatedAt: Date.now(),
         });
+        // Stage = "manager" (forward of mid-career) so the guide lands in
+        // the linear lane — what the assertion below relies on.
         const guideId = await ctx.db.insert(
           "career_guides",
-          guideSeed("saved-snap", "Saved + In Snapshot"),
+          guideSeedWithStage("saved-snap", "Saved + In Snapshot", "manager"),
         );
         await ctx.db.insert("career_guide_embeddings", {
           guideId,

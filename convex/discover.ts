@@ -23,7 +23,7 @@ import {
   SIDEWAYS_WHOLE_SIM_FLOOR,
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
-import { cosineSim } from "./lib/discoverScoring";
+import { cosineSim, compareStages } from "./lib/discoverScoring";
 import { rerank as openRouterRerank, chatModel } from "../lib/ai/providers";
 
 /**
@@ -287,8 +287,10 @@ type CardStub = {
   whyMatchReason: string;
 };
 
+type LaneKindFour = "linear" | "adjacent" | "earlier" | "transformational";
+
 type LaneStub = {
-  kind: "linear" | "adjacent" | "transformational";
+  kind: LaneKindFour;
   cards: CardStub[];
 };
 
@@ -503,60 +505,75 @@ async function runPipeline(
     (c) => !dismissed.has(c.guideId as string),
   );
 
-  // Step 5: Lane assignment by wholeSim percentile WITHIN the user's
-  // surviving candidate pool.
+  // Step 5: 4-lane bucketing using career stage comparison + wholeSim signal
+  // floor.
   //
-  // Why wholeSim instead of currentStateSim: wholeSim encodes the full profile
-  // (current role + arc + domain + skills) which separates tech from non-tech
-  // more cleanly than currentStateSim alone. Bucketing on currentStateSim
-  // surfaced noise like Park Ranger / Primary School Teacher in "Sideways
-  // moves" for an AI Engineer profile — the current-state facet alone doesn't
-  // carry enough signal to distinguish domains. The whole-profile vector does.
+  // Lane semantics:
+  //   linear            ("Next steps")        — guide stage > user stage AND wholeSim ≥ floor
+  //   adjacent          ("Sideways moves")    — guide stage == user stage AND wholeSim ≥ floor
+  //   earlier           ("Earlier chapters")  — guide stage < user stage AND wholeSim ≥ floor
+  //   transformational  ("A different chapter") — wholeSim < floor OR stage missing
   //
-  // Why percentile instead of absolute thresholds: Gemini's text-embedding
-  // distribution for career-related content concentrates around cosine 0.6-0.7
-  // regardless of true semantic distance — Massage Therapist vs AI Engineer
-  // scores ~0.65, same as Software Engineer vs AI Engineer. Absolute cutoffs
-  // therefore lump everything into one lane (whichever side of the threshold
-  // the cluster lands on). Bucketing by rank within THIS user's pool restores
-  // a meaningful spread: the closest 20% land in linear, the most distant 50%
-  // land in transformational, regardless of where the cluster sits.
+  // The wholeSim floor (SIDEWAYS_WHOLE_SIM_FLOOR, 0.72) keeps cross-domain
+  // noise out of the three "high signal" lanes. When user or guide stage is
+  // missing the candidate falls through to transformational rather than
+  // guessing — so guides that haven't been backfilled with
+  // `typicalCareerStage` yet still have a place to land.
   //
-  // The fixed `LANE_THRESHOLDS` (LINEAR_MIN / ADJACENT_MIN) remain as soft
-  // floors — exposed via `assignLane` for the saved-override below — but no
-  // longer drive the primary bucketing.
-  const sortedByWhole = [...surviving].sort(
-    (a, b) => b.wholeSim - a.wholeSim,
+  // Why this replaces percentile-based wholeSim bucketing: senior users (Head
+  // of ML, Director) were seeing roles like Data Engineer / AI Engineer in
+  // "Next steps" because the previous bucketing had no concept of seniority.
+  // Career stage comparison fixes that: lateral/downward roles now route to
+  // sideways/earlier instead of misrepresented as next-steps.
+  const enrichment = await ctx.runQuery(
+    internal.discover._readProfileEnrichment,
+    { profileId: args.profileId },
   );
-  const linearCount = Math.ceil(sortedByWhole.length * 0.2);
-  const adjacentEnd = Math.ceil(sortedByWhole.length * 0.5);
-  // Hybrid gate: sideways requires top 20-50% rank AND wholeSim ≥ floor. The
-  // floor stops cross-domain noise (Massage Therapist scoring 0.65 against an
-  // AI Engineer) from filling the lane just because rank-bucketing always
-  // assigns 30% of the pool to it. Below-floor candidates that would have
-  // landed in sideways fall through to transformational instead.
-  const adjacentSlice = sortedByWhole.slice(linearCount, adjacentEnd);
-  const adjacent = adjacentSlice.filter(
-    (c) => c.wholeSim >= SIDEWAYS_WHOLE_SIM_FLOOR,
+  const userStage = enrichment?.careerStage;
+
+  const guideIds = surviving.map((c) => c.guideId);
+  const guideStageRows = await ctx.runQuery(
+    internal.discover._readGuideStages,
+    { guideIds },
   );
-  const adjacentBelowFloor = adjacentSlice.filter(
-    (c) => c.wholeSim < SIDEWAYS_WHOLE_SIM_FLOOR,
+  const stageByGuide = new Map<string, string | undefined>(
+    guideStageRows.map((g) => [g._id as string, g.stage]),
   );
-  const byLane: Record<
-    "linear" | "adjacent" | "transformational",
-    ScoredCandidate[]
-  > = {
-    linear: sortedByWhole.slice(0, linearCount),
-    adjacent,
-    transformational: [...adjacentBelowFloor, ...sortedByWhole.slice(adjacentEnd)],
+
+  const byLane: Record<LaneKindFour, ScoredCandidate[]> = {
+    linear: [],
+    adjacent: [],
+    earlier: [],
+    transformational: [],
   };
 
-  // Saved-guide override: if a lane ends up empty (only possible when the
-  // candidate pool is very small — e.g. ≤ 4 candidates), pull a saved guide
-  // from elsewhere to fill it. Under percentile bucketing this rarely fires
-  // for active users; kept for the cold-start case.
+  for (const c of surviving) {
+    if (c.wholeSim < SIDEWAYS_WHOLE_SIM_FLOOR) {
+      byLane.transformational.push(c);
+      continue;
+    }
+    const guideStage = stageByGuide.get(c.guideId as string);
+    const cmp = compareStages(userStage, guideStage);
+    if (cmp === "forward") byLane.linear.push(c);
+    else if (cmp === "sideways") byLane.adjacent.push(c);
+    else if (cmp === "earlier") byLane.earlier.push(c);
+    else byLane.transformational.push(c);
+  }
+
+  // Sort each lane's pool by wholeSim desc so downstream slot pickers
+  // (`pickStrong` / `pickBridge` / `pickAspirational`) receive the most
+  // relevant candidates first within their lane.
+  for (const k of ["linear", "adjacent", "earlier", "transformational"] as const) {
+    byLane[k].sort((a, b) => b.wholeSim - a.wholeSim);
+  }
+
+  // Saved-guide override: if a lane ends up empty pull a saved guide from
+  // elsewhere to fill it. Under stage-based bucketing this can happen
+  // legitimately for senior users (no senior-leadership guides exist yet so
+  // "Next steps" is empty for a Director/VP profile); the saved override
+  // doesn't paper over that — only saved guides on the user's account count.
   const emptyLanes = (
-    Object.keys(byLane) as Array<keyof typeof byLane>
+    Object.keys(byLane) as Array<LaneKindFour>
   ).filter((k) => byLane[k].length === 0);
   if (emptyLanes.length > 0) {
     const savedCandidates = surviving
@@ -565,13 +582,18 @@ async function runPipeline(
     for (const emptyLane of emptyLanes) {
       const pick = savedCandidates.find((c) => {
         const currentLane = (
-          ["linear", "adjacent", "transformational"] as const
+          ["linear", "adjacent", "earlier", "transformational"] as const
         ).find((kind) => byLane[kind].includes(c));
         return currentLane !== undefined && currentLane !== emptyLane;
       });
       if (pick) {
         byLane[emptyLane].push(pick);
-        for (const kind of ["linear", "adjacent", "transformational"] as const) {
+        for (const kind of [
+          "linear",
+          "adjacent",
+          "earlier",
+          "transformational",
+        ] as const) {
           if (kind !== emptyLane) {
             byLane[kind] = byLane[kind].filter((x) => x !== pick);
           }
@@ -583,7 +605,9 @@ async function runPipeline(
   // Step 6a + 6b + 6c: pick strong-fit + bridge + aspirational cards per
   // lane. Step 7 then top-ups extras for the slider expansion pool.
   const builtLanes: LaneStub[] = await Promise.all(
-    (["linear", "adjacent", "transformational"] as const).map(async (kind) => {
+    (
+      ["linear", "adjacent", "earlier", "transformational"] as const
+    ).map(async (kind) => {
       const pool = byLane[kind];
       const strong = pickStrong(pool);
       const strongIds = new Set(strong.map((c) => c.guideId as string));
@@ -781,6 +805,43 @@ export const _readGuideOverviews = internalQuery({
   },
 });
 
+/**
+ * Reads the user's profile enrichment row so the Step 5 lane bucketer can
+ * compare the user's `careerStage` against each guide's `typicalCareerStage`.
+ * Returns `null` when no enrichment exists yet (cold-start) — the bucketer
+ * treats `undefined` user stage as "unknown" and falls every candidate
+ * through to the transformational lane in that case.
+ */
+export const _readProfileEnrichment = internalQuery({
+  args: { profileId: v.id("profiles") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("profile_enrichments")
+      .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
+      .unique();
+  },
+});
+
+/**
+ * Reads each guide's `typicalCareerStage` for the Step 5 4-lane bucketer.
+ * Returns `{ _id, stage }` per id so the caller can build a map without
+ * pulling the full guide doc (the snapshot pipeline already reads
+ * `_readGuideOverviews` for content, which would double-up unnecessarily).
+ * Missing or unbackfilled guides return `stage: undefined` and route to the
+ * transformational lane.
+ */
+export const _readGuideStages = internalQuery({
+  args: { guideIds: v.array(v.id("career_guides")) },
+  handler: async (ctx, args) => {
+    return await Promise.all(
+      args.guideIds.map(async (id) => {
+        const g = await ctx.db.get(id);
+        return { _id: id, stage: g?.content?.typicalCareerStage };
+      }),
+    );
+  },
+});
+
 export const _readReactions = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -946,6 +1007,7 @@ const laneValidator = v.object({
   kind: v.union(
     v.literal("linear"),
     v.literal("adjacent"),
+    v.literal("earlier"),
     v.literal("transformational"),
   ),
   cards: v.array(cardValidator),
@@ -1403,7 +1465,7 @@ export const getSnapshot = query({
         profileEmbeddingId: snap.profileEmbeddingId,
         failureReason: snap.failureReason,
         lanes: [] as Array<{
-          kind: "linear" | "adjacent" | "transformational";
+          kind: "linear" | "adjacent" | "earlier" | "transformational";
           cards: Array<{
             guideId: Id<"career_guides">;
             slotKind: "strong" | "bridge" | "aspirational" | "extra";

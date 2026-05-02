@@ -7,6 +7,11 @@ export const JUDGE_MODEL_ID = "google/gemini-2.5-flash";
 // model is reserved for the heavier upfront guide generation.
 export const BRANCH_MODEL_ID = "google/gemini-3-flash-preview";
 
+// Homepage search validation — single boolean + a normalized title. Latency
+// matters more than nuance, and the schema is trivial, so flash is the right
+// fit. Kept separate from BRANCH so the two surfaces can diverge later.
+export const VALIDATION_MODEL_ID = "google/gemini-3-flash-preview";
+
 // ── Validation ──────────────────────────────────────────────────────────────
 
 export const ValidationResponseSchema = z.object({
@@ -134,6 +139,18 @@ export const ContentResponseSchema = z.object({
   }),
   followUps: FollowUpsSchema,
   meta: ContentMetaSchema,
+  // Classification of the role's typical career stage. Mirrors the
+  // careerStage vocabulary on profile_enrichments minus "transitioning"
+  // (guides describe destinations, not transitions). Drives discover-canvas
+  // lane bucketing — see CareerStageSchema below for the canonical rubric.
+  typicalCareerStage: z.enum([
+    "early-career",
+    "mid-career",
+    "senior-IC",
+    "manager",
+    "director",
+    "exec",
+  ]),
 });
 export type ContentResponse = z.infer<typeof ContentResponseSchema>;
 
@@ -183,6 +200,13 @@ Field guidance:
   - meta.description: 150 to 160 characters. A single complete sentence — no mid-cut, no ellipsis. Lead with what the role does. Ground a number where natural (a representative salary band or a hiring trend signal). Do not start with "Discover" or "Learn about" — pick a concrete, declarative opening.
   - meta.keywords: 8 to 12 short search-intent phrases. Mix head terms (the role title alone, common variants) with tail terms ("how to become a ${title} uk", "${title} salary us", "${title} career path"). Lower-case, no quotes.
   - meta.socialAlt: 1 to 2 sentences describing the role for the OG/Twitter image's alt attribute. Plain English, ends with a full stop. Used by screen readers and platforms that strip the image.
+- typicalCareerStage: classify the PRIMARY level this guide describes — the level a reader would first encounter the role at, not the full trajectory. Pick ONE of:
+  - "early-career": junior / associate / 0-2 years experience expected. Trainee, apprentice, junior X.
+  - "mid-career": individual contributor with 2-7 years experience. Plain titles like "Software Engineer", "Data Engineer", "Therapist", "Nurse", "Teacher".
+  - "senior-IC": individual contributor with 7+ years experience, no direct reports. Senior X / Staff X / Principal X / Lead X (when not a people-leader title).
+  - "manager": engineering manager, team lead with reports, 3-7 direct reports. "X Manager" titles where management is the primary axis.
+  - "director": director / head-of / department lead. 7-15 reports across 1-2 sub-teams.
+  - "exec": VP / SVP / C-suite / Chief X Officer / President. Cross-functional executive scope.
 
 Style: avoid em dashes and en dashes; use commas, colons, or new sentences. Be concrete and insightful, not generic. Where US and UK genuinely look similar, still produce both regional blocks with region-appropriate phrasing and localised numbers.
 `.trim();
@@ -754,6 +778,58 @@ export function buildBranchExaQuery(args: {
     query: `In the context of working as a ${args.guideTitle}: ${args.question}`,
     systemPrompt: `You are researching a follow-up question for a public career guide. Cite recent, reputable sources. Today's date is ${today}.`,
   };
+}
+
+// ── Career-stage classification ───────────────────────────────────────────
+//
+// Single-field classifier that tags an existing guide with its typical career
+// stage. Drives the discover canvas's 4-lane bucketing (next-steps / sideways
+// / earlier-chapters / a-different-chapter) by comparing this against the
+// user's profile_enrichments.careerStage. Vocabulary mirrors the enrichment
+// stage minus "transitioning" — guides describe destinations, not transitions.
+//
+// Per project memory `feedback_gemini_structured_output_schema_limits`: the
+// schema avoids constraints (no .min/.max/.int/array-length) so Gemini's
+// structured output accepts it cleanly. The rubric encodes the gradations.
+
+export const CareerStageSchema = z.object({
+  typicalCareerStage: z.union([
+    z.literal("early-career"),
+    z.literal("mid-career"),
+    z.literal("senior-IC"),
+    z.literal("manager"),
+    z.literal("director"),
+    z.literal("exec"),
+  ]),
+});
+export type CareerStageClassification = z.infer<typeof CareerStageSchema>;
+
+// Flash tier — short-form classification, latency-friendly. Same model
+// family as VALIDATION/BRANCH for consistency.
+export const CAREER_STAGE_MODEL_ID = "google/gemini-3-flash-preview";
+
+export function buildCareerStagePrompt(args: {
+  title: string;
+  dayToDay: string;
+  entrySalary?: string;
+  midSalary?: string;
+  seniorSalary?: string;
+}): string {
+  return `Classify this career role's typical career stage based on the role description.
+
+ROLE: ${args.title}
+DAY-TO-DAY: ${args.dayToDay}
+SALARY BANDS: entry=${args.entrySalary ?? "n/a"}, mid=${args.midSalary ?? "n/a"}, senior=${args.seniorSalary ?? "n/a"}
+
+Rubric — what's the PRIMARY level this role describes?
+- "early-career": junior / associate / 0-2 years experience expected. Trainee, apprentice, junior X.
+- "mid-career": individual contributor with 2-7 years experience. Plain titles like "Software Engineer", "Data Engineer", "Therapist", "Nurse", "Teacher".
+- "senior-IC": individual contributor with 7+ years experience, no direct reports. Senior X / Staff X / Principal X / Lead X (when not a people-leader title).
+- "manager": engineering manager, team lead with reports, 3-7 direct reports. "X Manager" titles where management is the primary axis.
+- "director": director / head-of / department lead. 7-15 reports across 1-2 sub-teams.
+- "exec": VP / SVP / C-suite / Chief X Officer / President. Cross-functional executive scope.
+
+Pick ONE classification — the level a generalist reading this guide would FIRST encounter the role at, not the entire career trajectory.`;
 }
 
 // ── Skills-detail backfill ────────────────────────────────────────────────

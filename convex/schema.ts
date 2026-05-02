@@ -365,6 +365,24 @@ export default defineSchema({
             relatedRoles: v.array(v.string()),
           }),
         }),
+        // Typical career stage this guide describes. Mirrors the
+        // `profile_enrichments.careerStage` vocabulary (minus "transitioning"
+        // — guides describe destinations, not transitions). Drives the
+        // discover canvas's 4-lane bucketing: comparing user stage vs guide
+        // stage assigns a candidate to next-step / sideways / earlier-chapter
+        // lanes (anything missing falls through to "a different chapter").
+        // Optional so legacy guides remain valid until backfilled by
+        // `triggerCareerStageBackfill`.
+        typicalCareerStage: v.optional(
+          v.union(
+            v.literal("early-career"),
+            v.literal("mid-career"),
+            v.literal("senior-IC"),
+            v.literal("manager"),
+            v.literal("director"),
+            v.literal("exec"),
+          ),
+        ),
       }),
     ),
     illustrationStorageId: v.optional(v.id("_storage")),
@@ -820,6 +838,7 @@ export default defineSchema({
         kind: v.union(
           v.literal("linear"),
           v.literal("adjacent"),
+          v.literal("earlier"),
           v.literal("transformational"),
         ),
         cards: v.array(

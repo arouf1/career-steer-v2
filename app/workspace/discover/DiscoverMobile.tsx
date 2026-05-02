@@ -10,9 +10,10 @@ import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
 import { DiscoverGenerating, DiscoverFailed } from "./DiscoverEmptyState";
 
 const LANES = [
-  { kind: "linear", label: "Linear" },
-  { kind: "adjacent", label: "Adjacent" },
-  { kind: "transformational", label: "Transformational" },
+  { kind: "linear", label: "Next steps" },
+  { kind: "adjacent", label: "Sideways" },
+  { kind: "earlier", label: "Earlier" },
+  { kind: "transformational", label: "Different" },
 ] as const;
 
 export function DiscoverMobile() {
@@ -76,7 +77,7 @@ function DiscoverMobileInner() {
       </header>
 
       <Tabs defaultValue="linear" className="flex-1">
-        <TabsList className="sticky top-0 z-10 grid w-full grid-cols-3 rounded-none border-b border-hairline bg-paper">
+        <TabsList className="sticky top-0 z-10 grid w-full grid-cols-4 rounded-none border-b border-hairline bg-paper">
           {LANES.map((lane) => {
             const count =
               snapshot.lanes.find((l) => l.kind === lane.kind)?.cards.length ??

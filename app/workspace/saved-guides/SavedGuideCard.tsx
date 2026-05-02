@@ -12,9 +12,19 @@ export type SavedGuide = {
   title: string;
   slug: string;
   reactedAt: number;
-  lane: "linear" | "adjacent" | "transformational" | null;
+  lane: "linear" | "adjacent" | "earlier" | "transformational" | null;
   whyMatchReason: string | null;
   arcScore: number | null;
+};
+
+// Friendly labels for the lane badge. Mirrors LANE_LABEL_TEXT in
+// DiscoverCanvas so a saved-guide chip reads identically to its discover
+// origin lane. Shown as upper-case in the badge (Tailwind `uppercase`).
+const LANE_BADGE_LABEL: Record<NonNullable<SavedGuide["lane"]>, string> = {
+  linear: "Next steps",
+  adjacent: "Sideways",
+  earlier: "Earlier",
+  transformational: "Different",
 };
 
 export function SavedGuideCard({ saved }: { saved: SavedGuide }) {
@@ -33,7 +43,7 @@ export function SavedGuideCard({ saved }: { saved: SavedGuide }) {
       <div className="flex items-center justify-between gap-2">
         {saved.lane && (
           <Badge variant="secondary" className="text-[10px] uppercase">
-            {saved.lane}
+            {LANE_BADGE_LABEL[saved.lane]}
           </Badge>
         )}
         {score != null && (

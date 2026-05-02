@@ -33,3 +33,46 @@ export function clamp01(x: number): number {
   if (x > 1) return 1;
   return x;
 }
+
+/**
+ * Career-stage rank for the 4-lane bucketing in `discover.ts`.
+ *
+ * Ranks compare across both ICs and managers — `senior-IC` and `manager` sit
+ * at the same level (7+ years, comparable scope) so a senior-IC user looking
+ * at a manager guide registers as "sideways", not forward. The `transitioning`
+ * stage (used on profile_enrichments only — not on guides) maps to the same
+ * rank as `mid-career` so a user mid-pivot still gets meaningful bucketing.
+ */
+export const STAGE_RANK: Record<string, number> = {
+  "early-career": 0,
+  "mid-career": 1,
+  transitioning: 1,
+  "senior-IC": 2,
+  manager: 2,
+  director: 3,
+  exec: 4,
+};
+
+/**
+ * Compare a user's career stage against a guide's stage and return the lane
+ * direction. Returns `"unknown"` when either side is missing or unrecognised
+ * — callers fall through to the transformational ("a different chapter")
+ * lane rather than guessing.
+ *
+ *   forward    → guide is at a higher stage than the user (= next steps)
+ *   sideways   → guide is at the same stage as the user (= sideways moves)
+ *   earlier    → guide is at a lower stage than the user (= earlier chapters)
+ *   unknown    → either user or guide stage missing/unrecognised
+ */
+export function compareStages(
+  user: string | undefined,
+  guide: string | undefined,
+): "forward" | "sideways" | "earlier" | "unknown" {
+  if (!user || !guide) return "unknown";
+  const u = STAGE_RANK[user];
+  const g = STAGE_RANK[guide];
+  if (u === undefined || g === undefined) return "unknown";
+  if (g > u) return "forward";
+  if (g < u) return "earlier";
+  return "sideways";
+}
