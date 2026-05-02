@@ -83,7 +83,13 @@ const canonicalSchema = z.object({
   ),
 });
 
-const CANONICAL_MODEL_ID = "google/gemini-3.1-pro-preview";
+// Canonicalization is a trivial structured-extraction transform — it does
+// not need a reasoning model. Project precedent: Gemini Flash is the
+// standard choice for this tier of task (BRANCH_MODEL_ID, VALIDATION_MODEL_ID,
+// PERSONALIZATION_MODEL_ID, PEOPLE_EXTRACT_MODEL_ID all use it). Earlier
+// pick of gemini-3.1-pro-preview burned ~190 reasoning tokens before the
+// JSON answer started, hitting MAX_TOKENS and yielding empty content.
+const CANONICAL_MODEL_ID = "google/gemini-3-flash-preview";
 
 export const getOrCreateCanonical = internalAction({
   args: { rawTitle: v.string() },
@@ -111,6 +117,8 @@ export const getOrCreateCanonical = internalAction({
       };
     }
 
+    // No maxOutputTokens cap — Flash returns ~10–20 tokens for this prompt
+    // naturally, and other Flash callers in the project don't cap either.
     const model = chatModel(CANONICAL_MODEL_ID, { zdr: true });
     const { experimental_output } = await generateText({
       model,
@@ -120,7 +128,6 @@ export const getOrCreateCanonical = internalAction({
         "seniority-stripped form for use as a shared career-guide topic. " +
         "Output JSON matching the schema.\n\n" +
         `Raw title: ${rawTitle}`,
-      maxOutputTokens: 200,
     });
 
     const canonical = experimental_output.canonical_title.trim();
