@@ -33,7 +33,7 @@ export function PersonalizeProfileCta({ guideTitle, id }: Props) {
         make up.
       </p>
       <Link
-        href="/profile"
+        href="/workspace/profile"
         className="mt-7 inline-flex items-center gap-2 rounded-pill bg-ink px-5 py-2.5 text-[14px] font-medium text-paper transition-colors hover:bg-ink/90"
       >
         <Sparkles className="h-4 w-4" />

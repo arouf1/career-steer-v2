@@ -24,7 +24,7 @@ export function SiteNav() {
           </Link>
 
           <Authenticated>
-            <Link href="/profile" className={navLink}>
+            <Link href="/workspace/profile" className={navLink}>
               Profile
             </Link>
           </Authenticated>

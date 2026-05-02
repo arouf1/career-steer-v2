@@ -104,7 +104,7 @@ export function SignUpForm() {
 
       if (completeSignUp.status === "complete") {
         await setActive({ session: completeSignUp.createdSessionId });
-        router.push("/profile");
+        router.push("/workspace/profile");
       } else {
         setError("Verification incomplete. Please try again.");
       }
@@ -125,7 +125,7 @@ export function SignUpForm() {
       await signUp.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/profile",
+        redirectUrlComplete: "/workspace/profile",
       });
     } catch {
       setError("Failed to sign up with Google. Please try again.");

@@ -49,7 +49,7 @@ export function SignInForm() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        router.push("/profile");
+        router.push("/workspace/profile");
       } else {
         setError("Sign in incomplete. Please try again.");
       }
@@ -75,7 +75,7 @@ export function SignInForm() {
       await signIn.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/profile",
+        redirectUrlComplete: "/workspace/profile",
       });
     } catch {
       setError("Failed to sign in with Google. Please try again.");

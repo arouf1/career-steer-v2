@@ -5,7 +5,7 @@ export const proxy = clerkMiddleware(async (auth, req) => {
   if (req.nextUrl.pathname === "/") {
     const { userId } = await auth();
     if (userId) {
-      return NextResponse.redirect(new URL("/profile", req.url));
+      return NextResponse.redirect(new URL("/workspace/profile", req.url));
     }
   }
 });

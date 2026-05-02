@@ -321,7 +321,7 @@ export function CareerGuideArticle({
               <p className="text-[15px] leading-relaxed text-paper/85">
                 This is a general guide.{" "}
                 <Link
-                  href="/profile"
+                  href="/workspace/profile"
                   className="font-medium text-paper underline underline-offset-4 transition-colors hover:text-paper/80"
                 >
                   Upload your CV
@@ -1190,7 +1190,7 @@ function Sidebar({
       </div>
 
       <Link
-        href="/profile"
+        href="/workspace/profile"
         className="group flex items-start gap-4 rounded-card bg-ink p-6 text-paper transition-colors hover:bg-ink-deep"
       >
         <div className="flex flex-col gap-2">
