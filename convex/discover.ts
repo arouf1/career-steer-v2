@@ -553,6 +553,23 @@ async function runPipeline(
   const stageByGuide = new Map<string, string | undefined>(
     guideStageRows.map((g) => [g._id as string, g.stage]),
   );
+  const slugByGuide = new Map<string, string | undefined>(
+    guideStageRows.map((g) => [g._id as string, g.slug]),
+  );
+
+  // Experience override: pull the user's seeded guide slugs (the canonical
+  // titles of the roles they've actually held, populated by
+  // `internal.profileGuideSeeding.seedGuidesFromProfile`). Any candidate
+  // whose slug appears here is a literal past role and will be force-routed
+  // into the `earlier` lane below — bypassing the embedding-based
+  // classifier, which can mis-route past roles when the stage embedding
+  // overlaps with the user's current state or the domainSim/wholeSim floors
+  // don't admit them.
+  const seededSlugs = await ctx.runQuery(
+    internal.discover._readProfileSeedingSlugs,
+    { profileId: args.profileId },
+  );
+  const seededSlugSet = new Set<string>(seededSlugs);
 
   const byLane: Record<LaneKindFour, ScoredCandidate[]> = {
     linear: [],
@@ -563,6 +580,16 @@ async function runPipeline(
 
   for (const c of surviving) {
     const guideStage = stageByGuide.get(c.guideId as string);
+    const guideSlug = slugByGuide.get(c.guideId as string);
+
+    // Override branch: this guide represents a role the user has held.
+    // "Earlier chapters" should mean exactly that, regardless of embedding
+    // scores. Skips the wholeSim/domainSim/cmp gates entirely.
+    if (guideSlug && seededSlugSet.has(guideSlug)) {
+      byLane.earlier.push(c);
+      continue;
+    }
+
     const cmp = compareStages(userStage, guideStage);
     if (cmp === "forward" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.linear) {
       byLane.linear.push(c);
@@ -842,12 +869,14 @@ export const _readProfileEnrichment = internalQuery({
 });
 
 /**
- * Reads each guide's `typicalCareerStage` for the Step 5 4-lane bucketer.
- * Returns `{ _id, stage }` per id so the caller can build a map without
- * pulling the full guide doc (the snapshot pipeline already reads
- * `_readGuideOverviews` for content, which would double-up unnecessarily).
- * Missing or unbackfilled guides return `stage: undefined` and route to the
- * transformational lane.
+ * Reads each guide's `typicalCareerStage` and `slug` for the Step 5 4-lane
+ * bucketer. Returns `{ _id, stage, slug }` per id so the caller can build
+ * maps without pulling the full guide doc (the snapshot pipeline already
+ * reads `_readGuideOverviews` for content, which would double-up
+ * unnecessarily). Missing or unbackfilled guides return `stage: undefined`
+ * and route to the transformational lane. Slug is included so the lane
+ * bucketer can match candidates against `profile.seedingGuideSlugs` and
+ * apply the experience override (literal past roles → `earlier`).
  */
 export const _readGuideStages = internalQuery({
   args: { guideIds: v.array(v.id("career_guides")) },
@@ -855,9 +884,33 @@ export const _readGuideStages = internalQuery({
     return await Promise.all(
       args.guideIds.map(async (id) => {
         const g = await ctx.db.get(id);
-        return { _id: id, stage: g?.content?.typicalCareerStage };
+        return {
+          _id: id,
+          stage: g?.content?.typicalCareerStage,
+          slug: g?.slug,
+        };
       }),
     );
+  },
+});
+
+/**
+ * Reads the user's `profile.seedingGuideSlugs` for the Step 5 lane bucketer's
+ * experience override. These are the slugs of public career guides that were
+ * seeded from the user's own work-history canonical titles via
+ * `internal.profileGuideSeeding.seedGuidesFromProfile`. The bucketer treats
+ * any candidate whose slug matches as a "literal past role" and forces it
+ * into the `earlier` lane, regardless of embedding scores. Without this
+ * override, an embedding-only classifier can mis-route literal past roles
+ * into `transformational` when the stage embedding overlaps with the user's
+ * current state, OR fail to admit them to `earlier` because of the
+ * domainSim/wholeSim floors. Returns `[]` if no profile or no seedings yet.
+ */
+export const _readProfileSeedingSlugs = internalQuery({
+  args: { profileId: v.id("profiles") },
+  handler: async (ctx, args) => {
+    const profile = await ctx.db.get(args.profileId);
+    return profile?.seedingGuideSlugs ?? [];
   },
 });
 
