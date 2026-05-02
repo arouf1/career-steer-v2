@@ -1776,3 +1776,264 @@ describe("discover refill (Task 3.2)", () => {
     }
   });
 });
+
+describe("discover queries (Task 3.3)", () => {
+  it("getSnapshot returns the current user's snapshot with hydrated guide titles", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      const embeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "I want to write things people remember",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("hydrate-me", "Hydrate me"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      return { userId, profileId, embeddingId };
+    });
+
+    // Stub LLMs so generateSnapshot stays offline.
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const map = new Map<string, string>();
+      for (const p of args.pairs) map.set(p.guideId, "test reason");
+      return map;
+    };
+    (globalThis as any).__testRerank__ = async () => [];
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+
+      const out = await t
+        .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+        .query(api.discover.getSnapshot, {});
+      expect(out).not.toBeNull();
+      expect(out!.status).toBe("ready");
+      const allCards = out!.lanes.flatMap((l) => l.cards);
+      expect(allCards.some((c) => c.title === "Hydrate me")).toBe(true);
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+
+  it("getSnapshot returns null when the user has no snapshot", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+    });
+
+    const out = await t
+      .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+      .query(api.discover.getSnapshot, {});
+    expect(out).toBeNull();
+  });
+
+  it("querySavedGuides returns saved guides ordered by reaction date desc", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, aId, bId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const aId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("a", "A"),
+      );
+      const bId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("b", "B"),
+      );
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId: aId,
+        reaction: "saved",
+        reactedAt: 1,
+      });
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId: bId,
+        reaction: "saved",
+        reactedAt: 2,
+      });
+      return { userId, aId, bId };
+    });
+
+    const out = await t
+      .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+      .query(api.discover.querySavedGuides, {});
+    expect(out.map((x) => x.title)).toEqual(["B", "A"]);
+    // Sanity: ids match the seed.
+    expect(out.map((x) => x.guideId)).toEqual([bId, aId]);
+    // Use userId so seed return value is fully exercised.
+    expect(userId).toBeTruthy();
+  });
+
+  it("querySavedGuides hydrates snapshot card metadata (lane, whyMatchReason, arcScore) when present", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, guideId } = await t.run(
+      async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-test",
+          email: "t@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          arcSourceText: "I want to ship beautiful tools",
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("saved-snap", "Saved + In Snapshot"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+        return { userId, profileId, embeddingId, guideId };
+      },
+    );
+
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const map = new Map<string, string>();
+      for (const p of args.pairs) map.set(p.guideId, "saved-reason");
+      return map;
+    };
+    (globalThis as any).__testRerank__ = async () => [];
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+      await t.run(async (ctx) => {
+        await ctx.db.insert("discover_reactions", {
+          userId,
+          guideId,
+          reaction: "saved",
+          reactedAt: 1,
+        });
+      });
+      const out = await t
+        .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+        .query(api.discover.querySavedGuides, {});
+      expect(out).toHaveLength(1);
+      expect(out[0].lane).toBe("linear");
+      expect(out[0].whyMatchReason).toBe("saved-reason");
+      expect(out[0].arcScore).toBeGreaterThan(0);
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+
+  it("querySavedGuides returns saved-only (excludes dismissed)", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const aId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("saved-only", "Saved"),
+      );
+      const bId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("dismissed-only", "Dismissed"),
+      );
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId: aId,
+        reaction: "saved",
+        reactedAt: 1,
+      });
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId: bId,
+        reaction: "dismissed",
+        reactedAt: 2,
+      });
+    });
+
+    const out = await t
+      .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+      .query(api.discover.querySavedGuides, {});
+    expect(out.map((x) => x.title)).toEqual(["Saved"]);
+  });
+});

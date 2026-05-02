@@ -7,6 +7,7 @@ import {
   internalMutation,
   internalQuery,
   mutation,
+  query,
   type ActionCtx,
   type MutationCtx,
   type QueryCtx,
@@ -1061,6 +1062,130 @@ export const refillAfterDismiss = internalAction({
         dedupKey: `refill:${args.guideId}`,
         forceFreshReasons: false,
       },
+    );
+  },
+});
+
+// ─── Public read surface (Task 3.3) ─────────────────────────────────────
+//
+// Two queries the canvas + saved-guides UIs call:
+//   - getSnapshot()       → the user's current discover_canvases row, with
+//                           per-card guide details (title, slug, overview,
+//                           top-3 typical skills) hydrated server-side so
+//                           the UI renders without a follow-up query.
+//   - querySavedGuides()  → the user's saved guides (from
+//                           discover_reactions, reaction = "saved"),
+//                           ordered by reactedAt desc, with snapshot card
+//                           metadata (lane, whyMatchReason, arcScore)
+//                           joined when the guide is currently on the
+//                           canvas.
+// Both auth-gate via `requireUserId` (throws on unauthenticated).
+
+/**
+ * Hydrated snapshot for the current user. Returns `null` when no snapshot
+ * row exists (new user, pre-generation). The client uses `null` to
+ * distinguish "loading" from "empty"; do NOT throw here.
+ *
+ * `attempts` is internal bookkeeping (used by the cron retry sweep) and is
+ * deliberately omitted from the response. `failureReason` IS included so
+ * the UI can show a "we couldn't generate, try again" message.
+ *
+ * Hydration cost: 3 lanes × ~7 cards = ~21 `ctx.db.get(guideId)` reads per
+ * call. Bounded by the lane budget; fine for a query.
+ */
+export const getSnapshot = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const snap = await ctx.db
+      .query("discover_canvases")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .unique();
+    if (!snap) return null;
+    const lanes = await Promise.all(
+      snap.lanes.map(async (lane) => ({
+        kind: lane.kind,
+        cards: await Promise.all(
+          lane.cards.map(async (c) => {
+            const g = await ctx.db.get(c.guideId);
+            return {
+              ...c,
+              slug: g?.slug ?? "",
+              title: g?.title ?? "(missing)",
+              overview: g?.content?.overview ?? "",
+              typicalSkills: (g?.content?.typicalSkills ?? []).slice(0, 3),
+            };
+          }),
+        ),
+      })),
+    );
+    return {
+      status: snap.status,
+      generatedAt: snap.generatedAt,
+      profileEmbeddingId: snap.profileEmbeddingId,
+      failureReason: snap.failureReason,
+      lanes,
+    };
+  },
+});
+
+/**
+ * Saved guides for the current user, ordered by `reactedAt` desc. Each
+ * entry includes guide details (title, slug) and — when the guide also
+ * appears on the live snapshot — the card's `lane`, `whyMatchReason`, and
+ * `arcScore`. Saved guides not currently on the canvas return `null` for
+ * those fields.
+ *
+ * Sort happens in memory: `discover_reactions` is indexed on
+ * `(userId, reaction)` (not `reactedAt`), so we collect then sort. For an
+ * MVP user the saved set is in the dozens at most.
+ *
+ * Excludes `dismissed` reactions by index-narrowing on `reaction = "saved"`.
+ */
+export const querySavedGuides = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const reactions = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_reaction", (q) =>
+        q.eq("userId", userId).eq("reaction", "saved"),
+      )
+      .collect();
+    reactions.sort((a, b) => b.reactedAt - a.reactedAt);
+    const snap = await ctx.db
+      .query("discover_canvases")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .unique();
+    const cardByGuide = new Map<
+      string,
+      { lane: string; whyMatchReason: string; arcScore: number }
+    >();
+    if (snap) {
+      for (const lane of snap.lanes) {
+        for (const c of lane.cards) {
+          cardByGuide.set(c.guideId as string, {
+            lane: lane.kind,
+            whyMatchReason: c.whyMatchReason,
+            arcScore: c.arcScore,
+          });
+        }
+      }
+    }
+    return await Promise.all(
+      reactions.map(async (r) => {
+        const g = await ctx.db.get(r.guideId);
+        const card = cardByGuide.get(r.guideId as string);
+        return {
+          guideId: r.guideId,
+          title: g?.title ?? "(missing)",
+          slug: g?.slug ?? "",
+          reactedAt: r.reactedAt,
+          lane: card?.lane ?? null,
+          whyMatchReason: card?.whyMatchReason ?? null,
+          arcScore: card?.arcScore ?? null,
+        };
+      }),
     );
   },
 });
