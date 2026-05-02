@@ -29,6 +29,7 @@ import type * as peopleOutreach from "../peopleOutreach.js";
 import type * as podcasts from "../podcasts.js";
 import type * as podcastsTts from "../podcastsTts.js";
 import type * as profiles from "../profiles.js";
+import type * as titleCanonicalization from "../titleCanonicalization.js";
 import type * as users from "../users.js";
 
 import type {
@@ -59,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   podcasts: typeof podcasts;
   podcastsTts: typeof podcastsTts;
   profiles: typeof profiles;
+  titleCanonicalization: typeof titleCanonicalization;
   users: typeof users;
 }>;
 
