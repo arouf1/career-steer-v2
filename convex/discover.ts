@@ -155,9 +155,12 @@ type ScoredCandidate = {
   wholeSim: number;
 };
 
+/** Slot kinds populated across Steps 6a–6c + Step 7 (extras). */
+type Slot = "strong" | "bridge" | "aspirational" | "extra";
+
 type CardStub = {
   guideId: Id<"career_guides">;
-  slotKind: "strong" | "bridge" | "aspirational" | "extra";
+  slotKind: Slot;
   arcScore: number;
   currentStateScore: number;
   domainScore: number;
@@ -170,15 +173,48 @@ type LaneStub = {
   cards: CardStub[];
 };
 
-function toCardStub(c: ScoredCandidate): CardStub {
+/**
+ * Step 6a — strong-fit picks: top-N by arcSim. These are the cards that
+ * most resemble the user's narrative arc; they anchor the lane.
+ */
+function pickStrong(pool: ScoredCandidate[]): ScoredCandidate[] {
+  return [...pool]
+    .sort((a, b) => b.arcSim - a.arcSim)
+    .slice(0, LANE_BUDGET.STRONG);
+}
+
+/**
+ * Step 6b — bridge picks: top-N by domainSim, with arcSim as tiebreaker.
+ * Excludes guides already taken by `pickStrong` so the same card never
+ * appears in two slots within a lane.
+ */
+function pickBridge(
+  pool: ScoredCandidate[],
+  excluded: Set<string>,
+): ScoredCandidate[] {
+  return [...pool]
+    .filter((c) => !excluded.has(c.guideId as string))
+    .sort((a, b) => b.domainSim - a.domainSim || b.arcSim - a.arcSim)
+    .slice(0, LANE_BUDGET.BRIDGE);
+}
+
+/**
+ * Canonical card-shape factory. Tasks 2.5/2.6/2.7 build their own slot
+ * pickers on top of this helper so the persisted shape stays consistent.
+ */
+function withSlot(
+  c: ScoredCandidate,
+  slotKind: Slot,
+  whyMatchReason: string,
+): CardStub {
   return {
     guideId: c.guideId,
-    slotKind: "strong",
+    slotKind,
     arcScore: c.arcSim,
     currentStateScore: c.currentStateSim,
     domainScore: c.domainSim,
     wholeScore: c.wholeSim,
-    whyMatchReason: "(stub)",
+    whyMatchReason,
   };
 }
 
@@ -289,17 +325,23 @@ export const generateSnapshot = internalAction({
       }
     }
 
-    // Temp cap matches the curated-slot budget (strong + bridge + aspirational
-    // = 6). Task 2.4 replaces this slice with proper per-slot picking; Task
-    // 2.6 then layers extras on top up to LANE_BUDGET.TOTAL_MAX.
-    const CURATED_BUDGET =
-      LANE_BUDGET.STRONG + LANE_BUDGET.BRIDGE + LANE_BUDGET.ASPIRATIONAL;
+    // Step 6a + 6b: pick strong-fit + bridge cards per lane. The aspirational
+    // slot lands in Task 2.5; extras for the slider land in Task 2.6.
     const lanes: LaneStub[] = (
       ["linear", "adjacent", "transformational"] as const
-    ).map((kind) => ({
-      kind,
-      cards: byLane[kind].slice(0, CURATED_BUDGET).map(toCardStub),
-    }));
+    ).map((kind) => {
+      const pool = byLane[kind];
+      const strong = pickStrong(pool);
+      const strongIds = new Set(strong.map((c) => c.guideId as string));
+      const bridge = pickBridge(pool, strongIds);
+      return {
+        kind,
+        cards: [
+          ...strong.map((c) => withSlot(c, "strong", "(stub)")),
+          ...bridge.map((c) => withSlot(c, "bridge", "(stub)")),
+        ],
+      };
+    });
 
     await ctx.runMutation(internal.discover._writeSnapshot, {
       userId: args.userId,

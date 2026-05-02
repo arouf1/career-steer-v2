@@ -395,3 +395,126 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
     expect(lanes.transformational).toEqual([transId]);
   });
 });
+
+describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () => {
+  it("picks top-3 strong + top-2 bridge per lane with correct slotKind", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, strongIds, bridgeIds } =
+      await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-curation-test",
+          email: "curate@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        // Profile facets:
+        //   arcVector            = [1,0,0,0]
+        //   currentStateVector   = [1,0,0,0] (so all candidates land in linear)
+        //   domainVector         = [0,0,1,0]
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [0, 0, 1, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // 3 "Strong i" guides:
+        //   arcVector          = [1,0,0,0]      → arcSim = 1.0
+        //   currentStateVector = [1,0,0,0]      → currentStateSim = 1.0 (linear)
+        //   domainVector       = [0,1,0,0]      → domainSim = 0.0
+        // → win the strong slots on arcSim, lose the bridge race on domainSim.
+        const strongIds: Id<"career_guides">[] = [];
+        for (let i = 0; i < 3; i++) {
+          const guideId = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`strong-${i}`, `Strong ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [1, 0, 0, 0],
+            currentStateVector: [1, 0, 0, 0],
+            domainVector: [0, 1, 0, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+          strongIds.push(guideId);
+        }
+
+        // 3 "Bridge i" guides:
+        //   arcVector          = [0.6, 0.8, 0, 0] → arcSim = 0.6 (above floor)
+        //   currentStateVector = [1,0,0,0]        → currentStateSim = 1.0 (linear)
+        //   domainVector       = [0,0,1,0]        → domainSim = 1.0
+        // → top-2 by domainSim once strong picks are excluded.
+        const bridgeIds: Id<"career_guides">[] = [];
+        for (let i = 0; i < 3; i++) {
+          const guideId = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`bridge-${i}`, `Bridge ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [0.6, 0.8, 0, 0],
+            currentStateVector: [1, 0, 0, 0],
+            domainVector: [0, 0, 1, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+          bridgeIds.push(guideId);
+        }
+
+        return { userId, profileId, embeddingId, strongIds, bridgeIds };
+      });
+
+    await t.action(internal.discover.generateSnapshot, {
+      userId,
+      profileId,
+      expectedProfileEmbeddingId: embeddingId,
+      forceFreshReasons: true,
+    });
+
+    const snapshot = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_canvases")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique();
+    });
+    expect(snapshot).not.toBeNull();
+    expect(snapshot!.status).toBe("ready");
+
+    const linearLane = snapshot!.lanes.find((l) => l.kind === "linear");
+    expect(linearLane).toBeDefined();
+
+    const strongCards = linearLane!.cards.filter(
+      (c) => c.slotKind === "strong",
+    );
+    const bridgeCards = linearLane!.cards.filter(
+      (c) => c.slotKind === "bridge",
+    );
+
+    expect(strongCards).toHaveLength(3);
+    expect(bridgeCards).toHaveLength(2);
+
+    // Strong cards are the 3 "Strong i" guides (in any order).
+    expect(strongCards.map((c) => c.guideId).sort()).toEqual(
+      [...strongIds].sort(),
+    );
+
+    // Bridge cards are 2 of the 3 "Bridge i" guides; none are strong picks.
+    for (const c of bridgeCards) {
+      expect(bridgeIds).toContain(c.guideId);
+      expect(strongIds).not.toContain(c.guideId);
+    }
+  });
+});
