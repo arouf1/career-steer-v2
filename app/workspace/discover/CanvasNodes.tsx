@@ -2,6 +2,12 @@
 "use client";
 import { Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Id } from "@/convex/_generated/dataModel";
 
 export type GuideCardData = {
@@ -71,21 +77,27 @@ export function UserNode({
   currentRoleChip?: string;
   onClick?: () => void;
 }) {
-  return (
+  const avatar = (
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+      className="flex size-20 items-center justify-center rounded-full bg-ink text-paper text-2xl font-medium ring-4 ring-paper transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ink/20 focus-visible:ring-offset-2 focus-visible:ring-offset-paper hover:scale-105"
     >
-      <div className="flex size-20 items-center justify-center rounded-full bg-ink text-paper text-2xl font-medium ring-4 ring-paper">
-        <span>{initials}</span>
-      </div>
-      {currentRoleChip && (
-        <span className="rounded-pill border border-hairline bg-paper px-2.5 py-0.5 text-[11px] font-medium text-ink">
-          {currentRoleChip}
-        </span>
-      )}
+      <span>{initials}</span>
     </button>
+  );
+
+  if (!currentRoleChip) return avatar;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>{avatar}</TooltipTrigger>
+        <TooltipContent side="bottom" className="text-[12px]">
+          {currentRoleChip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

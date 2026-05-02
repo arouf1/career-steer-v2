@@ -115,6 +115,27 @@ function DiscoverCanvasInner() {
   );
   const zoomReset = useCallback(() => setZoom(1), []);
 
+  // Ctrl/Cmd + wheel to zoom. React's onWheel attaches a passive listener
+  // (preventDefault is a no-op there), so we use addEventListener with
+  // passive: false on the wrapper. Bare wheel still scrolls the page
+  // normally; only modified wheel intercepts. macOS trackpad pinch also
+  // fires wheel events with ctrlKey: true, so this handles pinch too.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      // deltaY positive = scroll down = zoom out; invert so up = zoom in.
+      const delta = -e.deltaY * 0.002;
+      setZoom((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z + delta)));
+    };
+
+    wrapper.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", onWheel);
+  }, []);
+
   // Subscribe to primitive initials and fullName, not the whole `user`
   // object — Clerk's user reference changes on unrelated session ticks and
   // would invalidate the `cards` memo unnecessarily.
@@ -260,10 +281,10 @@ function DiscoverCanvasInner() {
         >
           {/*
             Concentric rings centered on the user node — visual scale for
-            "closer = closer fit." 3 hairlines at 250 / 430 / 610 align
-            roughly with the strong / bridge / aspirational tiers. SVG sits
-            at the origin div with overflow:visible so the circles render
-            outside the 1px viewport.
+            "closer = closer fit." Generated at 160px intervals out to a
+            wide outer radius so zooming out reveals progressively fainter
+            rings. SVG sits at the origin div with overflow:visible so the
+            circles render outside the 1px viewport.
           */}
           <svg
             className="pointer-events-none absolute"
@@ -276,30 +297,23 @@ function DiscoverCanvasInner() {
             }}
             aria-hidden
           >
-            <circle
-              cx={0}
-              cy={0}
-              r={250}
-              fill="none"
-              stroke="oklch(0.9 0.005 35)"
-              strokeWidth={1}
-            />
-            <circle
-              cx={0}
-              cy={0}
-              r={430}
-              fill="none"
-              stroke="oklch(0.92 0.005 35)"
-              strokeWidth={1}
-            />
-            <circle
-              cx={0}
-              cy={0}
-              r={610}
-              fill="none"
-              stroke="oklch(0.93 0.005 35)"
-              strokeWidth={1}
-            />
+            {Array.from({ length: 9 }, (_, i) => {
+              const r = 200 + i * 160; // 200, 360, 520, ..., 1480
+              // Lightness fades from 0.88 (inner) to 0.96 (outer, clamped).
+              const lightness = Math.min(0.96, 0.88 + i * 0.008);
+              const stroke = `oklch(${lightness} 0.005 35)`;
+              return (
+                <circle
+                  key={i}
+                  cx={0}
+                  cy={0}
+                  r={r}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth={1}
+                />
+              );
+            })}
           </svg>
 
           {/* User node at canvas centre. */}
