@@ -1,6 +1,6 @@
 // app/workspace/discover/DiscoverMobile.tsx
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Authenticated, useQuery, useMutation } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
@@ -44,6 +44,14 @@ function DiscoverMobileInner() {
   const handleRefresh = useCallback(() => {
     void manualRefresh({});
   }, [manualRefresh]);
+
+  // Auto-trigger first-time generation when the user has no snapshot row.
+  // See DiscoverCanvas for rationale; debounce-gated server-side.
+  useEffect(() => {
+    if (snapshot === null) {
+      void manualRefresh({});
+    }
+  }, [snapshot, manualRefresh]);
 
   if (
     snapshot === undefined ||

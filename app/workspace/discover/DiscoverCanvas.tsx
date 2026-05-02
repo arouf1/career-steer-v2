@@ -1,6 +1,6 @@
 // app/workspace/discover/DiscoverCanvas.tsx
 "use client";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { Authenticated, useQuery, useMutation } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -65,6 +65,18 @@ function DiscoverCanvasInner() {
   const initials =
     (user?.firstName?.[0] ?? "Y") + (user?.lastName?.[0] ?? "ou");
   const fullName = user?.fullName ?? null;
+
+  // Auto-trigger first-time generation when the user has no snapshot row
+  // yet. `scheduleSnapshotRegeneration`'s 30s debounce + per-user gate
+  // collapses any accidental re-fires; if `profile_embeddings` is missing
+  // the schedule mutation warns + returns and the user stays in the
+  // generating skeleton (a future improvement: surface a "complete your
+  // profile to build the canvas" empty state explicitly).
+  useEffect(() => {
+    if (snapshot === null) {
+      void manualRefresh({});
+    }
+  }, [snapshot, manualRefresh]);
 
   const reactionByGuide = useMemo(() => {
     const m = new Map<string, "saved">();

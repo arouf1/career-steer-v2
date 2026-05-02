@@ -1334,7 +1334,21 @@ export const _listOldFailed = internalQuery({
 export const getSnapshot = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
+    // Speculative read: return null on missing identity rather than throwing,
+    // matching the pattern in `users.current`. The Clerk → Convex JWT
+    // handshake can race the first render of <Authenticated>'s children, so a
+    // hard throw shows up as an uncaught error in the browser. Mutations
+    // still throw via `requireUserId` because they're user-driven actions.
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!user) return null;
+    const userId = user._id;
     const snap = await ctx.db
       .query("discover_canvases")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
@@ -1412,7 +1426,18 @@ export const getSnapshot = query({
 export const querySavedGuides = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
+    // Same speculative-read pattern as getSnapshot: return [] on missing
+    // identity to avoid auth-race throws on the client.
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!user) return [];
+    const userId = user._id;
     const reactions = await ctx.db
       .query("discover_reactions")
       .withIndex("by_user_and_reaction", (q) =>
