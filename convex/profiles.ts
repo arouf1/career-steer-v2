@@ -269,6 +269,16 @@ export const markReviewed = mutation({
   handler: async (ctx) => {
     const profile = await userOwnedProfile(ctx);
     await ctx.db.patch(profile._id, { reviewed: true });
+
+    // Seed public career guides for the canonical job titles in this
+    // profile's work history. Idempotent — re-running markReviewed on an
+    // unchanged experience array is a no-op via the checksum gate in
+    // seedGuidesFromProfile.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.profileGuideSeeding.seedGuidesFromProfile,
+      { userId: profile.userId },
+    );
   },
 });
 
