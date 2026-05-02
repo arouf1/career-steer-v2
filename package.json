@@ -19,6 +19,7 @@
     "@google/genai": "1.50.1",
     "@hookform/resolvers": "5.2.2",
     "@openrouter/ai-sdk-provider": "2.8.1",
+    "@xyflow/react": "12.10.2",
     "ai": "6.0.168",
     "convex": "1.36.1",
     "exa-js": "2.12.1",
