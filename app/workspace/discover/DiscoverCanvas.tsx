@@ -248,7 +248,7 @@ function DiscoverCanvasInner() {
         return (
           <div
             key={`label:${lane}`}
-            className="pointer-events-none absolute"
+            className="absolute z-20"
             style={{
               left: pos.left,
               top: pos.top,
