@@ -84,19 +84,17 @@ export function positionCard(args: {
   return { x, y };
 }
 
-// Margin past the outer card position so the canvas's bounding-box anchors
-// sit slightly outside the populated card area without dominating it. Shared
-// with DiscoverCanvas so the anchor positions stay in lockstep with the
-// quadrant-cell centre math below.
-export const ANCHOR_OFFSET = 80;
+// Margin past the outer card position so the lane labels sit at the visual
+// centre of each quadrant tint cell without crowding the outermost cards.
+// Now that the canvas is plain CSS (no React Flow fitView), this is purely
+// a layout offset for label placement — the canvas extent is fixed by the
+// virtual canvas dimensions in DiscoverCanvas.
+const ANCHOR_OFFSET = 80;
 
-// Center of each quadrant — used by DiscoverCanvas for lane label positions.
-//
-// The anchor nodes added in DiscoverCanvas establish the bounding-box extent
-// at ±(QUADRANT_HALF_WIDTH + ANCHOR_OFFSET, QUADRANT_HALF_HEIGHT + ANCHOR_OFFSET).
+// Centre of each quadrant — used by DiscoverCanvas for lane label positions.
 // Each visual quadrant (one of the four tint cells) occupies a 1/2 × 1/2
-// fraction of that viewport. The centre of each cell — where the lane label
-// should sit — is at half of that extent.
+// fraction of the canvas viewport. The centre of each cell sits at half of
+// the extended quadrant extent (QUADRANT_HALF + ANCHOR_OFFSET).
 const VIEWPORT_HALF_WIDTH = QUADRANT_HALF_WIDTH + ANCHOR_OFFSET; // 800
 const VIEWPORT_HALF_HEIGHT = QUADRANT_HALF_HEIGHT + ANCHOR_OFFSET; // 600
 
