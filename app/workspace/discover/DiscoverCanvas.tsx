@@ -1,6 +1,6 @@
 // app/workspace/discover/DiscoverCanvas.tsx
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { Authenticated, useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
@@ -90,21 +90,27 @@ function DiscoverCanvasInner() {
   // so the card cluster sits centrally with breathing room (and outermost
   // cards never get clipped against the wrapper bounds). The user-controlled
   // `zoom` multiplier rides on top of the auto-fit scale.
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  //
+  // Wrapper is held as state (callback ref pattern) rather than a useRef so
+  // the resize-observer effect re-runs when the element actually mounts.
+  // With a useRef, the early-return loading state would mount/unmount the
+  // wrapper without triggering the observer setup — `scale` would stay at
+  // its initial 1 and cards would render way too big until something else
+  // changed the deps (e.g. the user zooming).
+  const [wrapper, setWrapper] = useState<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
+    if (!wrapper) return;
     const update = () => {
-      const sx = el.clientWidth / CANVAS_VIRTUAL_WIDTH;
-      const sy = el.clientHeight / CANVAS_VIRTUAL_HEIGHT;
+      const sx = wrapper.clientWidth / CANVAS_VIRTUAL_WIDTH;
+      const sy = wrapper.clientHeight / CANVAS_VIRTUAL_HEIGHT;
       setScale(Math.min(sx, sy) * 0.88 * zoom);
     };
     update();
     const ro = new ResizeObserver(update);
-    ro.observe(el);
+    ro.observe(wrapper);
     return () => ro.disconnect();
-  }, [zoom]);
+  }, [wrapper, zoom]);
 
   const zoomIn = useCallback(
     () => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP)),
@@ -122,9 +128,7 @@ function DiscoverCanvasInner() {
   // normally; only modified wheel intercepts. macOS trackpad pinch also
   // fires wheel events with ctrlKey: true, so this handles pinch too.
   useEffect(() => {
-    const wrapper = wrapperRef.current;
     if (!wrapper) return;
-
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
@@ -132,10 +136,9 @@ function DiscoverCanvasInner() {
       const delta = -e.deltaY * 0.002;
       setZoom((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z + delta)));
     };
-
     wrapper.addEventListener("wheel", onWheel, { passive: false });
     return () => wrapper.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [wrapper]);
 
   // Subscribe to primitive initials and fullName, not the whole `user`
   // object — Clerk's user reference changes on unrelated session ticks and
@@ -207,7 +210,7 @@ function DiscoverCanvasInner() {
 
   return (
     <motion.div
-      ref={wrapperRef}
+      ref={setWrapper}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
