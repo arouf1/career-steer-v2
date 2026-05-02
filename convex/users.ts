@@ -93,6 +93,37 @@ const cascadeDeleteUser = async (
     .collect();
   for (const row of personalizations) await ctx.db.delete(row._id);
 
+  // Discover canvas + junction rows (Phase 1+ tables). The snapshot is 1:1
+  // per user; junction rows are bounded by N cards in the snapshot
+  // (≤ 3 lanes × 20 max). We use by_snapshotId rather than adding a
+  // by_userId index on discover_snapshot_guides — keeps the schema lean.
+  const canvas = await ctx.db
+    .query("discover_canvases")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .unique();
+  if (canvas) {
+    const junctionRows = await ctx.db
+      .query("discover_snapshot_guides")
+      .withIndex("by_snapshotId", (q) => q.eq("snapshotId", canvas._id))
+      .collect();
+    for (const r of junctionRows) await ctx.db.delete(r._id);
+    await ctx.db.delete(canvas._id);
+  }
+
+  // Discover reactions (saved + dismissed). Compound index prefix scan.
+  const reactions = await ctx.db
+    .query("discover_reactions")
+    .withIndex("by_user_and_guide", (q) => q.eq("userId", userId))
+    .collect();
+  for (const r of reactions) await ctx.db.delete(r._id);
+
+  // Discover match-reason cache. Compound index prefix scan.
+  const reasons = await ctx.db
+    .query("discover_match_reasons")
+    .withIndex("by_user_and_guide", (q) => q.eq("userId", userId))
+    .collect();
+  for (const r of reasons) await ctx.db.delete(r._id);
+
   await ctx.db.delete(userId);
 };
 

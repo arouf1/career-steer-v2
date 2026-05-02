@@ -2597,3 +2597,174 @@ describe("discover.sweepFailedSnapshots (Task 4.3)", () => {
     expect(snap!.status).toBe("failed");
   });
 });
+
+describe("users.deleteAccount cascade — discover tables", () => {
+  it("removes all discover_* rows owned by the user being deleted", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, guideId } = await t.run(
+      async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-cascade-test",
+          email: "cascade@example.com",
+        });
+        const profileId = await ctx.db.insert(
+          "profiles",
+          profileSeed(userId),
+        );
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("cascade-guide", "Cascade guide"),
+        );
+        return { userId, profileId, embeddingId, guideId };
+      },
+    );
+
+    // Seed all four discover tables for this user.
+    await t.run(async (ctx) => {
+      const snapshotId = await ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId: embeddingId,
+        generatedAt: Date.now(),
+        status: "ready",
+        lanes: [],
+        attempts: 0,
+      });
+      await ctx.db.insert("discover_snapshot_guides", {
+        snapshotId,
+        userId,
+        guideId,
+      });
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId,
+        reaction: "saved",
+        reactedAt: Date.now(),
+      });
+      await ctx.db.insert("discover_match_reasons", {
+        userId,
+        guideId,
+        profileEmbeddingId: embeddingId,
+        reason: "test",
+        generatedAt: Date.now(),
+      });
+    });
+
+    // Sanity: the rows exist.
+    const beforeCanvases = await t.run(async (ctx) =>
+      ctx.db.query("discover_canvases").collect(),
+    );
+    const beforeJunction = await t.run(async (ctx) =>
+      ctx.db.query("discover_snapshot_guides").collect(),
+    );
+    const beforeReactions = await t.run(async (ctx) =>
+      ctx.db.query("discover_reactions").collect(),
+    );
+    const beforeReasons = await t.run(async (ctx) =>
+      ctx.db.query("discover_match_reasons").collect(),
+    );
+    expect(beforeCanvases).toHaveLength(1);
+    expect(beforeJunction).toHaveLength(1);
+    expect(beforeReactions).toHaveLength(1);
+    expect(beforeReasons).toHaveLength(1);
+
+    // Delete account.
+    await t
+      .withIdentity({
+        tokenIdentifier: "u-cascade-test",
+        email: "cascade@example.com",
+      })
+      .mutation(api.users.deleteAccount, {});
+
+    // All four tables should be empty.
+    const afterCanvases = await t.run(async (ctx) =>
+      ctx.db.query("discover_canvases").collect(),
+    );
+    const afterJunction = await t.run(async (ctx) =>
+      ctx.db.query("discover_snapshot_guides").collect(),
+    );
+    const afterReactions = await t.run(async (ctx) =>
+      ctx.db.query("discover_reactions").collect(),
+    );
+    const afterReasons = await t.run(async (ctx) =>
+      ctx.db.query("discover_match_reasons").collect(),
+    );
+    expect(afterCanvases).toHaveLength(0);
+    expect(afterJunction).toHaveLength(0);
+    expect(afterReactions).toHaveLength(0);
+    expect(afterReasons).toHaveLength(0);
+
+    // The user row is gone too.
+    const afterUsers = await t.run(async (ctx) =>
+      ctx.db.query("users").collect(),
+    );
+    expect(afterUsers).toHaveLength(0);
+  });
+
+  it("does not affect other users' discover rows", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userB, guideId } = await t.run(async (ctx) => {
+      // User A — will be deleted.
+      const userA = await ctx.db.insert("users", {
+        tokenIdentifier: "u-a",
+        email: "a@b.co",
+      });
+      // User B — should remain untouched.
+      const userB = await ctx.db.insert("users", {
+        tokenIdentifier: "u-b",
+        email: "b@c.co",
+      });
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("shared", "Shared"),
+      );
+
+      // Seed reactions for both users.
+      await ctx.db.insert("discover_reactions", {
+        userId: userA,
+        guideId,
+        reaction: "saved",
+        reactedAt: Date.now(),
+      });
+      await ctx.db.insert("discover_reactions", {
+        userId: userB,
+        guideId,
+        reaction: "saved",
+        reactedAt: Date.now(),
+      });
+      return { userA, userB, guideId };
+    });
+
+    // Delete account for user A.
+    await t
+      .withIdentity({ tokenIdentifier: "u-a", email: "a@b.co" })
+      .mutation(api.users.deleteAccount, {});
+
+    // User B's reaction should still exist.
+    const remaining = await t.run(async (ctx) =>
+      ctx.db.query("discover_reactions").collect(),
+    );
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].userId).toBe(userB);
+    expect(remaining[0].guideId).toBe(guideId);
+  });
+});

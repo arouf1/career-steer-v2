@@ -831,6 +831,22 @@ export const triggerEnrichmentBySlug = mutation({
   },
 });
 
+/**
+ * Admin reset: deletes every `career_guides` row plus its illustration
+ * and slot-illustration storage. Used as a hard reset before bulk
+ * regeneration in dev / staging.
+ *
+ * NOTE on discover-canvas data integrity: this mutation does NOT
+ * proactively clean up `discover_canvases.lanes[*].cards[*].guideId`
+ * references, `discover_snapshot_guides` junction rows, or
+ * `discover_match_reasons` cache rows pointing at the deleted guides.
+ * Orphans are self-healing: the next per-user `generateSnapshot` rewrites
+ * the snapshot from scratch (excluding the now-missing guides), and the
+ * fan-out from `guideEmbeddings.upsert` after regeneration triggers that
+ * regen for every active user. Between deletion and the next regen,
+ * `getSnapshot` returns lane slots with missing-guide fallbacks
+ * (`title: "(missing)"`); the canvas reader UI must handle this gracefully.
+ */
 export const _purgeAllGuides = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -863,6 +879,18 @@ export const _purgeAllGuides = internalMutation({
 // captured title via the new grounded-first pipeline. Requires an explicit
 // confirmation literal to prevent accidental runs. Validation rows are
 // left in place — getValidation self-heals stale slugs.
+//
+// NOTE on discover-canvas data integrity: this mutation does NOT
+// proactively clean up `discover_canvases.lanes[*].cards[*].guideId`
+// references, `discover_snapshot_guides` junction rows, or
+// `discover_match_reasons` cache rows pointing at the deleted guides.
+// Orphans are self-healing: the next per-user `generateSnapshot` rewrites
+// the snapshot from scratch (excluding the now-missing guides), and the
+// fan-out from `guideEmbeddings.upsert` after `purgeAndRegenerateAll`
+// triggers that regen for every active user. Between deletion and the
+// next regen, `getSnapshot` returns lane slots with missing-guide
+// fallbacks (`title: "(missing)"`); the canvas reader UI must handle
+// this gracefully.
 export const purgeAndRegenerateAll = mutation({
   args: { confirm: v.literal("purge-and-regenerate") },
   returns: v.object({
