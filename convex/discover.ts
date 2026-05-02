@@ -398,6 +398,47 @@ export const generateSnapshot = internalAction({
     forceFreshReasons: v.boolean(),
   },
   handler: async (ctx, args) => {
+    try {
+      await runPipeline(ctx, args);
+    } catch (err) {
+      // Concurrency abort from `_writeSnapshot` is expected racing behavior —
+      // a fresher in-flight generation has already (or is about to) replaced
+      // the snapshot. Don't mark this run as failed; just bail silently so
+      // the live row keeps whatever the winning action wrote.
+      if (
+        err instanceof ConvexError &&
+        (err as ConvexError<string>).data === "profile-embedding-superseded"
+      ) {
+        return;
+      }
+      const reason =
+        err instanceof Error ? err.message.slice(0, 500) : "unknown";
+      await ctx.runMutation(internal.discover._markSnapshotFailed, {
+        userId: args.userId,
+        reason,
+      });
+      throw err;
+    }
+  },
+});
+
+/**
+ * Inner pipeline body. Extracted from the action handler so the outer
+ * try/catch wrapping it stays uncluttered and the existing Steps 0–9
+ * structure is preserved verbatim. `_markSnapshotFailed` only patches an
+ * existing `discover_canvases` row — in production
+ * `scheduleSnapshotRegeneration` always inserts the generating row before
+ * dispatching this action, so the patch target reliably exists.
+ */
+async function runPipeline(
+  ctx: any,
+  args: {
+    userId: Id<"users">;
+    profileId: Id<"profiles">;
+    expectedProfileEmbeddingId: Id<"profile_embeddings">;
+    forceFreshReasons: boolean;
+  },
+) {
     // Step 0: Read the user's profile embedding. If it's gone, the embedding
     // was regenerated or deleted between scheduling and execution; abort.
     const profileEmbedding = await ctx.runQuery(
@@ -438,9 +479,10 @@ export const generateSnapshot = internalAction({
 
     // Step 4: Drop dismissed guides for this user. We also collect the saved
     // set up front since Step 5's saved-override needs it.
-    const reactions = await ctx.runQuery(internal.discover._readReactions, {
-      userId: args.userId,
-    });
+    const reactions: Array<Doc<"discover_reactions">> = await ctx.runQuery(
+      internal.discover._readReactions,
+      { userId: args.userId },
+    );
     const dismissed = new Set<string>(
       reactions
         .filter((r) => r.reaction === "dismissed")
@@ -641,10 +683,34 @@ export const generateSnapshot = internalAction({
       profileEmbeddingId: args.expectedProfileEmbeddingId,
       lanes: lanesWithReasons,
     });
-  },
-});
+}
 
 // ─── Internal helpers ────────────────────────────────────────────────────
+
+/**
+ * Mark the live snapshot row (if any) as failed, increment `attempts`, and
+ * record a 500-char-truncated `failureReason`. No-op when no row exists —
+ * the pipeline catches that case in `generateSnapshot`'s outer try/catch.
+ *
+ * Phase 4 (Task 4.3) introduces a cron sweep that uses
+ * `SNAPSHOT_MAX_ATTEMPTS` to retry stuck rows; we don't enforce that gate
+ * here, just bump the counter so the sweep has accurate state.
+ */
+export const _markSnapshotFailed = internalMutation({
+  args: { userId: v.id("users"), reason: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("discover_canvases")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .unique();
+    if (!row) return;
+    await ctx.db.patch(row._id, {
+      status: "failed",
+      attempts: (row.attempts ?? 0) + 1,
+      failureReason: args.reason,
+    });
+  },
+});
 
 export const _readProfileEmbedding = internalQuery({
   args: { profileEmbeddingId: v.id("profile_embeddings") },

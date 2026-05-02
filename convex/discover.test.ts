@@ -1256,3 +1256,82 @@ describe("discover.generateSnapshot — Step 8 (why-match reasons)", () => {
     }
   });
 });
+
+describe("discover.generateSnapshot — failure handling", () => {
+  it("marks snapshot as failed and increments attempts on hard error", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-failure-handling",
+        email: "fail@example.com",
+      });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      // 4-dim profile embedding.
+      const embeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      // Force a dimension mismatch by inserting a 2-dim guide embedding.
+      // cosineSim throws on mismatched dims → bubbles up out of Step 2.
+      const brokenGuideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("broken", "Broken"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId: brokenGuideId,
+        wholeVector: [1, 0],
+        arcVector: [1, 0],
+        currentStateVector: [1, 0],
+        domainVector: [1, 0],
+        dimensions: 2,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      // Pre-seed a "generating" snapshot row so _markSnapshotFailed has a row
+      // to patch (mirrors what scheduleSnapshotRegeneration does in prod).
+      await ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId: embeddingId,
+        generatedAt: Date.now(),
+        status: "generating",
+        lanes: [],
+        attempts: 0,
+      });
+
+      return { userId, profileId, embeddingId };
+    });
+
+    await expect(
+      t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      }),
+    ).rejects.toThrow();
+
+    const snap = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_canvases")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique();
+    });
+    expect(snap?.status).toBe("failed");
+    expect(snap?.attempts ?? 0).toBeGreaterThan(0);
+    expect(snap?.failureReason).toBeTruthy();
+  });
+});
