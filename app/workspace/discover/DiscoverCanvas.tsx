@@ -15,17 +15,32 @@ import "@xyflow/react/dist/style.css";
 import { RefreshCw } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
-import { GuideCardNode, UserNodeView, LaneLabelNode } from "./CanvasNodes";
+import {
+  GuideCardNode,
+  UserNodeView,
+  LaneLabelNode,
+  AnchorNode,
+} from "./CanvasNodes";
 import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
 import { DensitySlider, type Density } from "./DensitySlider";
 import { DiscoverGenerating, DiscoverFailed } from "./DiscoverEmptyState";
-import { positionCard, QUADRANT_CENTER } from "./lib/positionCard";
+import {
+  positionCard,
+  QUADRANT_CENTER,
+  QUADRANT_HALF_WIDTH,
+  QUADRANT_HALF_HEIGHT,
+} from "./lib/positionCard";
 
 const nodeTypes = {
   guide: GuideCardNode,
   user: UserNodeView,
   laneLabel: LaneLabelNode,
+  anchor: AnchorNode,
 };
+
+// Small margin past the outer card position so anchors sit slightly outside
+// the populated card area without dominating it.
+const ANCHOR_OFFSET = 80;
 
 const LANE_LABEL_TEXT = {
   linear: "Next steps",
@@ -127,8 +142,30 @@ function DiscoverCanvasInner() {
       },
     }));
 
+    // Four invisible 1px anchors at the outer corners of the canvas extent.
+    // They force fitView's bounding box to be symmetric around (0, 0) so the
+    // user node stays visually centered even when some quadrants are empty.
+    const anchorNodes: Node[] = (
+      [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ] as const
+    ).map(([sx, sy], i) => ({
+      id: `anchor:${i}`,
+      type: "anchor",
+      position: {
+        x: sx * (QUADRANT_HALF_WIDTH + ANCHOR_OFFSET),
+        y: sy * (QUADRANT_HALF_HEIGHT + ANCHOR_OFFSET),
+      },
+      data: {},
+      draggable: false,
+      selectable: false,
+    }));
+
     return {
-      nodes: [userNode, ...labelNodes, ...guideNodes],
+      nodes: [...anchorNodes, userNode, ...labelNodes, ...guideNodes],
       edges: [] as Edge[],
     };
   }, [snapshot, density, reactionByGuide, initials, fullName]);
@@ -144,56 +181,68 @@ function DiscoverCanvasInner() {
     return <DiscoverFailed onRetry={handleRefresh} />;
 
   return (
-    <div className="relative h-full w-full bg-white">
+    <div className="relative flex h-full w-full flex-col bg-white">
       {/*
-        Quadrant tints — barely-visible cream variants, one per canvas
-        region. Sit BEHIND React Flow's nodes via DOM order. Chroma stays
-        below 0.01 so they read as "tinted neutrals," not color blocks —
-        the brand register is editorial cream, not Memphis primary.
+        Control strip — fixed above the canvas, OUTSIDE React Flow. Lives
+        between the workspace topbar and the canvas itself. Previously the
+        density slider + refresh button were a `top-right` Panel, which
+        collided visually with the "Sideways moves" lane label that sits at
+        the center of the top-right quadrant.
       */}
-      <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
-        {/* top-left = Next steps — warm-yellow cream (most aspirational, draws eye) */}
-        <div className="bg-[oklch(0.985_0.008_70)]" />
-        {/* top-right = Sideways moves — cool-neutral cream */}
-        <div className="bg-[oklch(0.98_0.005_220)]" />
-        {/* bottom-left = Earlier chapters — slight green-cream (foundational, calm) */}
-        <div className="bg-[oklch(0.978_0.007_120)]" />
-        {/* bottom-right = A different chapter — lavender (alternative direction) */}
-        <div className="bg-[oklch(0.978_0.008_290)]" />
+      <div className="flex items-center justify-end gap-2 border-b border-hairline bg-paper px-4 py-2">
+        <button
+          type="button"
+          onClick={handleRefresh}
+          aria-label="Rebuild canvas"
+          className="flex items-center justify-center rounded-md border border-hairline bg-paper-raised px-3 py-2 text-mute transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+        >
+          <RefreshCw className="size-4" />
+        </button>
+        <DensitySlider onChange={setDensity} />
       </div>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        fitView
-        panOnDrag={false}
-        panOnScroll={false}
-        zoomOnScroll={false}
-        zoomOnPinch={false}
-        zoomOnDoubleClick={false}
-        preventScrolling={false}
-        nodesDraggable={false}
-        proOptions={{ hideAttribution: true }}
-        className="!bg-transparent"
-      >
-        <Background gap={24} size={1} color="oklch(0.92 0.005 35)" />
-        <Panel position="bottom-center" className="!m-3">
-          <p className="text-[11px] italic text-mute">
-            Closer to you means closer fit · Direction means kind of move
-          </p>
-        </Panel>
-        <Panel position="top-right" className="!m-3 flex items-stretch gap-2">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            aria-label="Rebuild canvas"
-            className="flex items-center justify-center rounded-md border border-hairline bg-paper-raised px-3 text-mute transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-          >
-            <RefreshCw className="size-4" />
-          </button>
-          <DensitySlider onChange={setDensity} />
-        </Panel>
-      </ReactFlow>
+
+      {/* Canvas — flex-1 fills the remaining vertical space. */}
+      <div className="relative flex-1">
+        {/*
+          Quadrant tints — barely-visible cream variants, one per canvas
+          region. Sit BEHIND React Flow's nodes via DOM order. Chroma stays
+          below 0.01 so they read as "tinted neutrals," not color blocks —
+          the brand register is editorial cream, not Memphis primary.
+        */}
+        <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
+          {/* top-left = Next steps — warm-yellow cream (most aspirational, draws eye) */}
+          <div className="bg-[oklch(0.985_0.008_70)]" />
+          {/* top-right = Sideways moves — cool-neutral cream */}
+          <div className="bg-[oklch(0.98_0.005_220)]" />
+          {/* bottom-left = Earlier chapters — slight green-cream (foundational, calm) */}
+          <div className="bg-[oklch(0.978_0.007_120)]" />
+          {/* bottom-right = A different chapter — lavender (alternative direction) */}
+          <div className="bg-[oklch(0.978_0.008_290)]" />
+        </div>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          panOnDrag={false}
+          panOnScroll={false}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          zoomOnDoubleClick={false}
+          preventScrolling={false}
+          nodesDraggable={false}
+          proOptions={{ hideAttribution: true }}
+          className="!bg-transparent"
+        >
+          <Background gap={24} size={1} color="oklch(0.92 0.005 35)" />
+          <Panel position="bottom-center" className="!m-3">
+            <p className="text-[11px] italic text-mute">
+              Closer to you means closer fit · Direction means kind of move
+            </p>
+          </Panel>
+        </ReactFlow>
+      </div>
+
       <CardPreviewSheet
         card={previewCard}
         open={previewCard !== null}

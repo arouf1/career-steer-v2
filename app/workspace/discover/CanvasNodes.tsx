@@ -116,3 +116,12 @@ export function LaneLabelNode({ data }: NodeProps) {
     </div>
   );
 }
+
+// Invisible 1px anchor used to stake out the canvas extent symmetrically
+// around (0, 0). Without four of these in the corners, React Flow's fitView
+// centers the bounding box of whatever cards exist — empty quadrants pull
+// the user node off-center. These nodes are non-interactive and visually
+// imperceptible.
+export function AnchorNode() {
+  return <div className="size-px" aria-hidden />;
+}
