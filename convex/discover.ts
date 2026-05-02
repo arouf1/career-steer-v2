@@ -6,6 +6,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  mutation,
   type ActionCtx,
   type MutationCtx,
   type QueryCtx,
@@ -921,5 +922,123 @@ export const _writeSnapshot = internalMutation({
         });
       }
     }
+  },
+});
+
+// ─── Public reaction mutations (Task 3.1) ───────────────────────────────
+//
+// These three mutations are the canvas UI's write surface for the saved /
+// dismissed reaction state on a guide. All three are auth-gated via
+// `requireUserId` (which throws "Not authenticated" on missing identity).
+// The `discover_reactions` table is keyed on (userId, guideId) via the
+// `by_user_and_guide` index — so each (user, guide) pair has at most one
+// row regardless of which mutation last touched it.
+
+/**
+ * Save a guide for the current user. Upserts into `discover_reactions` —
+ * if a row already exists for (userId, guideId), patches its `reaction` to
+ * `"saved"` (overwriting a prior `"dismissed"` state); otherwise inserts a
+ * fresh row. Idempotent: calling twice in a row leaves a single saved row.
+ */
+export const saveGuide = mutation({
+  args: { guideId: v.id("career_guides") },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const existing = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_guide", (q) =>
+        q.eq("userId", userId).eq("guideId", args.guideId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        reaction: "saved",
+        reactedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId: args.guideId,
+        reaction: "saved",
+        reactedAt: Date.now(),
+      });
+    }
+  },
+});
+
+/**
+ * Dismiss a guide for the current user. Same upsert semantics as
+ * `saveGuide` but writes `"dismissed"`. After persisting the reaction we
+ * schedule `internal.discover.refillAfterDismiss` to backfill the now-empty
+ * card slot on the canvas without a full snapshot regeneration. The refill
+ * action is currently a stub — Task 3.2 implements the in-place slot
+ * replacement.
+ */
+export const dismissGuide = mutation({
+  args: { guideId: v.id("career_guides") },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const existing = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_guide", (q) =>
+        q.eq("userId", userId).eq("guideId", args.guideId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        reaction: "dismissed",
+        reactedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId: args.guideId,
+        reaction: "dismissed",
+        reactedAt: Date.now(),
+      });
+    }
+    await ctx.scheduler.runAfter(0, internal.discover.refillAfterDismiss, {
+      userId,
+      guideId: args.guideId,
+    });
+  },
+});
+
+/**
+ * Remove a save for the current user. Deletes the `discover_reactions` row
+ * only when the existing reaction is `"saved"` — calling `removeSave` on a
+ * dismissed guide is a deliberate no-op so the user can't accidentally
+ * undo a dismissal through the save-undo path.
+ */
+export const removeSave = mutation({
+  args: { guideId: v.id("career_guides") },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const existing = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_guide", (q) =>
+        q.eq("userId", userId).eq("guideId", args.guideId),
+      )
+      .unique();
+    if (existing && existing.reaction === "saved") {
+      await ctx.db.delete(existing._id);
+    }
+  },
+});
+
+/**
+ * In-place slot refill triggered after a dismissal. Stub — Task 3.2 lands
+ * the real body that picks the next-best candidate for the dismissed card's
+ * lane/slot and patches the live snapshot without a full regen. Declared
+ * here so `dismissGuide`'s `ctx.scheduler.runAfter` call typechecks.
+ */
+export const refillAfterDismiss = internalAction({
+  args: {
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+  },
+  handler: async () => {
+    // TODO(Task 3.2): replace the dismissed card with the next-best candidate
+    // for its lane/slot and patch the live discover_canvases row.
   },
 });

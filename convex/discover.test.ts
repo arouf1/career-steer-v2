@@ -2,7 +2,7 @@
 import { convexTest } from "convex-test";
 import { describe, it, expect } from "vitest";
 import schema from "./schema";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 /**
@@ -1333,5 +1333,237 @@ describe("discover.generateSnapshot — failure handling", () => {
     expect(snap?.status).toBe("failed");
     expect(snap?.attempts ?? 0).toBeGreaterThan(0);
     expect(snap?.failureReason).toBeTruthy();
+  });
+});
+
+describe("discover reactions (saveGuide / dismissGuide / removeSave)", () => {
+  it("saveGuide writes a saved row", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, guideId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("save-target", "Save target"),
+      );
+      return { userId, guideId };
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "u-test",
+      email: "t@example.com",
+    });
+    await asUser.mutation(api.discover.saveGuide, { guideId });
+
+    const reactions = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_reactions")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", userId).eq("guideId", guideId),
+        )
+        .collect();
+    });
+    expect(reactions).toHaveLength(1);
+    expect(reactions[0].reaction).toBe("saved");
+  });
+
+  it("saveGuide upserts (idempotent)", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, guideId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("save-idempotent", "Save idempotent"),
+      );
+      return { userId, guideId };
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "u-test",
+      email: "t@example.com",
+    });
+    await asUser.mutation(api.discover.saveGuide, { guideId });
+    await asUser.mutation(api.discover.saveGuide, { guideId });
+
+    const reactions = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_reactions")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", userId).eq("guideId", guideId),
+        )
+        .collect();
+    });
+    expect(reactions).toHaveLength(1);
+    expect(reactions[0].reaction).toBe("saved");
+  });
+
+  it("dismissGuide writes a dismissed row AND refillAfterDismiss exists", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, guideId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("dismiss-target", "Dismiss target"),
+      );
+      return { userId, guideId };
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "u-test",
+      email: "t@example.com",
+    });
+    await asUser.mutation(api.discover.dismissGuide, { guideId });
+
+    const reactions = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_reactions")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", userId).eq("guideId", guideId),
+        )
+        .collect();
+    });
+    expect(reactions).toHaveLength(1);
+    expect(reactions[0].reaction).toBe("dismissed");
+
+    // refillAfterDismiss must exist as an internalAction so dismissGuide's
+    // ctx.scheduler.runAfter typechecks. Asserting the function reference is
+    // present is enough — Task 3.2 wires the actual body.
+    expect(internal.discover.refillAfterDismiss).toBeDefined();
+  });
+
+  it("dismissGuide also overwrites a previous saved reaction", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, guideId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("dismiss-overwrite", "Dismiss overwrite"),
+      );
+      return { userId, guideId };
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "u-test",
+      email: "t@example.com",
+    });
+    await asUser.mutation(api.discover.saveGuide, { guideId });
+    await asUser.mutation(api.discover.dismissGuide, { guideId });
+
+    const reactions = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_reactions")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", userId).eq("guideId", guideId),
+        )
+        .collect();
+    });
+    expect(reactions).toHaveLength(1);
+    expect(reactions[0].reaction).toBe("dismissed");
+  });
+
+  it("removeSave deletes a saved row", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, guideId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("remove-save", "Remove save"),
+      );
+      return { userId, guideId };
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "u-test",
+      email: "t@example.com",
+    });
+    await asUser.mutation(api.discover.saveGuide, { guideId });
+    await asUser.mutation(api.discover.removeSave, { guideId });
+
+    const reactions = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_reactions")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", userId).eq("guideId", guideId),
+        )
+        .collect();
+    });
+    expect(reactions).toHaveLength(0);
+  });
+
+  it("removeSave does NOT delete a dismissed row", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, guideId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      await ctx.db.insert("profiles", profileSeed(userId));
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("remove-save-noop", "Remove save no-op"),
+      );
+      return { userId, guideId };
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "u-test",
+      email: "t@example.com",
+    });
+    await asUser.mutation(api.discover.dismissGuide, { guideId });
+    await asUser.mutation(api.discover.removeSave, { guideId });
+
+    const reactions = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_reactions")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", userId).eq("guideId", guideId),
+        )
+        .collect();
+    });
+    expect(reactions).toHaveLength(1);
+    expect(reactions[0].reaction).toBe("dismissed");
   });
 });
