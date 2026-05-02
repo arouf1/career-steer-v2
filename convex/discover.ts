@@ -739,12 +739,8 @@ export const _readAllGuideEmbeddings = internalQuery({
 export const _readGuideOverviews = internalQuery({
   args: { guideIds: v.array(v.id("career_guides")) },
   handler: async (ctx, args) => {
-    const out: Array<Doc<"career_guides">> = [];
-    for (const id of args.guideIds) {
-      const g = await ctx.db.get(id);
-      if (g) out.push(g);
-    }
-    return out;
+    const docs = await Promise.all(args.guideIds.map((id) => ctx.db.get(id)));
+    return docs.filter((g): g is Doc<"career_guides"> => g !== null);
   },
 });
 
@@ -801,15 +797,21 @@ export const _invalidateReasonsForGuide = internalMutation({
     userIds: v.array(v.id("users")),
   },
   handler: async (ctx, args) => {
-    for (const userId of args.userIds) {
-      const row = await ctx.db
-        .query("discover_match_reasons")
-        .withIndex("by_user_and_guide", (q) =>
-          q.eq("userId", userId).eq("guideId", args.guideId),
-        )
-        .unique();
-      if (row) await ctx.db.delete(row._id);
-    }
+    const rows = await Promise.all(
+      args.userIds.map((userId) =>
+        ctx.db
+          .query("discover_match_reasons")
+          .withIndex("by_user_and_guide", (q) =>
+            q.eq("userId", userId).eq("guideId", args.guideId),
+          )
+          .unique(),
+      ),
+    );
+    await Promise.all(
+      rows
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+        .map((r) => ctx.db.delete(r._id)),
+    );
   },
 });
 
@@ -827,18 +829,18 @@ export const _readCachedReasons = internalQuery({
     guideIds: v.array(v.id("career_guides")),
   },
   handler: async (ctx, args) => {
-    const out: Doc<"discover_match_reasons">[] = [];
-    for (const guideId of args.guideIds) {
-      const row = await ctx.db
-        .query("discover_match_reasons")
-        .withIndex("by_user_and_guide", (q) =>
-          q.eq("userId", args.userId).eq("guideId", guideId),
-        )
-        .filter((q) => q.eq(q.field("profileEmbeddingId"), args.profileEmbeddingId))
-        .unique();
-      if (row) out.push(row);
-    }
-    return out;
+    const rows = await Promise.all(
+      args.guideIds.map((guideId) =>
+        ctx.db
+          .query("discover_match_reasons")
+          .withIndex("by_user_and_guide", (q) =>
+            q.eq("userId", args.userId).eq("guideId", guideId),
+          )
+          .filter((q) => q.eq(q.field("profileEmbeddingId"), args.profileEmbeddingId))
+          .unique(),
+      ),
+    );
+    return rows.filter((r): r is Doc<"discover_match_reasons"> => r !== null);
   },
 });
 
@@ -860,24 +862,31 @@ export const _writeReasons = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    for (const e of args.entries) {
-      const existing = await ctx.db
-        .query("discover_match_reasons")
-        .withIndex("by_user_and_guide", (q) =>
-          q.eq("userId", args.userId).eq("guideId", e.guideId),
-        )
-        .filter((q) => q.eq(q.field("profileEmbeddingId"), args.profileEmbeddingId))
-        .unique();
-      const doc = {
-        userId: args.userId,
-        guideId: e.guideId,
-        profileEmbeddingId: args.profileEmbeddingId,
-        reason: e.reason,
-        generatedAt: Date.now(),
-      };
-      if (existing) await ctx.db.replace(existing._id, doc);
-      else await ctx.db.insert("discover_match_reasons", doc);
-    }
+    const existing = await Promise.all(
+      args.entries.map((e) =>
+        ctx.db
+          .query("discover_match_reasons")
+          .withIndex("by_user_and_guide", (q) =>
+            q.eq("userId", args.userId).eq("guideId", e.guideId),
+          )
+          .filter((q) => q.eq(q.field("profileEmbeddingId"), args.profileEmbeddingId))
+          .unique(),
+      ),
+    );
+    await Promise.all(
+      args.entries.map(async (e, i) => {
+        const row = existing[i];
+        const doc = {
+          userId: args.userId,
+          guideId: e.guideId,
+          profileEmbeddingId: args.profileEmbeddingId,
+          reason: e.reason,
+          generatedAt: Date.now(),
+        };
+        if (row) await ctx.db.replace(row._id, doc);
+        else await ctx.db.insert("discover_match_reasons", doc);
+      }),
+    );
   },
 });
 
