@@ -1,6 +1,7 @@
 // app/workspace/discover/DiscoverCanvas.tsx
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { Authenticated, useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -205,8 +206,11 @@ function DiscoverCanvasInner() {
     return <DiscoverFailed onRetry={handleRefresh} />;
 
   return (
-    <div
+    <motion.div
       ref={wrapperRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
       className="relative h-full w-full overflow-hidden bg-white"
     >
       {/*
@@ -436,7 +440,7 @@ function DiscoverCanvasInner() {
         open={previewCard !== null}
         onOpenChange={(o) => !o && setPreviewCard(null)}
       />
-    </div>
+    </motion.div>
   );
 }
 
