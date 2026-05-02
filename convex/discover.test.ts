@@ -504,6 +504,28 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         generatedAt: Date.now(),
       });
 
+      // Filler candidates with low currentStateSim (~0.5) so they sort
+      // BELOW the 7 expected candidates (currentStateSim = 1.0) under
+      // percentile lane bucketing. Padding to 35 total ensures top 20%
+      // (= ceil(35 * 0.2) = 7) covers exactly the 7 expected candidates,
+      // putting them all in the linear lane.
+      for (let i = 0; i < 28; i++) {
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed(`filler-${i}`, `Filler ${i}`),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 1, 0, 0], // arcSim ≈ 0.707 (above floor)
+          currentStateVector: [0.5, 0.866, 0, 0], // currentStateSim ≈ 0.5
+          domainVector: [0, 1, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+      }
+
       return {
         userId,
         profileId,
@@ -661,6 +683,28 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
           fallbackCandidateIds.push(guideId);
         }
 
+        // Filler candidates with low currentStateSim (~0.5) so they sort
+        // BELOW the 7 expected candidates (currentStateSim = 1.0) under
+        // percentile lane bucketing. Padding to 35 total ensures top 20%
+        // (= ceil(35 * 0.2) = 7) covers exactly the 7 expected candidates,
+        // putting them all in the linear lane.
+        for (let i = 0; i < 28; i++) {
+          const guideId = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`filler-${i}`, `Filler ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [1, 1, 0, 0], // arcSim ≈ 0.707 (above floor)
+            currentStateVector: [0.5, 0.866, 0, 0], // currentStateSim ≈ 0.5
+            domainVector: [0, 1, 0, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+        }
+
         return { userId, profileId, embeddingId, fallbackCandidateIds };
       });
 
@@ -787,6 +831,28 @@ describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () =
           bridgeIds.push(guideId);
         }
 
+        // Filler candidates with low currentStateSim (~0.5) so they sort
+        // BELOW the 6 expected candidates (currentStateSim = 1.0) under
+        // percentile lane bucketing. Padding to 30 total ensures top 20%
+        // (= ceil(30 * 0.2) = 6) covers exactly the 6 expected candidates,
+        // putting them all in the linear lane.
+        for (let i = 0; i < 24; i++) {
+          const guideId = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`filler-${i}`, `Filler ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [1, 1, 0, 0], // arcSim ≈ 0.707 (above floor)
+            currentStateVector: [0.5, 0.866, 0, 0], // currentStateSim ≈ 0.5
+            domainVector: [0, 1, 0, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+        }
+
         return { userId, profileId, embeddingId, strongIds, bridgeIds };
       });
 
@@ -861,9 +927,16 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
         generatedAt: Date.now(),
       });
 
-      // 25 linear-lane candidates with slightly varied arcVectors so each has
-      // a unique arcSim above the floor (worst-case ~0.953 for i=24).
-      for (let i = 0; i < 25; i++) {
+      // 100 linear-lane candidates with slightly varied arcVectors so each
+      // has a unique arcSim above the floor (worst-case ~0.994 for i=99).
+      // Under percentile lane bucketing, top 20% of 100 = 20 land in linear,
+      // which is exactly 6 curated (3 strong + 2 bridge + 1 aspirational) +
+      // 14 extras (capped by LANE_BUDGET.EXTRA_MAX). The remaining 80
+      // candidates spill into adjacent + transformational, but those lanes
+      // get no curated picks here (they all sit at currentStateSim = 1.0,
+      // tied with linear, so the assertion at the end allows them to be
+      // empty after curation).
+      for (let i = 0; i < 100; i++) {
         const guideId = await ctx.db.insert(
           "career_guides",
           guideSeed(`extras-${i}`, `Extras ${i}`),
@@ -871,7 +944,7 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
         await ctx.db.insert("career_guide_embeddings", {
           guideId,
           wholeVector: [1, 0, 0, 0],
-          arcVector: [1 - i * 0.01, i * 0.01, 0, 0],
+          arcVector: [1 - i * 0.001, i * 0.001, 0, 0],
           currentStateVector: [1, 0, 0, 0],
           domainVector: [1, 0, 0, 0],
           dimensions: 4,
@@ -932,8 +1005,9 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
       const extras = linearLane!.cards.filter((c) => c.slotKind === "extra");
       // Cap on extras alone.
       expect(extras.length).toBeLessThanOrEqual(14);
-      // Proof that we actually filled extras (we seeded 25 candidates, so
-      // after 6 curated there are 19 left → expect the cap of 14).
+      // Proof that we actually filled extras (we seeded 100 candidates and
+      // top 20% = 20 land in linear → after 6 curated there are 14 left,
+      // exactly hitting the EXTRA_MAX cap).
       expect(extras.length).toBeGreaterThan(0);
       expect(extras.length).toBe(14);
 
@@ -951,13 +1025,24 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
         );
       }
 
-      // Adjacent + transformational lanes have no candidates in this seed.
+      // Adjacent + transformational lanes also receive percentile-bucketed
+      // candidates from the same pool. We verify they too respect the
+      // EXTRA_MAX cap on their extras pools (the focus of this test is the
+      // per-lane extras-pool behavior, not lane emptiness — under percentile
+      // bucketing all three lanes get populated when the candidate pool is
+      // large enough).
       const adjacent = snapshot!.lanes.find((l) => l.kind === "adjacent");
       const transformational = snapshot!.lanes.find(
         (l) => l.kind === "transformational",
       );
-      expect(adjacent?.cards ?? []).toHaveLength(0);
-      expect(transformational?.cards ?? []).toHaveLength(0);
+      const adjacentExtras = (adjacent?.cards ?? []).filter(
+        (c) => c.slotKind === "extra",
+      );
+      const transformationalExtras = (transformational?.cards ?? []).filter(
+        (c) => c.slotKind === "extra",
+      );
+      expect(adjacentExtras.length).toBeLessThanOrEqual(14);
+      expect(transformationalExtras.length).toBeLessThanOrEqual(14);
     } finally {
       delete (globalThis as any).__testRerank__;
       delete (globalThis as any).__testReasonsLLM__;
