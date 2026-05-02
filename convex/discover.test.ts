@@ -313,7 +313,7 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
           generatedAt: Date.now(),
         });
 
-        // Linear: high currentStateSim (1.0 ≥ 0.7).
+        // Linear: high currentStateSim (1.0 ≥ 0.75).
         const linearId = await ctx.db.insert(
           "career_guides",
           guideSeed("linear-a", "Linear A"),
@@ -329,7 +329,7 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
           generatedAt: Date.now(),
         });
 
-        // Adjacent: ~0.5 currentStateSim (≥ 0.45 and < 0.7).
+        // Adjacent: ~0.65 currentStateSim (≥ 0.6 and < 0.75).
         const adjacentId = await ctx.db.insert(
           "career_guides",
           guideSeed("adjacent-a", "Adjacent A"),
@@ -338,14 +338,14 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
           guideId: adjacentId,
           wholeVector: [1, 0, 0, 0],
           arcVector: [1, 0, 0, 0],
-          currentStateVector: [0.5, 0.866, 0, 0],
+          currentStateVector: [0.65, 0.7599, 0, 0],
           domainVector: [1, 0, 0, 0],
           dimensions: 4,
           model: "test",
           generatedAt: Date.now(),
         });
 
-        // Transformational: orthogonal currentState (0 < 0.45).
+        // Transformational: orthogonal currentState (0 < 0.6).
         const transId = await ctx.db.insert(
           "career_guides",
           guideSeed("trans-a", "Transformational A"),

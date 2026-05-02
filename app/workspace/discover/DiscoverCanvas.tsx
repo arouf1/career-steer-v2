@@ -13,6 +13,7 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { RefreshCw } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
 import { GuideCardNode, UserNodeView, LaneLabelNode } from "./CanvasNodes";
@@ -176,7 +177,15 @@ function DiscoverCanvasInner() {
             Closer to you means closer fit · Direction means kind of move
           </p>
         </Panel>
-        <Panel position="top-right" className="!m-3 flex gap-2">
+        <Panel position="top-right" className="!m-3 flex items-stretch gap-2">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            aria-label="Rebuild canvas"
+            className="flex items-center justify-center rounded-md border border-hairline bg-paper-raised px-3 text-mute transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            <RefreshCw className="size-4" />
+          </button>
           <DensitySlider onChange={setDensity} />
         </Panel>
       </ReactFlow>

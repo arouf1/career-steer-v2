@@ -25,18 +25,18 @@ describe("cosineSim", () => {
 });
 
 describe("assignLane", () => {
-  it("assigns >= 0.7 to linear", () => {
-    expect(assignLane(0.7)).toBe("linear");
+  it("assigns >= 0.75 to linear", () => {
+    expect(assignLane(0.75)).toBe("linear");
     expect(assignLane(0.95)).toBe("linear");
   });
 
-  it("assigns 0.45..<0.7 to adjacent", () => {
-    expect(assignLane(0.45)).toBe("adjacent");
-    expect(assignLane(0.6999)).toBe("adjacent");
+  it("assigns 0.6..<0.75 to adjacent", () => {
+    expect(assignLane(0.6)).toBe("adjacent");
+    expect(assignLane(0.7499)).toBe("adjacent");
   });
 
-  it("assigns < 0.45 to transformational", () => {
-    expect(assignLane(0.4499)).toBe("transformational");
+  it("assigns < 0.6 to transformational", () => {
+    expect(assignLane(0.5999)).toBe("transformational");
     expect(assignLane(0)).toBe("transformational");
   });
 });
