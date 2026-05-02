@@ -36,6 +36,7 @@ import type * as profileGuideSeeding from "../profileGuideSeeding.js";
 import type * as profiles from "../profiles.js";
 import type * as titleCanonicalization from "../titleCanonicalization.js";
 import type * as users from "../users.js";
+import type * as usersAccount from "../usersAccount.js";
 
 import type {
   ApiFromModules,
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   profiles: typeof profiles;
   titleCanonicalization: typeof titleCanonicalization;
   users: typeof users;
+  usersAccount: typeof usersAccount;
 }>;
 
 /**

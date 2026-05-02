@@ -3006,13 +3006,11 @@ describe("users.deleteAccount cascade — discover tables", () => {
     expect(beforeReactions).toHaveLength(1);
     expect(beforeReasons).toHaveLength(1);
 
-    // Delete account.
-    await t
-      .withIdentity({
-        tokenIdentifier: "u-cascade-test",
-        email: "cascade@example.com",
-      })
-      .mutation(api.users.deleteAccount, {});
+    // Delete account (data-only path — production goes through the
+    // Clerk-aware action in usersAccount.ts; tests exercise cascade only).
+    await t.mutation(internal.users.deleteByTokenIdentifierInternal, {
+      tokenIdentifier: "u-cascade-test",
+    });
 
     // All four tables should be empty.
     const afterCanvases = await t.run(async (ctx) =>
@@ -3077,10 +3075,10 @@ describe("users.deleteAccount cascade — discover tables", () => {
       return { userA, userB, guideId };
     });
 
-    // Delete account for user A.
-    await t
-      .withIdentity({ tokenIdentifier: "u-a", email: "a@b.co" })
-      .mutation(api.users.deleteAccount, {});
+    // Delete account for user A (data-only cascade path).
+    await t.mutation(internal.users.deleteByTokenIdentifierInternal, {
+      tokenIdentifier: "u-a",
+    });
 
     // User B's reaction should still exist.
     const remaining = await t.run(async (ctx) =>

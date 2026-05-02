@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "convex/react";
+import { useAction } from "convex/react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import {
@@ -25,11 +25,9 @@ const DATA_CLASSES = [
 
 type Status =
   | { kind: "idle" }
-  | { kind: "deleting-data" }
-  | { kind: "closing-account" }
+  | { kind: "deleting" }
   | { kind: "signing-out" }
-  | { kind: "error"; message: string }
-  | { kind: "partial"; message: string };
+  | { kind: "error"; message: string };
 
 interface Props {
   trigger: React.ReactNode;
@@ -41,14 +39,16 @@ export function DeleteAccountDialog({ trigger }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const router = useRouter();
-  const deleteAccount = useMutation(api.users.deleteAccount);
+  // Server-side action: deletes the Clerk user via the Backend SDK and
+  // cascades all Convex data in one atomic-ish call. Uses the admin secret
+  // key so it works regardless of Clerk's "allow self delete" dashboard
+  // toggle.
+  const deleteAccount = useAction(api.usersAccount.deleteAccount);
   const { user } = useUser();
   const { signOut } = useClerk();
 
   const inFlight =
-    status.kind === "deleting-data" ||
-    status.kind === "closing-account" ||
-    status.kind === "signing-out";
+    status.kind === "deleting" || status.kind === "signing-out";
 
   const canConfirm = confirmInput === CONFIRM_PHRASE && !inFlight && !!user;
 
@@ -60,34 +60,20 @@ export function DeleteAccountDialog({ trigger }: Props) {
   async function onConfirm() {
     if (!canConfirm || !user) return;
 
-    // Step 1 — Convex cascade. If this throws, nothing is destroyed yet.
-    setStatus({ kind: "deleting-data" });
+    // Single server call: Clerk delete + Convex cascade. If this throws,
+    // nothing is destroyed (Clerk delete runs first, errors before cascade).
+    setStatus({ kind: "deleting" });
     try {
-      await deleteAccount({});
+      await deleteAccount();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Couldn't remove your data.";
+      const message =
+        err instanceof Error ? err.message : "Couldn't delete your account.";
       setStatus({ kind: "error", message });
       return;
     }
 
-    // Step 2 — Clerk delete. If this fails, Convex data is already gone.
-    // We surface a partial-success message and stop short of redirect so the
-    // user actually reads it. The Clerk webhook is the safety net that runs
-    // the Convex cascade idempotently when Clerk is eventually deleted.
-    setStatus({ kind: "closing-account" });
-    try {
-      await user.delete();
-    } catch {
-      setStatus({
-        kind: "partial",
-        message:
-          "Your data has been removed, but closing the sign-in account hit a snag. Please contact support to finish closing it.",
-      });
-      return;
-    }
-
-    // Step 3 — sign out + redirect home (Clerk session is already invalid,
-    // this is belt-and-braces).
+    // Sign out + redirect home. Clerk session is already invalid since the
+    // user was deleted server-side; this clears the local session state.
     setStatus({ kind: "signing-out" });
     try {
       await signOut({ redirectUrl: "/" });
@@ -103,13 +89,11 @@ export function DeleteAccountDialog({ trigger }: Props) {
   }
 
   const primaryLabel =
-    status.kind === "deleting-data"
-      ? "Removing your data…"
-      : status.kind === "closing-account"
-        ? "Closing account…"
-        : status.kind === "signing-out"
-          ? "Signing out…"
-          : "Delete account";
+    status.kind === "deleting"
+      ? "Deleting your account…"
+      : status.kind === "signing-out"
+        ? "Signing out…"
+        : "Delete account";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -154,7 +138,7 @@ export function DeleteAccountDialog({ trigger }: Props) {
           </p>
         </div>
 
-        {(status.kind === "error" || status.kind === "partial") && (
+        {status.kind === "error" && (
           <p role="alert" className="type-body text-state-error">
             {status.message}
           </p>

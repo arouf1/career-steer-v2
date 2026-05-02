@@ -169,24 +169,6 @@ const cascadeDeleteUser = async (
   await ctx.db.delete(userId);
 };
 
-export const deleteAccount = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_tokenIdentifier", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-    if (!user) return;
-
-    await cascadeDeleteUser(ctx, user._id);
-  },
-});
-
 export const deleteByTokenIdentifierInternal = internalMutation({
   args: { tokenIdentifier: v.string() },
   handler: async (ctx, args) => {
