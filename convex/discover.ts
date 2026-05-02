@@ -969,10 +969,10 @@ export const saveGuide = mutation({
 /**
  * Dismiss a guide for the current user. Same upsert semantics as
  * `saveGuide` but writes `"dismissed"`. After persisting the reaction we
- * schedule `internal.discover.refillAfterDismiss` to backfill the now-empty
- * card slot on the canvas without a full snapshot regeneration. The refill
- * action is currently a stub — Task 3.2 implements the in-place slot
- * replacement.
+ * schedule `internal.discover.refillAfterDismiss` to backfill the dismissed
+ * card slot on the canvas. v1 of `refillAfterDismiss` triggers a full
+ * snapshot regen (the dismissal filter in `generateSnapshot` Step 4 then
+ * drops the dismissed guide); surgical per-slot refill is a follow-up.
  */
 export const dismissGuide = mutation({
   args: { guideId: v.id("career_guides") },
@@ -1027,18 +1027,40 @@ export const removeSave = mutation({
 });
 
 /**
- * In-place slot refill triggered after a dismissal. Stub — Task 3.2 lands
- * the real body that picks the next-best candidate for the dismissed card's
- * lane/slot and patches the live snapshot without a full regen. Declared
- * here so `dismissGuide`'s `ctx.scheduler.runAfter` call typechecks.
+ * Refill the dismissed slot after a `dismissGuide` mutation.
+ *
+ * v1 simplicity: instead of surgically patching the dismissed card in the
+ * live snapshot, we trigger a full snapshot regeneration via
+ * `scheduleSnapshotRegeneration`. The dismissal is already persisted in
+ * `discover_reactions`, so when `generateSnapshot` re-runs, Step 4's
+ * dismissal filter drops the dismissed guide and Steps 5–8 fill its slot
+ * from fresh candidates. `forceFreshReasons` is `false` so unchanged cards
+ * reuse their cached why-match reasons.
+ *
+ * The body uses `ctx.scheduler.runAfter(0, ...)` rather than
+ * `ctx.runMutation(...)` deliberately: the regen mutation itself goes on to
+ * schedule `generateSnapshot` (a third hop), and a `runMutation`-then-
+ * scheduler-call composition has had subtle race conditions in
+ * `convex-test`. Scheduling all hops via `runAfter` keeps the chain uniform
+ * and matches how production fan-out works for this flow anyway.
+ *
+ * Surgical per-slot refill (no full regen, just patch one card in place) is
+ * a deliberate post-v1 follow-up — see the discover plan.
  */
 export const refillAfterDismiss = internalAction({
   args: {
     userId: v.id("users"),
     guideId: v.id("career_guides"),
   },
-  handler: async () => {
-    // TODO(Task 3.2): replace the dismissed card with the next-best candidate
-    // for its lane/slot and patch the live discover_canvases row.
+  handler: async (ctx, args) => {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.discover.scheduleSnapshotRegeneration,
+      {
+        userId: args.userId,
+        dedupKey: `refill:${args.guideId}`,
+        forceFreshReasons: false,
+      },
+    );
   },
 });

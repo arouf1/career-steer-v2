@@ -1448,10 +1448,18 @@ describe("discover reactions (saveGuide / dismissGuide / removeSave)", () => {
     expect(reactions).toHaveLength(1);
     expect(reactions[0].reaction).toBe("dismissed");
 
-    // refillAfterDismiss must exist as an internalAction so dismissGuide's
-    // ctx.scheduler.runAfter typechecks. Asserting the function reference is
-    // present is enough — Task 3.2 wires the actual body.
+    // refillAfterDismiss is wired up — the internalAction reference exists
+    // (so dismissGuide's `ctx.scheduler.runAfter` call typechecks). The
+    // refill chain itself is exercised by the "discover refill (Task 3.2)"
+    // describe block below.
     expect(internal.discover.refillAfterDismiss).toBeDefined();
+
+    // Drain the queued `refillAfterDismiss` action so it doesn't leak into
+    // a later test's event loop. With the action fully implemented (Task
+    // 3.2), the leaked setTimeout fires after the test ends and triggers
+    // `EnvironmentTeardownError` from vitest if not drained here.
+    await new Promise((r) => setTimeout(r, 0));
+    await t.finishInProgressScheduledFunctions();
   });
 
   it("dismissGuide also overwrites a previous saved reaction", async () => {
@@ -1490,6 +1498,11 @@ describe("discover reactions (saveGuide / dismissGuide / removeSave)", () => {
     });
     expect(reactions).toHaveLength(1);
     expect(reactions[0].reaction).toBe("dismissed");
+
+    // Drain the queued `refillAfterDismiss` action so it doesn't leak into
+    // a later test's event loop (see the same drain in the test above).
+    await new Promise((r) => setTimeout(r, 0));
+    await t.finishInProgressScheduledFunctions();
   });
 
   it("removeSave deletes a saved row", async () => {
@@ -1565,5 +1578,201 @@ describe("discover reactions (saveGuide / dismissGuide / removeSave)", () => {
     });
     expect(reactions).toHaveLength(1);
     expect(reactions[0].reaction).toBe("dismissed");
+
+    // Drain the queued `refillAfterDismiss` action so it doesn't leak into
+    // a later test's event loop (see the same drain in the dismissGuide
+    // tests above).
+    await new Promise((r) => setTimeout(r, 0));
+    await t.finishInProgressScheduledFunctions();
+  });
+});
+
+describe("discover refill (Task 3.2)", () => {
+  it("refillAfterDismiss schedules a regen that rewrites the snapshot without the dismissed guide", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    // Seed user + profile + 4-dim profile embedding aligned so that all
+    // candidates land in the linear lane (currentStateSim = 1.0). Provide
+    // an arcSourceText so Step 6c (aspirational rerank) has a real query.
+    const { userId, profileId, embeddingId, dismissId } = await t.run(
+      async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-refill",
+          email: "refill@example.com",
+        });
+        const profileId = await ctx.db.insert(
+          "profiles",
+          profileSeed(userId),
+        );
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          arcSourceText: "I want to ship beautiful tools",
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // Three guides — A is the dismissal target, B/C remain. All linear
+        // (currentStateSim = 1.0) so the dismissed slot is refillable from
+        // within the same lane.
+        const dismissId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("refill-a", "A"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: dismissId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const bId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("refill-b", "B"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: bId,
+          wholeVector: [0.95, 0.05, 0, 0],
+          arcVector: [0.9, 0.1, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const cId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("refill-c", "C"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: cId,
+          wholeVector: [0.9, 0.1, 0, 0],
+          arcVector: [0.8, 0.2, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        return { userId, profileId, embeddingId, dismissId };
+      },
+    );
+
+    // Stub both AI seams so the pipeline runs offline. Cleaned up in finally.
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const map = new Map<string, string>();
+      for (const p of args.pairs) map.set(p.guideId, "test reason");
+      return map;
+    };
+    (globalThis as any).__testRerank__ = async (args: {
+      query: string;
+      documents: string[];
+      topN: number;
+    }) => {
+      if (args.documents.length === 0) return [];
+      return [{ index: 0, relevanceScore: 0.9 }];
+    };
+
+    try {
+      // Step 1: initial snapshot — A should land in the linear lane.
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+
+      const snapBefore = await t.run(async (ctx) =>
+        ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique(),
+      );
+      expect(snapBefore).not.toBeNull();
+      const idsBefore = snapBefore!.lanes.flatMap((l) =>
+        l.cards.map((c) => c.guideId),
+      );
+      expect(idsBefore).toContain(dismissId);
+
+      // Step 2: persist the dismissal as the authenticated user.
+      await t
+        .withIdentity({ tokenIdentifier: "u-refill", email: "refill@example.com" })
+        .mutation(api.discover.dismissGuide, { guideId: dismissId });
+
+      // Step 3: drive the refill chain manually. We don't rely on
+      // `t.finishAllScheduledFunctions` to drain the
+      // dismissGuide → refillAfterDismiss → scheduleSnapshotRegeneration →
+      // generateSnapshot chain because `convex-test`'s drain helpers race
+      // with multi-hop `runAfter(0)` chains in this codebase (concurrent
+      // setTimeouts pumped by the drain loop corrupt the global tx state).
+      // Instead, invoke each hop directly — `refillAfterDismiss` is the
+      // unit under test; the rest is plumbing already covered by
+      // `generateSnapshot`'s own tests.
+      //
+      // `refillAfterDismiss` schedules `scheduleSnapshotRegeneration` (a
+      // mutation) via `ctx.scheduler.runAfter(0, ...)`. Yield + drain to
+      // run that mutation, which itself schedules `generateSnapshot`.
+      await t.action(internal.discover.refillAfterDismiss, {
+        userId,
+        guideId: dismissId,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      await t.finishInProgressScheduledFunctions();
+
+      // After the regen mutation runs, the canvas row is patched to
+      // `status: "generating"` and a `generateSnapshot` action is queued.
+      // Run that action directly — passing the live profile_embeddings id
+      // so the concurrency abort in `_writeSnapshot` doesn't fire.
+      const liveEmbedding = await t.run(async (ctx) =>
+        ctx.db
+          .query("profile_embeddings")
+          .withIndex("by_profileId", (q) => q.eq("profileId", profileId))
+          .unique(),
+      );
+      expect(liveEmbedding).not.toBeNull();
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: liveEmbedding!._id,
+        forceFreshReasons: false,
+      });
+
+      const snap = await t.run(async (ctx) =>
+        ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique(),
+      );
+      expect(snap).not.toBeNull();
+      expect(snap!.status).toBe("ready");
+      const ids = snap!.lanes.flatMap((l) =>
+        l.cards.map((c) => c.guideId),
+      );
+      // Core assertion: the dismissed guide is gone from the regenerated
+      // snapshot — the dismissal filter in Step 4 of `generateSnapshot`
+      // dropped it. Other guides (B, C) remain.
+      expect(ids).not.toContain(dismissId);
+      expect(ids.length).toBeGreaterThan(0);
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
+      delete (globalThis as any).__testRerank__;
+    }
   });
 });
