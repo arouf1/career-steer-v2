@@ -1,36 +1,43 @@
-export const SELF_RING_RADIUS = 140;
-export const MAX_RADIUS = 720;
-
-// 4-wedge cardinal-compass layout. Each wedge spans 90° and is centred on
-// one of the four cardinals (top / right / bottom / left). Together they
-// cover the full canvas — no dead zones — so every lane can splay outward
-// from the centre user node along a clear direction.
+// True 2x2 Cartesian quadrant layout for the Discover canvas.
 //
-// Screen coords (CCW from +X, Y grows downward):
-//   linear            top    270° centre,  225..315 wedge
-//   adjacent          right    0° centre,  -45..+45 wedge (handled via shift)
-//   earlier           bottom  90° centre,   45..135  wedge
-//   transformational  left   180° centre,  135..225  wedge
+// User node sits at (0, 0). Each lane occupies one corner-anchored quadrant:
+//   linear            → top-left      (x < 0, y < 0)  "Next steps"
+//   adjacent          → top-right     (x > 0, y < 0)  "Sideways moves"
+//   earlier           → bottom-left   (x < 0, y > 0)  "Earlier chapters"
+//   transformational  → bottom-right  (x > 0, y > 0)  "A different chapter"
 //
-// The "right" wedge wraps around 0° so we offset its start by -45° in the
-// position calc below — the resulting angles span [-45, 45] which is
-// trigonometrically equivalent to [315, 405].
-const WEDGE = {
-  linear: { centerDeg: 270, spreadDeg: 90 },
-  adjacent: { centerDeg: 0, spreadDeg: 90 },
-  earlier: { centerDeg: 90, spreadDeg: 90 },
-  transformational: { centerDeg: 180, spreadDeg: 90 },
-} as const;
+// Cards FILL the quadrant area (not just the perimeter) — within each
+// quadrant, distance from the user node is driven by slot kind and arcScore,
+// and a per-axis hash adds scatter so cards don't all line up.
 
-const SLOT_JITTER = {
-  strong: 0,
-  bridge: 15,
-  aspirational: 35,
-  extra: 8,
-} as const;
+// Inner edge: how close cards can sit to the user node (avoids collision).
+export const INNER_PADDING = 160;
+// Outer edge of each quadrant. With fitView the canvas scales to fit;
+// these values just establish the canvas's logical extent.
+export const QUADRANT_HALF_WIDTH = 720;
+export const QUADRANT_HALF_HEIGHT = 520;
 
 type Lane = "linear" | "adjacent" | "earlier" | "transformational";
 type Slot = "strong" | "bridge" | "aspirational" | "extra";
+
+// Quadrant signs: which corner the quadrant occupies in screen coords (Y down).
+// (-1,-1) = top-left, (1,-1) = top-right, (-1,1) = bottom-left, (1,1) = bottom-right.
+const QUADRANT_SIGN: Record<Lane, { x: -1 | 1; y: -1 | 1 }> = {
+  linear: { x: -1, y: -1 }, // top-left
+  adjacent: { x: 1, y: -1 }, // top-right
+  earlier: { x: -1, y: 1 }, // bottom-left
+  transformational: { x: 1, y: 1 }, // bottom-right
+};
+
+// How far OUT from user the card sits, as a fraction of the quadrant's
+// available radial span (0 = at INNER_PADDING, 1 = at outer edge).
+// Strong fits cluster closer; aspirational sits at the outer edge.
+const SLOT_BIAS: Record<Slot, number> = {
+  strong: 0.18,
+  bridge: 0.42,
+  aspirational: 0.78,
+  extra: 0.62,
+};
 
 function hashStringTo01(s: string): number {
   let h = 2166136261 >>> 0;
@@ -47,38 +54,53 @@ export function positionCard(args: {
   arcScore: number;
   guideId: string;
 }): { x: number; y: number } {
-  const wedge = WEDGE[args.lane];
-  const angleDeg =
-    wedge.centerDeg -
-    wedge.spreadDeg / 2 +
-    hashStringTo01(args.guideId) * wedge.spreadDeg;
-  const angleRad = (angleDeg * Math.PI) / 180;
+  const sign = QUADRANT_SIGN[args.lane];
 
-  // Screen coords: y grows downward. cos/sin of the angle puts the card on
-  // the correct side of the user node automatically:
-  //   top    (270°) → cos≈0,  sin≈-1 → y negative (upward)
-  //   right    (0°) → cos=1,  sin=0  → x positive
-  //   bottom  (90°) → cos≈0,  sin=1  → y positive (downward)
-  //   left   (180°) → cos=-1, sin≈0  → x negative
-  const baseRadius =
-    SELF_RING_RADIUS + (1 - args.arcScore) * (MAX_RADIUS - SELF_RING_RADIUS);
-  const radius = baseRadius + SLOT_JITTER[args.slotKind];
+  // Available radial span within this quadrant (from inner padding to outer edge).
+  const spanX = QUADRANT_HALF_WIDTH - INNER_PADDING;
+  const spanY = QUADRANT_HALF_HEIGHT - INNER_PADDING;
 
-  // L∞ (max-norm / Chebyshev) projection so the locus at "distance R" is a
-  // SQUARE inscribed at that radius — not a circle. With 4 cardinal-direction
-  // wedges, the cards in each lane then sit along one straight EDGE of the
-  // square frame around the user, instead of along an arc of a diamond.
-  //
-  // - At cardinal angles (0°, 90°, 180°, 270°): denom = 1 → unchanged.
-  // - At 45° corners: denom = √2/2 ≈ 0.707 → scale ×√2 ≈ 1.41 outward to
-  //   reach the corner of the square inscribed at `radius`.
-  const cos = Math.cos(angleRad);
-  const sin = Math.sin(angleRad);
-  const denom = Math.max(Math.abs(cos), Math.abs(sin));
-  const k = denom === 0 ? 0 : radius / denom;
+  // Card distance fraction (0 = at inner padding, 1 = at outer edge).
+  // Combine slot bias (where the slot kind tends to sit) with arcScore-based
+  // pull toward user (high arcScore = closer). Slot bias dominates so the
+  // strong/bridge/aspirational tiers stay visually distinct.
+  const arcPull = 1 - args.arcScore; // 0 = at user, 1 = far
+  const slotBias = SLOT_BIAS[args.slotKind];
+  // Weighted blend: 70% slot bias, 30% arc-score pull.
+  const t = Math.max(0, Math.min(1, 0.7 * slotBias + 0.3 * arcPull));
 
-  return {
-    x: k * cos,
-    y: k * sin,
-  };
+  // Two independent hashes so cards spread in BOTH dimensions.
+  const hashA = hashStringTo01(args.guideId);
+  const hashB = hashStringTo01(args.guideId + ":y");
+  // Bias each axis toward t with ± scatter so cards don't all line up.
+  const SCATTER = 0.32; // ±32% of the span
+  const fx = Math.max(0, Math.min(1, t + (hashA - 0.5) * SCATTER));
+  const fy = Math.max(0, Math.min(1, t + (hashB - 0.5) * SCATTER));
+
+  // Project into the quadrant: sign · (INNER_PADDING + f * span).
+  const x = sign.x * (INNER_PADDING + fx * spanX);
+  const y = sign.y * (INNER_PADDING + fy * spanY);
+
+  return { x, y };
 }
+
+// Center of each quadrant — used by DiscoverCanvas for lane label positions.
+// Geometric center between the inner padding edge and the outer edge.
+export const QUADRANT_CENTER: Record<Lane, { x: number; y: number }> = {
+  linear: {
+    x: -((INNER_PADDING + QUADRANT_HALF_WIDTH) / 2),
+    y: -((INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2),
+  },
+  adjacent: {
+    x: (INNER_PADDING + QUADRANT_HALF_WIDTH) / 2,
+    y: -((INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2),
+  },
+  earlier: {
+    x: -((INNER_PADDING + QUADRANT_HALF_WIDTH) / 2),
+    y: (INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2,
+  },
+  transformational: {
+    x: (INNER_PADDING + QUADRANT_HALF_WIDTH) / 2,
+    y: (INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2,
+  },
+};

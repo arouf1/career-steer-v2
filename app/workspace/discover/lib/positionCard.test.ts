@@ -1,44 +1,108 @@
 import { describe, it, expect } from "vitest";
-import { positionCard, SELF_RING_RADIUS, MAX_RADIUS } from "./positionCard";
+import {
+  positionCard,
+  QUADRANT_CENTER,
+  QUADRANT_HALF_WIDTH,
+  QUADRANT_HALF_HEIGHT,
+  INNER_PADDING,
+} from "./positionCard";
 
-const linfNorm = (p: { x: number; y: number }) =>
-  Math.max(Math.abs(p.x), Math.abs(p.y));
-
-describe("positionCard", () => {
-  it("strong-fit linear card with arcScore=1 sits exactly on the self-ring (L∞ — square inscribed at SELF_RING_RADIUS)", () => {
+describe("positionCard — quadrant layout", () => {
+  it("linear cards land in top-left quadrant (x < 0, y < 0)", () => {
     const p = positionCard({
       lane: "linear",
       slotKind: "strong",
-      arcScore: 1,
-      guideId: "any",
+      arcScore: 0.5,
+      guideId: "g1",
     });
-    // L∞ projection: the locus at "distance R" is a square, so max(|x|,|y|)
-    // exactly equals the radius (with slot jitter = 0 here).
-    expect(linfNorm(p)).toBeCloseTo(SELF_RING_RADIUS, 0);
-    // Top wedge (270° centre, 225..315 spread): y must be negative-leaning.
+    expect(p.x).toBeLessThan(0);
     expect(p.y).toBeLessThan(0);
   });
 
-  it("arcScore=0 sits near MAX_RADIUS in L∞ norm (with slot jitter)", () => {
+  it("adjacent cards land in top-right quadrant (x > 0, y < 0)", () => {
+    const p = positionCard({
+      lane: "adjacent",
+      slotKind: "strong",
+      arcScore: 0.5,
+      guideId: "g2",
+    });
+    expect(p.x).toBeGreaterThan(0);
+    expect(p.y).toBeLessThan(0);
+  });
+
+  it("earlier cards land in bottom-left quadrant (x < 0, y > 0)", () => {
+    const p = positionCard({
+      lane: "earlier",
+      slotKind: "strong",
+      arcScore: 0.5,
+      guideId: "g3",
+    });
+    expect(p.x).toBeLessThan(0);
+    expect(p.y).toBeGreaterThan(0);
+  });
+
+  it("transformational cards land in bottom-right quadrant (x > 0, y > 0)", () => {
     const p = positionCard({
       lane: "transformational",
       slotKind: "strong",
-      arcScore: 0,
-      guideId: "x",
+      arcScore: 0.5,
+      guideId: "g4",
     });
-    // Square geometry: assert max-norm rather than L2.
-    expect(linfNorm(p)).toBeCloseTo(MAX_RADIUS, -1); // within ~10px
+    expect(p.x).toBeGreaterThan(0);
+    expect(p.y).toBeGreaterThan(0);
+  });
+
+  it("respects INNER_PADDING — no card sits closer than INNER_PADDING to either axis", () => {
+    for (const lane of [
+      "linear",
+      "adjacent",
+      "earlier",
+      "transformational",
+    ] as const) {
+      for (let i = 0; i < 50; i++) {
+        const p = positionCard({
+          lane,
+          slotKind: "strong",
+          arcScore: 1,
+          guideId: `g${i}`,
+        });
+        // Some scatter latitude — the floor is INNER_PADDING but scatter can
+        // pull a single axis a touch lower; assert against a generous fraction.
+        expect(Math.abs(p.x)).toBeGreaterThanOrEqual(INNER_PADDING * 0.6);
+        expect(Math.abs(p.y)).toBeGreaterThanOrEqual(INNER_PADDING * 0.6);
+      }
+    }
+  });
+
+  it("respects outer bounds — no card sits past QUADRANT_HALF_WIDTH/HEIGHT", () => {
+    for (const lane of [
+      "linear",
+      "adjacent",
+      "earlier",
+      "transformational",
+    ] as const) {
+      for (let i = 0; i < 50; i++) {
+        const p = positionCard({
+          lane,
+          slotKind: "extra",
+          arcScore: 0,
+          guideId: `g${i}`,
+        });
+        expect(Math.abs(p.x)).toBeLessThanOrEqual(QUADRANT_HALF_WIDTH * 1.05);
+        expect(Math.abs(p.y)).toBeLessThanOrEqual(QUADRANT_HALF_HEIGHT * 1.05);
+      }
+    }
   });
 
   it("returns the same position for the same guideId (deterministic)", () => {
     const a = positionCard({
-      lane: "adjacent",
+      lane: "earlier",
       slotKind: "extra",
       arcScore: 0.5,
       guideId: "stable-id",
     });
     const b = positionCard({
-      lane: "adjacent",
+      lane: "earlier",
       slotKind: "extra",
       arcScore: 0.5,
       guideId: "stable-id",
@@ -46,7 +110,8 @@ describe("positionCard", () => {
     expect(a).toEqual(b);
   });
 
-  it("aspirational slot lands ~35px farther than its arcScore would suggest (in L∞ norm)", () => {
+  it("strong-slot cards sit closer to the user than aspirational-slot cards (same arcScore)", () => {
+    // With slot bias dominating, strong (0.18 bias) sits closer than aspirational (0.78 bias).
     const strong = positionCard({
       lane: "linear",
       slotKind: "strong",
@@ -59,77 +124,19 @@ describe("positionCard", () => {
       arcScore: 0.5,
       guideId: "g",
     });
-    // Same guideId + lane → same projected angle. With L∞ projection, the
-    // 35px slot offset is the difference in `radius` parameter, which maps
-    // 1:1 onto max(|x|,|y|) when projected through L∞.
-    expect(linfNorm(asp) - linfNorm(strong)).toBeCloseTo(35, -1);
+    const strongDist = Math.sqrt(strong.x ** 2 + strong.y ** 2);
+    const aspDist = Math.sqrt(asp.x ** 2 + asp.y ** 2);
+    expect(aspDist).toBeGreaterThan(strongDist);
   });
 
-  it("L∞ square geometry: a card whose angle hits a 45° corner has |x| ≈ |y| ≈ radius", () => {
-    // Linear wedge spans [225°, 315°]; the corners at 225° and 315° need
-    // the hash to fall at 0 or 1. Search a few guideIds for one whose angle
-    // lands close to a corner.
-    const candidates = ["corner-a", "corner-b", "corner-c", "corner-d", "corner-e", "edge-fffff"];
-    let cornerlike: { x: number; y: number } | null = null;
-    for (const id of candidates) {
-      const p = positionCard({
-        lane: "linear",
-        slotKind: "strong",
-        arcScore: 1,
-        guideId: id,
-      });
-      // A corner-like point has |x| roughly equal to |y|.
-      const ratio = Math.min(Math.abs(p.x), Math.abs(p.y)) /
-        Math.max(Math.abs(p.x), Math.abs(p.y));
-      if (ratio > 0.7) {
-        cornerlike = p;
-        break;
-      }
-    }
-    // Even if none of the seeded ids land near a corner, the invariant we
-    // really care about is: max(|x|,|y|) == SELF_RING_RADIUS for any seed.
-    // (L∞ holds for every angle in the wedge, not just corners.)
-    const fallback = positionCard({
-      lane: "linear",
-      slotKind: "strong",
-      arcScore: 1,
-      guideId: "fallback",
-    });
-    const point = cornerlike ?? fallback;
-    expect(linfNorm(point)).toBeCloseTo(SELF_RING_RADIUS, 0);
-  });
-
-  it("adjacent (right) wedge has positive x and small |y|", () => {
-    // Right wedge spans [-45, 45]: cos > 0, |sin| ≤ √2/2.
-    const p = positionCard({
-      lane: "adjacent",
-      slotKind: "strong",
-      arcScore: 0.5,
-      guideId: "right-wedge",
-    });
-    expect(p.x).toBeGreaterThan(0);
-    expect(Math.abs(p.y)).toBeLessThan(Math.abs(p.x));
-  });
-
-  it("earlier (bottom) wedge has positive y", () => {
-    // Bottom wedge spans [45, 135]: sin > 0, screen Y down.
-    const p = positionCard({
-      lane: "earlier",
-      slotKind: "strong",
-      arcScore: 0.5,
-      guideId: "bottom-wedge",
-    });
-    expect(p.y).toBeGreaterThan(0);
-  });
-
-  it("transformational (left) wedge has negative x", () => {
-    // Left wedge spans [135, 225]: cos < 0.
-    const p = positionCard({
-      lane: "transformational",
-      slotKind: "strong",
-      arcScore: 0.5,
-      guideId: "left-wedge",
-    });
-    expect(p.x).toBeLessThan(0);
+  it("QUADRANT_CENTER returns the geometric center of each quadrant", () => {
+    expect(QUADRANT_CENTER.linear.x).toBeLessThan(0);
+    expect(QUADRANT_CENTER.linear.y).toBeLessThan(0);
+    expect(QUADRANT_CENTER.adjacent.x).toBeGreaterThan(0);
+    expect(QUADRANT_CENTER.adjacent.y).toBeLessThan(0);
+    expect(QUADRANT_CENTER.earlier.x).toBeLessThan(0);
+    expect(QUADRANT_CENTER.earlier.y).toBeGreaterThan(0);
+    expect(QUADRANT_CENTER.transformational.x).toBeGreaterThan(0);
+    expect(QUADRANT_CENTER.transformational.y).toBeGreaterThan(0);
   });
 });

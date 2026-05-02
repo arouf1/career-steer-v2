@@ -7,7 +7,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
-  Controls,
   Panel,
   type Node,
   type Edge,
@@ -20,7 +19,7 @@ import { GuideCardNode, UserNodeView, LaneLabelNode } from "./CanvasNodes";
 import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
 import { DensitySlider, type Density } from "./DensitySlider";
 import { DiscoverGenerating, DiscoverFailed } from "./DiscoverEmptyState";
-import { positionCard, MAX_RADIUS } from "./lib/positionCard";
+import { positionCard, QUADRANT_CENTER } from "./lib/positionCard";
 
 const nodeTypes = {
   guide: GuideCardNode,
@@ -34,26 +33,6 @@ const LANE_LABEL_TEXT = {
   earlier: "Earlier chapters",
   transformational: "A different chapter",
 } as const;
-
-const LANE_LABEL_POSITION = {
-  // Outer-edge label positions, ~MAX_RADIUS + 24 along each wedge centre.
-  // 4-wedge cardinal-compass layout (matches `positionCard` WEDGE).
-  // Screen coords (Y down):
-  //   linear            top    (270°)
-  //   adjacent          right    (0°)
-  //   earlier           bottom  (90°)
-  //   transformational  left   (180°)
-  linear: { angleDeg: 270, offset: MAX_RADIUS + 24 },
-  adjacent: { angleDeg: 0, offset: MAX_RADIUS + 24 },
-  earlier: { angleDeg: 90, offset: MAX_RADIUS + 24 },
-  transformational: { angleDeg: 180, offset: MAX_RADIUS + 24 },
-};
-
-function laneLabelPos(lane: keyof typeof LANE_LABEL_POSITION) {
-  const p = LANE_LABEL_POSITION[lane];
-  const rad = (p.angleDeg * Math.PI) / 180;
-  return { x: Math.cos(rad) * p.offset, y: Math.sin(rad) * p.offset };
-}
 
 function DiscoverCanvasInner() {
   const { user } = useUser();
@@ -140,7 +119,7 @@ function DiscoverCanvasInner() {
     ).map((lane) => ({
       id: `label:${lane}`,
       type: "laneLabel",
-      position: laneLabelPos(lane),
+      position: QUADRANT_CENTER[lane],
       data: {
         kind: lane,
         label: LANE_LABEL_TEXT[lane],
@@ -173,28 +152,31 @@ function DiscoverCanvasInner() {
         the brand register is editorial cream, not Memphis primary.
       */}
       <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
-        {/* top-left: shared between linear (top) and different (left) — cool neutral */}
-        <div className="bg-[oklch(0.98_0.006_220)]" />
-        {/* top-right: linear + adjacent — barely-warmer cream */}
-        <div className="bg-[oklch(0.985_0.007_70)]" />
-        {/* bottom-left: earlier + different — subtle lavender */}
-        <div className="bg-[oklch(0.975_0.006_290)]" />
-        {/* bottom-right: earlier + adjacent — slightly cooler cream */}
-        <div className="bg-[oklch(0.98_0.005_100)]" />
+        {/* top-left = Next steps — warm-yellow cream (most aspirational, draws eye) */}
+        <div className="bg-[oklch(0.985_0.008_70)]" />
+        {/* top-right = Sideways moves — cool-neutral cream */}
+        <div className="bg-[oklch(0.98_0.005_220)]" />
+        {/* bottom-left = Earlier chapters — slight green-cream (foundational, calm) */}
+        <div className="bg-[oklch(0.978_0.007_120)]" />
+        {/* bottom-right = A different chapter — lavender (alternative direction) */}
+        <div className="bg-[oklch(0.978_0.008_290)]" />
       </div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
-        minZoom={0.5}
-        maxZoom={1.6}
+        panOnDrag={false}
+        panOnScroll={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
+        preventScrolling={false}
         nodesDraggable={false}
         proOptions={{ hideAttribution: true }}
         className="!bg-transparent"
       >
         <Background gap={24} size={1} color="oklch(0.92 0.005 35)" />
-        <Controls showInteractive={false} showFitView />
         <Panel position="bottom-center" className="!m-3">
           <p className="text-[11px] italic text-mute">
             Closer to you means closer fit · Direction means kind of move

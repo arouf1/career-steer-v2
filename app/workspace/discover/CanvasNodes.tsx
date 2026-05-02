@@ -100,17 +100,19 @@ export function UserNodeView({ data }: NodeProps) {
 export function LaneLabelNode({ data }: NodeProps) {
   const d = data as unknown as LaneLabelData;
   return (
-    <div className="pointer-events-none flex items-baseline gap-2 whitespace-nowrap">
-      {/*
-        Lane labels are now the canvas's primary navigational scaffold —
-        bumped from 11px to the project's `type-label` token (13px / 0.06em
-        tracking, weight 500) and widened slightly via `tracking-[0.18em]`
-        for editorial section-header presence. Count stays subdued at 11px.
-      */}
-      <span className="type-label uppercase tracking-[0.18em] text-ink">
+    // Sit at the geometric center of the quadrant. Cards render above on
+    // hover via React Flow's z-stacking + the GuideCardNode's `hover:z-10`.
+    // `pointer-events-none` keeps clicks falling through to the cards beneath.
+    <div
+      style={{ zIndex: 0 }}
+      className="pointer-events-none flex flex-col items-center gap-1 whitespace-nowrap"
+    >
+      <span className="font-medium uppercase tracking-[0.2em] text-base text-ink/85">
         {d.label}
       </span>
-      <span className="text-[11px] text-mute">· {d.count}</span>
+      <span className="text-[11px] text-mute">
+        {d.count} {d.count === 1 ? "guide" : "guides"}
+      </span>
     </div>
   );
 }
