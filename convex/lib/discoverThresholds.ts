@@ -17,22 +17,37 @@ export type LaneKind = "linear" | "adjacent" | "transformational";
 export const ARC_SIM_FLOOR = 0.5;
 
 /**
- * Absolute wholeSim threshold for the "sideways moves" lane. A candidate must
- * be in the top 20-50% rank AND exceed this threshold to land in adjacent —
- * otherwise it falls through to transformational ("a different chapter").
+ * Per-lane absolute wholeSim floors. A candidate must clear its lane's floor
+ * to enter that lane; below-floor candidates fall through to transformational
+ * ("a different chapter").
  *
- * Why: Gemini text embeddings have a ~0.6-0.7 noise floor for any two
- * career-related texts (shared "professional language"). Pure rank bucketing
- * always populates sideways with whatever's in the middle of the user's pool
- * even when nothing is genuinely a lateral move. This threshold prevents the
- * lane from filling with cross-domain false positives. If the user has no
- * real sideways candidates, the lane is correctly empty.
+ * Why per-lane: with 4-way stage bucketing, the stage signal disambiguates
+ * forward / sideways / earlier from each other. The wholeSim floor's job is
+ * narrower — keep cross-domain noise out of the three high-signal lanes. The
+ * floor can be slightly more permissive for `earlier` because stage gives us
+ * extra confidence: "wholeSim 0.69 + lower stage" is more clearly a genuine
+ * earlier-stage role in the user's domain than "wholeSim 0.69 + same stage"
+ * (which is more easily confused with a cross-domain peer).
  *
- * Calibrated against the AI Engineer demo: real lateral moves (ML Engineer,
- * Platform Engineer) score ~0.78+; cross-domain noise (Massage Therapist,
- * Zoologist) scores ~0.65-0.7. 0.72 splits them cleanly.
+ * Calibrated against the Head-of-ML demo against the live guide library:
+ *   - Real earlier-stage tech roles (Data Engineer, Data Scientist, Actuary,
+ *     SEO Manager) cluster at wholeSim 0.69-0.73.
+ *   - Real lateral moves at the same level (Data Architect, Cloud Architect)
+ *     score ~0.74-0.78.
+ *   - Cross-domain noise (Massage Therapist, Park Ranger, Yoga Teacher)
+ *     scores ~0.55-0.65.
+ *   - Forward (senior-leadership) candidates would score ~0.78+ if guides
+ *     existed.
+ *
+ * Floors split these cleanly: 0.72 keeps Massage Therapist out of sideways;
+ * 0.68 lets Data Engineer / Data Scientist into earlier while still keeping
+ * Park Ranger out.
  */
-export const SIDEWAYS_WHOLE_SIM_FLOOR = 0.72;
+export const LANE_WHOLE_SIM_FLOOR = {
+  linear: 0.72,
+  adjacent: 0.72,
+  earlier: 0.68,
+} as const;
 
 /** Curation budget per lane. */
 export const LANE_BUDGET = {

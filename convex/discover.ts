@@ -19,8 +19,8 @@ import {
   ASPIRATIONAL_RERANK_TOP_N,
   CANDIDATE_POOL_K,
   LANE_BUDGET,
+  LANE_WHOLE_SIM_FLOOR,
   REGEN_DEBOUNCE_MS,
-  SIDEWAYS_WHOLE_SIM_FLOOR,
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
 import { cosineSim, compareStages } from "./lib/discoverScoring";
@@ -505,20 +505,26 @@ async function runPipeline(
     (c) => !dismissed.has(c.guideId as string),
   );
 
-  // Step 5: 4-lane bucketing using career stage comparison + wholeSim signal
+  // Step 5: 4-lane bucketing using career stage comparison + per-lane wholeSim
   // floor.
   //
   // Lane semantics:
-  //   linear            ("Next steps")        — guide stage > user stage AND wholeSim ≥ floor
-  //   adjacent          ("Sideways moves")    — guide stage == user stage AND wholeSim ≥ floor
-  //   earlier           ("Earlier chapters")  — guide stage < user stage AND wholeSim ≥ floor
-  //   transformational  ("A different chapter") — wholeSim < floor OR stage missing
+  //   linear            ("Next steps")        — guide stage > user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.linear
+  //   adjacent          ("Sideways moves")    — guide stage == user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.adjacent
+  //   earlier           ("Earlier chapters")  — guide stage < user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.earlier
+  //   transformational  ("A different chapter") — wholeSim below the relevant lane floor OR stage missing
   //
-  // The wholeSim floor (SIDEWAYS_WHOLE_SIM_FLOOR, 0.72) keeps cross-domain
-  // noise out of the three "high signal" lanes. When user or guide stage is
-  // missing the candidate falls through to transformational rather than
-  // guessing — so guides that haven't been backfilled with
-  // `typicalCareerStage` yet still have a place to land.
+  // Per-lane floors (linear/adjacent: 0.72, earlier: 0.68): the stage signal
+  // disambiguates forward/sideways/earlier, but the wholeSim floor's job is
+  // narrower — keep cross-domain noise out of the three high-signal lanes.
+  // `earlier` tolerates a slightly lower floor because stage adds confidence
+  // ("wholeSim 0.69 + lower stage" is more clearly a genuine earlier-stage
+  // role in the user's domain than "wholeSim 0.69 + same stage", which is
+  // more easily confused with a cross-domain peer).
+  //
+  // When user or guide stage is missing the candidate falls through to
+  // transformational rather than guessing — so guides that haven't been
+  // backfilled with `typicalCareerStage` yet still have a place to land.
   //
   // Why this replaces percentile-based wholeSim bucketing: senior users (Head
   // of ML, Director) were seeing roles like Data Engineer / AI Engineer in
@@ -548,16 +554,17 @@ async function runPipeline(
   };
 
   for (const c of surviving) {
-    if (c.wholeSim < SIDEWAYS_WHOLE_SIM_FLOOR) {
-      byLane.transformational.push(c);
-      continue;
-    }
     const guideStage = stageByGuide.get(c.guideId as string);
     const cmp = compareStages(userStage, guideStage);
-    if (cmp === "forward") byLane.linear.push(c);
-    else if (cmp === "sideways") byLane.adjacent.push(c);
-    else if (cmp === "earlier") byLane.earlier.push(c);
-    else byLane.transformational.push(c);
+    if (cmp === "forward" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.linear) {
+      byLane.linear.push(c);
+    } else if (cmp === "sideways" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.adjacent) {
+      byLane.adjacent.push(c);
+    } else if (cmp === "earlier" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.earlier) {
+      byLane.earlier.push(c);
+    } else {
+      byLane.transformational.push(c);
+    }
   }
 
   // Sort each lane's pool by wholeSim desc so downstream slot pickers
