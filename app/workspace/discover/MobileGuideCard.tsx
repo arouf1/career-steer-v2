@@ -36,9 +36,11 @@ export function MobileGuideCard({
       type="button"
       onClick={onTap}
       className={cn(
-        "relative flex w-full flex-col gap-2 rounded-lg border bg-background px-4 py-3 text-left",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
-        isSaved && "border-hairline-strong bg-paper-raised",
+        "relative flex w-full flex-col gap-2 rounded-lg border px-4 py-3 text-left transition-all",
+        "hover:border-ink-deep hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
+        isSaved
+          ? "border-hairline-strong bg-paper-raised"
+          : "border-hairline bg-white",
       )}
     >
       <div className="flex items-baseline justify-between gap-2">

@@ -502,8 +502,15 @@ async function runPipeline(
     (c) => !dismissed.has(c.guideId as string),
   );
 
-  // Step 5: Lane assignment by currentStateSim percentile WITHIN the user's
+  // Step 5: Lane assignment by wholeSim percentile WITHIN the user's
   // surviving candidate pool.
+  //
+  // Why wholeSim instead of currentStateSim: wholeSim encodes the full profile
+  // (current role + arc + domain + skills) which separates tech from non-tech
+  // more cleanly than currentStateSim alone. Bucketing on currentStateSim
+  // surfaced noise like Park Ranger / Primary School Teacher in "Sideways
+  // moves" for an AI Engineer profile — the current-state facet alone doesn't
+  // carry enough signal to distinguish domains. The whole-profile vector does.
   //
   // Why percentile instead of absolute thresholds: Gemini's text-embedding
   // distribution for career-related content concentrates around cosine 0.6-0.7
@@ -517,18 +524,18 @@ async function runPipeline(
   // The fixed `LANE_THRESHOLDS` (LINEAR_MIN / ADJACENT_MIN) remain as soft
   // floors — exposed via `assignLane` for the saved-override below — but no
   // longer drive the primary bucketing.
-  const sortedByCurrent = [...surviving].sort(
-    (a, b) => b.currentStateSim - a.currentStateSim,
+  const sortedByWhole = [...surviving].sort(
+    (a, b) => b.wholeSim - a.wholeSim,
   );
-  const linearCount = Math.ceil(sortedByCurrent.length * 0.2);
-  const adjacentEnd = Math.ceil(sortedByCurrent.length * 0.5);
+  const linearCount = Math.ceil(sortedByWhole.length * 0.2);
+  const adjacentEnd = Math.ceil(sortedByWhole.length * 0.5);
   const byLane: Record<
     "linear" | "adjacent" | "transformational",
     ScoredCandidate[]
   > = {
-    linear: sortedByCurrent.slice(0, linearCount),
-    adjacent: sortedByCurrent.slice(linearCount, adjacentEnd),
-    transformational: sortedByCurrent.slice(adjacentEnd),
+    linear: sortedByWhole.slice(0, linearCount),
+    adjacent: sortedByWhole.slice(linearCount, adjacentEnd),
+    transformational: sortedByWhole.slice(adjacentEnd),
   };
 
   // Saved-guide override: if a lane ends up empty (only possible when the

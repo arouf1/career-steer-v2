@@ -159,7 +159,7 @@ function DiscoverCanvasInner() {
     return <DiscoverFailed onRetry={handleRefresh} />;
 
   return (
-    <div className="relative h-full w-full bg-paper">
+    <div className="relative h-full w-full bg-white">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -170,7 +170,7 @@ function DiscoverCanvasInner() {
         nodesDraggable={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={24} size={1} color="var(--color-hairline)" />
+        <Background gap={24} size={1} color="oklch(0.92 0.005 35)" />
         <Controls showInteractive={false} showFitView />
         <Panel position="bottom-left" className="!m-3">
           <p className="text-[11px] italic text-mute">
