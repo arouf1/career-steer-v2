@@ -1912,8 +1912,9 @@ describe("discover queries (Task 3.3)", () => {
     expect(out.map((x) => x.title)).toEqual(["B", "A"]);
     // Sanity: ids match the seed.
     expect(out.map((x) => x.guideId)).toEqual([bId, aId]);
-    // Use userId so seed return value is fully exercised.
-    expect(userId).toBeTruthy();
+    // Suppress unused-variable warning; userId is needed only as a seed
+    // input above and intentionally not asserted on here.
+    void userId;
   });
 
   it("querySavedGuides hydrates snapshot card metadata (lane, whyMatchReason, arcScore) when present", async () => {
@@ -2035,6 +2036,154 @@ describe("discover queries (Task 3.3)", () => {
       .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
       .query(api.discover.querySavedGuides, {});
     expect(out.map((x) => x.title)).toEqual(["Saved"]);
+  });
+
+  it("getSnapshot returns lanes: [] when snapshot status is failed (stale-lane guard)", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    // Manually insert a snapshot row in `failed` status with a previous
+    // generation's lanes still populated. `_markSnapshotFailed` patches
+    // `status`/`attempts`/`failureReason` only — it does NOT clear lanes —
+    // so this shape is what the DB actually looks like after a regen
+    // failure on a row that had previously generated successfully. The
+    // guard in `getSnapshot` should suppress those stale lanes.
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      const profileEmbeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "stale-lane test",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      const staleGuideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("stale-card", "Stale card"),
+      );
+      await ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId,
+        generatedAt: Date.now(),
+        status: "failed",
+        lanes: [
+          {
+            kind: "linear",
+            cards: [
+              {
+                guideId: staleGuideId,
+                slotKind: "strong",
+                arcScore: 1,
+                currentStateScore: 1,
+                domainScore: 0,
+                wholeScore: 0.7,
+                whyMatchReason: "stale reason from prior generation",
+              },
+            ],
+          },
+        ],
+        attempts: 1,
+        failureReason: "test-error",
+      });
+    });
+
+    const out = await t
+      .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+      .query(api.discover.getSnapshot, {});
+    expect(out).not.toBeNull();
+    expect(out!.status).toBe("failed");
+    expect(out!.failureReason).toBe("test-error");
+    expect(out!.lanes).toEqual([]);
+  });
+
+  it("querySavedGuides returns null lane/whyMatchReason/arcScore when snapshot status is failed", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    // Insert a failed snapshot whose lanes still carry the saved guide as
+    // a card (i.e. the previous successful generation included it). Without
+    // the guard, querySavedGuides would surface that stale card metadata
+    // on the saved row. With the guard, lane/whyMatchReason/arcScore stay
+    // null because we don't trust `lanes` unless `status === "ready"`.
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      const profileEmbeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "stale-lane saved test",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("saved-stale", "Saved"),
+      );
+      await ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId,
+        generatedAt: Date.now(),
+        status: "failed",
+        lanes: [
+          {
+            kind: "linear",
+            cards: [
+              {
+                guideId,
+                slotKind: "strong",
+                arcScore: 1,
+                currentStateScore: 1,
+                domainScore: 0,
+                wholeScore: 0.7,
+                whyMatchReason: "stale reason from prior generation",
+              },
+            ],
+          },
+        ],
+        attempts: 1,
+        failureReason: "test-error",
+      });
+      await ctx.db.insert("discover_reactions", {
+        userId,
+        guideId,
+        reaction: "saved",
+        reactedAt: 1,
+      });
+    });
+
+    const out = await t
+      .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+      .query(api.discover.querySavedGuides, {});
+    expect(out).toHaveLength(1);
+    // Title still hydrates from the guide doc — that's correct.
+    expect(out[0].title).toBe("Saved");
+    // But snapshot card metadata is suppressed because snapshot is failed.
+    expect(out[0].lane).toBeNull();
+    expect(out[0].whyMatchReason).toBeNull();
+    expect(out[0].arcScore).toBeNull();
   });
 });
 

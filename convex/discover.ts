@@ -20,7 +20,6 @@ import {
   CANDIDATE_POOL_K,
   LANE_BUDGET,
   REGEN_DEBOUNCE_MS,
-  SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
 import { cosineSim, assignLane } from "./lib/discoverScoring";
 import { rerank as openRouterRerank, chatModel } from "../lib/ai/providers";
@@ -1140,6 +1139,35 @@ export const getSnapshot = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .unique();
     if (!snap) return null;
+    // Stale-lane guard: only hydrate and return lanes when the snapshot is
+    // `ready`. If `status` is `"generating"` or `"failed"`, the lanes array
+    // may still hold a previous successful generation (since
+    // `_markSnapshotFailed` doesn't clear lanes), so suppress them at the
+    // boundary to keep the UI contract simple.
+    if (snap.status !== "ready") {
+      return {
+        status: snap.status,
+        generatedAt: snap.generatedAt,
+        profileEmbeddingId: snap.profileEmbeddingId,
+        failureReason: snap.failureReason,
+        lanes: [] as Array<{
+          kind: "linear" | "adjacent" | "transformational";
+          cards: Array<{
+            guideId: Id<"career_guides">;
+            slotKind: "strong" | "bridge" | "aspirational" | "extra";
+            arcScore: number;
+            currentStateScore: number;
+            domainScore: number;
+            wholeScore: number;
+            whyMatchReason: string;
+            slug: string;
+            title: string;
+            overview: string;
+            typicalSkills: string[];
+          }>;
+        }>,
+      };
+    }
     const lanes = await Promise.all(
       snap.lanes.map(async (lane) => ({
         kind: lane.kind,
@@ -1199,7 +1227,12 @@ export const querySavedGuides = query({
       string,
       { lane: string; whyMatchReason: string; arcScore: number }
     >();
-    if (snap) {
+    // Stale-lane guard: only join to the snapshot's cards when the snapshot
+    // is `ready`. A `"failed"` snapshot may carry the previous successful
+    // generation's lanes (since `_markSnapshotFailed` doesn't clear them);
+    // surfacing those here would show stale `lane`/`whyMatchReason`/`arcScore`
+    // on saved guides. Saved rows with no live card join cleanly to nulls.
+    if (snap && snap.status === "ready") {
       for (const lane of snap.lanes) {
         for (const c of lane.cards) {
           cardByGuide.set(c.guideId as string, {
