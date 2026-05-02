@@ -46,6 +46,7 @@ export function GuideCardNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Right} style={HIDDEN_HANDLE_STYLE} />
       <button
         type="button"
+        data-testid="guide-card"
         onClick={() => d.onClick(d.guideId)}
         className={cn(
           "group relative flex w-[200px] flex-col gap-1 rounded-lg border bg-background px-3 py-2.5 text-left transition-all",
