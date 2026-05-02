@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Authenticated, useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
-import { RefreshCw, SlidersHorizontal } from "lucide-react";
+import {
+  Maximize,
+  Minus,
+  Plus,
+  RefreshCw,
+  SlidersHorizontal,
+} from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
 import {
@@ -28,12 +34,18 @@ import {
 
 // Logical canvas size in virtual pixels. Everything is positioned relative
 // to the centre (0, 0). The actual rendered size is computed by the resize
-// observer below and applied via `transform: scale(...)`. The +600 padding
+// observer below and applied via `transform: scale(...)`. The +800 padding
 // gives the outermost cards generous breathing room — at the outer extent a
 // `w-[200px]` card needs ~226px clearance and we want visible whitespace
-// around the cluster, not edge-to-edge cards.
-const CANVAS_VIRTUAL_WIDTH = QUADRANT_HALF_WIDTH * 2 + 600; // 2040
-const CANVAS_VIRTUAL_HEIGHT = QUADRANT_HALF_HEIGHT * 2 + 600; // 1640
+// around the cluster, not edge-to-edge cards. Bumped from +600 to +800 so
+// cards never reach the canvas edge even with the wider scatter.
+const CANVAS_VIRTUAL_WIDTH = QUADRANT_HALF_WIDTH * 2 + 800; // 2240
+const CANVAS_VIRTUAL_HEIGHT = QUADRANT_HALF_HEIGHT * 2 + 800; // 1840
+
+// Zoom multiplier bounds — applied on top of the auto-fit scale.
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.15;
 
 const LANE_LABEL_TEXT = {
   linear: "Next steps",
@@ -70,11 +82,13 @@ function DiscoverCanvasInner() {
 
   const [density, setDensity] = useState<Density>(18);
   const [previewCard, setPreviewCard] = useState<CardPreviewData | null>(null);
+  const [zoom, setZoom] = useState(1);
 
-  // Compute scale to fit the canvas inside the wrapper. Re-runs on resize.
-  // 0.88 leaves a generous visual margin around the canvas so the card
-  // cluster sits centrally with breathing room (and outermost cards never
-  // get clipped against the wrapper bounds).
+  // Compute scale to fit the canvas inside the wrapper. Re-runs on resize and
+  // when zoom changes. 0.88 leaves a generous visual margin around the canvas
+  // so the card cluster sits centrally with breathing room (and outermost
+  // cards never get clipped against the wrapper bounds). The user-controlled
+  // `zoom` multiplier rides on top of the auto-fit scale.
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -83,13 +97,23 @@ function DiscoverCanvasInner() {
     const update = () => {
       const sx = el.clientWidth / CANVAS_VIRTUAL_WIDTH;
       const sy = el.clientHeight / CANVAS_VIRTUAL_HEIGHT;
-      setScale(Math.min(sx, sy) * 0.88);
+      setScale(Math.min(sx, sy) * 0.88 * zoom);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [zoom]);
+
+  const zoomIn = useCallback(
+    () => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP)),
+    [],
+  );
+  const zoomOut = useCallback(
+    () => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP)),
+    [],
+  );
+  const zoomReset = useCallback(() => setZoom(1), []);
 
   // Subscribe to primitive initials and fullName, not the whole `user`
   // object — Clerk's user reference changes on unrelated session ticks and
@@ -347,6 +371,42 @@ function DiscoverCanvasInner() {
             <DensitySlider onChange={setDensity} />
           </PopoverContent>
         </Popover>
+      </div>
+
+      {/*
+        Zoom controls — bottom-right corner. Stacked vertically: in / out /
+        reset. Each button is `size-8` (smaller than the top-right `size-9`)
+        since these are secondary chrome. Disabled state greys out at the
+        zoom limit.
+      */}
+      <div className="absolute bottom-4 right-4 flex flex-col gap-1 rounded-md border border-hairline bg-paper-raised shadow-sm">
+        <button
+          type="button"
+          onClick={zoomIn}
+          aria-label="Zoom in"
+          disabled={zoom >= ZOOM_MAX}
+          className="flex size-8 items-center justify-center text-mute transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+        >
+          <Plus className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={zoomOut}
+          aria-label="Zoom out"
+          disabled={zoom <= ZOOM_MIN}
+          className="flex size-8 items-center justify-center text-mute transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+        >
+          <Minus className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={zoomReset}
+          aria-label="Reset zoom"
+          disabled={zoom === 1}
+          className="flex size-8 items-center justify-center text-mute transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+        >
+          <Maximize className="size-4" />
+        </button>
       </div>
 
       {/* Bottom-centre legend. */}

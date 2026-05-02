@@ -110,23 +110,30 @@ describe("positionCard — quadrant layout", () => {
     expect(a).toEqual(b);
   });
 
-  it("strong-slot cards sit closer to the user than aspirational-slot cards (same arcScore)", () => {
-    // With slot bias dominating, strong (0.18 bias) sits closer than aspirational (0.78 bias).
-    const strong = positionCard({
-      lane: "linear",
-      slotKind: "strong",
-      arcScore: 0.5,
-      guideId: "g",
-    });
-    const asp = positionCard({
-      lane: "linear",
-      slotKind: "aspirational",
-      arcScore: 0.5,
-      guideId: "g",
-    });
-    const strongDist = Math.sqrt(strong.x ** 2 + strong.y ** 2);
-    const aspDist = Math.sqrt(asp.x ** 2 + asp.y ** 2);
-    expect(aspDist).toBeGreaterThan(strongDist);
+  it("strong-slot cards sit closer to the user than aspirational-slot cards (averaged)", () => {
+    // With slot bias dominating, strong (0.18 bias) sits closer than aspirational
+    // (0.78 bias). Wider scatter means individual cards may flip — average over a
+    // sample so the slot-distance ordering shows up reliably.
+    let strongTotal = 0;
+    let aspTotal = 0;
+    const N = 50;
+    for (let i = 0; i < N; i++) {
+      const strong = positionCard({
+        lane: "linear",
+        slotKind: "strong",
+        arcScore: 0.5,
+        guideId: `g${i}`,
+      });
+      const asp = positionCard({
+        lane: "linear",
+        slotKind: "aspirational",
+        arcScore: 0.5,
+        guideId: `g${i}`,
+      });
+      strongTotal += Math.sqrt(strong.x ** 2 + strong.y ** 2);
+      aspTotal += Math.sqrt(asp.x ** 2 + asp.y ** 2);
+    }
+    expect(aspTotal / N).toBeGreaterThan(strongTotal / N);
   });
 
   it("QUADRANT_CENTER returns the geometric center of each quadrant", () => {

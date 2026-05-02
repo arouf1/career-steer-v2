@@ -69,13 +69,15 @@ export function positionCard(args: {
   // Weighted blend: 70% slot bias, 30% arc-score pull.
   const t = Math.max(0, Math.min(1, 0.7 * slotBias + 0.3 * arcPull));
 
-  // Two independent hashes so cards spread in BOTH dimensions.
-  const hashA = hashStringTo01(args.guideId);
-  const hashB = hashStringTo01(args.guideId + ":y");
-  // Bias each axis toward t with ± scatter so cards don't all line up.
-  const SCATTER = 0.32; // ±32% of the span
-  const fx = Math.max(0, Math.min(1, t + (hashA - 0.5) * SCATTER));
-  const fy = Math.max(0, Math.min(1, t + (hashB - 0.5) * SCATTER));
+  // Within each quadrant, position cards in a 2D scatter where each axis is
+  // independently biased toward t. The result: cards spread across the whole
+  // quadrant rectangle, not just the diagonal from inner corner to outer corner.
+  // Use one hash per axis with different salts for true independence.
+  const SCATTER = 0.6; // wider spread (was 0.32)
+  const hashX = hashStringTo01(args.guideId + "::x");
+  const hashY = hashStringTo01(args.guideId + "::y");
+  const fx = Math.max(0, Math.min(1, t + (hashX - 0.5) * SCATTER));
+  const fy = Math.max(0, Math.min(1, t + (hashY - 0.5) * SCATTER));
 
   // Project into the quadrant: sign · (INNER_PADDING + f * span).
   const x = sign.x * (INNER_PADDING + fx * spanX);
