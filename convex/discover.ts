@@ -6,9 +6,9 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
-  mutation,
-  query,
-  action,
+  type ActionCtx,
+  type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
@@ -124,7 +124,10 @@ ${JSON.stringify(promptPairs, null, 2)}`,
  * module-scope so the cache write path can also use it for stub-grade
  * reasons without re-implementing the templates.
  */
-function defaultReasonFor(slot: Slot, g: any): string {
+function defaultReasonFor(
+  slot: Slot,
+  g: Doc<"career_guides"> | null | undefined,
+): string {
   const skill = g?.content?.typicalSkills?.[0] ?? "your background";
   if (slot === "strong") return `Strong fit on ${skill}.`;
   if (slot === "bridge") return `Builds on your ${skill}.`;
@@ -140,20 +143,19 @@ function defaultReasonFor(slot: Slot, g: any): string {
  * (not `subject` / `clerkId`), so we look up by the `by_tokenIdentifier`
  * index — matching the pattern in `convex/users.ts`.
  */
-async function requireUserId(ctx: {
-  auth: { getUserIdentity: () => Promise<{ tokenIdentifier: string } | null> };
-  db: any;
-}): Promise<Id<"users">> {
+async function requireUserId(
+  ctx: QueryCtx | MutationCtx,
+): Promise<Id<"users">> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
   const user = await ctx.db
     .query("users")
-    .withIndex("by_tokenIdentifier", (q: any) =>
+    .withIndex("by_tokenIdentifier", (q) =>
       q.eq("tokenIdentifier", identity.tokenIdentifier),
     )
     .unique();
   if (!user) throw new Error("user-not-provisioned");
-  return user._id as Id<"users">;
+  return user._id;
 }
 
 /**
@@ -325,7 +327,7 @@ function pickBridge(
  * aspirational slot never duplicates a card already on the lane.
  */
 async function pickAspirational(
-  ctx: any,
+  ctx: ActionCtx,
   pool: ScoredCandidate[],
   excluded: Set<string>,
   arcSourceText: string,
@@ -343,7 +345,7 @@ async function pickAspirational(
     guideIds: remaining.map((c) => c.guideId),
   });
   const docs = remaining.map((c) => {
-    const g = guides.find((x: any) => x._id === c.guideId);
+    const g = guides.find((x) => x._id === c.guideId);
     return g?.content?.overview ?? g?.title ?? "";
   });
 
@@ -431,7 +433,7 @@ export const generateSnapshot = internalAction({
  * dispatching this action, so the patch target reliably exists.
  */
 async function runPipeline(
-  ctx: any,
+  ctx: ActionCtx,
   args: {
     userId: Id<"users">;
     profileId: Id<"profiles">;
@@ -439,250 +441,250 @@ async function runPipeline(
     forceFreshReasons: boolean;
   },
 ) {
-    // Step 0: Read the user's profile embedding. If it's gone, the embedding
-    // was regenerated or deleted between scheduling and execution; abort.
-    const profileEmbedding = await ctx.runQuery(
-      internal.discover._readProfileEmbedding,
-      { profileEmbeddingId: args.expectedProfileEmbeddingId },
-    );
-    if (!profileEmbedding) {
-      throw new ConvexError("profile-not-ready");
-    }
+  // Step 0: Read the user's profile embedding. If it's gone, the embedding
+  // was regenerated or deleted between scheduling and execution; abort.
+  const profileEmbedding = await ctx.runQuery(
+    internal.discover._readProfileEmbedding,
+    { profileEmbeddingId: args.expectedProfileEmbeddingId },
+  );
+  if (!profileEmbedding) {
+    throw new ConvexError("profile-not-ready");
+  }
 
-    // Step 1: Pull all guide embeddings.
-    const guideEmbeddings = await ctx.runQuery(
-      internal.discover._readAllGuideEmbeddings,
-      {},
-    );
+  // Step 1: Pull all guide embeddings.
+  const guideEmbeddings = await ctx.runQuery(
+    internal.discover._readAllGuideEmbeddings,
+    {},
+  );
 
-    // Step 2: Compute facet sims per guide.
-    const scoredAll: ScoredCandidate[] = [];
-    for (const ge of guideEmbeddings) {
-      scoredAll.push({
-        guideId: ge.guideId,
-        arcSim: cosineSim(profileEmbedding.arcVector, ge.arcVector),
-        currentStateSim: cosineSim(
-          profileEmbedding.currentStateVector,
-          ge.currentStateVector,
-        ),
-        domainSim: cosineSim(profileEmbedding.domainVector, ge.domainVector),
-        wholeSim: cosineSim(profileEmbedding.wholeVector, ge.wholeVector),
-      });
-    }
-
-    // Step 3: Top-K by wholeSim, then quality floor on arcSim.
-    const candidates: ScoredCandidate[] = scoredAll
-      .slice()
-      .sort((a, b) => b.wholeSim - a.wholeSim)
-      .slice(0, CANDIDATE_POOL_K)
-      .filter((c) => c.arcSim >= ARC_SIM_FLOOR);
-
-    // Step 4: Drop dismissed guides for this user. We also collect the saved
-    // set up front since Step 5's saved-override needs it.
-    const reactions: Array<Doc<"discover_reactions">> = await ctx.runQuery(
-      internal.discover._readReactions,
-      { userId: args.userId },
-    );
-    const dismissed = new Set<string>(
-      reactions
-        .filter((r) => r.reaction === "dismissed")
-        .map((r) => r.guideId as string),
-    );
-    const savedSet = new Set<string>(
-      reactions
-        .filter((r) => r.reaction === "saved")
-        .map((r) => r.guideId as string),
-    );
-
-    const surviving = candidates.filter(
-      (c) => !dismissed.has(c.guideId as string),
-    );
-
-    // Step 5: Lane assignment by currentStateSim.
-    const byLane: Record<
-      "linear" | "adjacent" | "transformational",
-      ScoredCandidate[]
-    > = {
-      linear: [],
-      adjacent: [],
-      transformational: [],
-    };
-    for (const c of surviving) {
-      byLane[assignLane(c.currentStateSim)].push(c);
-    }
-
-    // Saved-guide override: if a lane is empty, pull the highest-arcSim saved
-    // guide that didn't naturally land there into it. Remove the picked guide
-    // from its natural lane to avoid duplication across lanes.
-    //
-    // Snapshot of empty lanes is taken once: only originally-empty lanes get
-    // backfilled from the saved set. We don't cascade — a pick that empties
-    // its natural lane mid-loop is not re-treated as eligible for backfill.
-    const emptyLanes = (
-      Object.keys(byLane) as Array<keyof typeof byLane>
-    ).filter((k) => byLane[k].length === 0);
-    if (emptyLanes.length > 0) {
-      const savedCandidates = surviving
-        .filter((c) => savedSet.has(c.guideId as string))
-        .sort((a, b) => b.arcSim - a.arcSim);
-      for (const emptyLane of emptyLanes) {
-        const pick = savedCandidates.find(
-          (c) => assignLane(c.currentStateSim) !== emptyLane,
-        );
-        if (pick) {
-          byLane[emptyLane].push(pick);
-          // Remove from its natural lane so a later iteration doesn't re-pick
-          // it and end up with the same guide in two lanes.
-          const natural = assignLane(pick.currentStateSim);
-          byLane[natural] = byLane[natural].filter((x) => x !== pick);
-        }
-      }
-    }
-
-    // Step 6a + 6b + 6c: pick strong-fit + bridge + aspirational cards per
-    // lane. Step 7 then top-ups extras for the slider expansion pool.
-    const builtLanes: LaneStub[] = await Promise.all(
-      (["linear", "adjacent", "transformational"] as const).map(async (kind) => {
-        const pool = byLane[kind];
-        const strong = pickStrong(pool);
-        const strongIds = new Set(strong.map((c) => c.guideId as string));
-        const bridge = pickBridge(pool, strongIds);
-        const usedIds = new Set([
-          ...strongIds,
-          ...bridge.map((c) => c.guideId as string),
-        ]);
-        const aspirational = await pickAspirational(
-          ctx,
-          pool,
-          usedIds,
-          profileEmbedding.arcSourceText ?? "",
-        );
-
-        // Step 7 — extras: anything remaining in the lane pool, ranked by
-        // arcSim desc, capped at LANE_BUDGET.EXTRA_MAX. The slider reveals
-        // these in the order we ship them.
-        const usedIds2 = new Set([
-          ...strongIds,
-          ...bridge.map((c) => c.guideId as string),
-          ...(aspirational ? [aspirational.guideId as string] : []),
-        ]);
-        const extras = pool
-          .filter((c) => !usedIds2.has(c.guideId as string))
-          .sort((a, b) => b.arcSim - a.arcSim)
-          .slice(0, LANE_BUDGET.EXTRA_MAX);
-
-        return {
-          kind,
-          cards: [
-            ...strong.map((c) => withSlot(c, "strong", "(stub)")),
-            ...bridge.map((c) => withSlot(c, "bridge", "(stub)")),
-            ...(aspirational
-              ? [withSlot(aspirational, "aspirational", "(stub)")]
-              : []),
-            ...extras.map((c) => withSlot(c, "extra", "(stub)")),
-          ],
-        };
-      }),
-    );
-
-    // Step 8 — why-match reasons. Cache-first read, single batched LLM call
-    // for uncached pairs across ALL lanes, persist new reasons, fall back to
-    // deterministic templates if the LLM throws.
-    const allCards = builtLanes.flatMap((l) => l.cards);
-    const cardGuideIds = allCards.map((c) => c.guideId);
-
-    const cachedRows: Array<Doc<"discover_match_reasons">> =
-      args.forceFreshReasons || cardGuideIds.length === 0
-        ? []
-        : await ctx.runQuery(internal.discover._readCachedReasons, {
-            userId: args.userId,
-            profileEmbeddingId: args.expectedProfileEmbeddingId,
-            guideIds: cardGuideIds,
-          });
-    const cachedByGuide = new Map<string, string>(
-      cachedRows.map((r) => [r.guideId as string, r.reason]),
-    );
-
-    // Dedup uncached cards by guideId — a guide could in principle land in
-    // two lanes (saved-override path); we only want one entry per guideId
-    // when we batch into the LLM call.
-    const uncachedByGuide = new Map<string, CardStub>();
-    for (const c of allCards) {
-      const gid = c.guideId as string;
-      if (!cachedByGuide.has(gid) && !uncachedByGuide.has(gid)) {
-        uncachedByGuide.set(gid, c);
-      }
-    }
-    const uncached = Array.from(uncachedByGuide.values());
-
-    const llmReasons = new Map<string, string>();
-    let guideMap = new Map<string, Doc<"career_guides">>();
-    if (uncached.length > 0) {
-      const guides: Doc<"career_guides">[] = await ctx.runQuery(
-        internal.discover._readGuideOverviews,
-        { guideIds: uncached.map((c) => c.guideId) },
-      );
-      guideMap = new Map(guides.map((g) => [g._id as string, g]));
-      const pairs = uncached.map((c) => {
-        const g = guideMap.get(c.guideId as string);
-        return {
-          guideId: c.guideId,
-          title: g?.title ?? "",
-          overview: g?.content?.overview ?? "",
-          slotKind: c.slotKind as Slot,
-        };
-      });
-      try {
-        const fresh = await callReasonsLLM({
-          arcSourceText: profileEmbedding.arcSourceText ?? "",
-          pairs,
-        });
-        for (const [gid, reason] of fresh) llmReasons.set(gid, reason);
-        // Persist freshly generated reasons so the next snapshot hits cache.
-        const entries = Array.from(llmReasons.entries()).map(
-          ([gid, reason]) => ({
-            guideId: gid as Id<"career_guides">,
-            reason,
-          }),
-        );
-        if (entries.length > 0) {
-          await ctx.runMutation(internal.discover._writeReasons, {
-            userId: args.userId,
-            profileEmbeddingId: args.expectedProfileEmbeddingId,
-            entries,
-          });
-        }
-      } catch (err) {
-        console.warn("discover.reasons_llm_failed", { err: String(err) });
-        // Fall back to deterministic per-slot templates. We don't persist
-        // these — caching a template would block a real reason from being
-        // generated on the next run.
-        for (const c of uncached) {
-          const g = guideMap.get(c.guideId as string);
-          llmReasons.set(c.guideId as string, defaultReasonFor(c.slotKind, g));
-        }
-      }
-    }
-
-    // Apply reasons to every card on every lane.
-    const lanesWithReasons: LaneStub[] = builtLanes.map((lane) => ({
-      ...lane,
-      cards: lane.cards.map((c) => {
-        const gid = c.guideId as string;
-        const reason =
-          cachedByGuide.get(gid) ??
-          llmReasons.get(gid) ??
-          defaultReasonFor(c.slotKind, guideMap.get(gid));
-        return { ...c, whyMatchReason: reason };
-      }),
-    }));
-
-    await ctx.runMutation(internal.discover._writeSnapshot, {
-      userId: args.userId,
-      profileId: args.profileId,
-      profileEmbeddingId: args.expectedProfileEmbeddingId,
-      lanes: lanesWithReasons,
+  // Step 2: Compute facet sims per guide.
+  const scoredAll: ScoredCandidate[] = [];
+  for (const ge of guideEmbeddings) {
+    scoredAll.push({
+      guideId: ge.guideId,
+      arcSim: cosineSim(profileEmbedding.arcVector, ge.arcVector),
+      currentStateSim: cosineSim(
+        profileEmbedding.currentStateVector,
+        ge.currentStateVector,
+      ),
+      domainSim: cosineSim(profileEmbedding.domainVector, ge.domainVector),
+      wholeSim: cosineSim(profileEmbedding.wholeVector, ge.wholeVector),
     });
+  }
+
+  // Step 3: Top-K by wholeSim, then quality floor on arcSim.
+  const candidates: ScoredCandidate[] = scoredAll
+    .slice()
+    .sort((a, b) => b.wholeSim - a.wholeSim)
+    .slice(0, CANDIDATE_POOL_K)
+    .filter((c) => c.arcSim >= ARC_SIM_FLOOR);
+
+  // Step 4: Drop dismissed guides for this user. We also collect the saved
+  // set up front since Step 5's saved-override needs it.
+  const reactions: Array<Doc<"discover_reactions">> = await ctx.runQuery(
+    internal.discover._readReactions,
+    { userId: args.userId },
+  );
+  const dismissed = new Set<string>(
+    reactions
+      .filter((r) => r.reaction === "dismissed")
+      .map((r) => r.guideId as string),
+  );
+  const savedSet = new Set<string>(
+    reactions
+      .filter((r) => r.reaction === "saved")
+      .map((r) => r.guideId as string),
+  );
+
+  const surviving = candidates.filter(
+    (c) => !dismissed.has(c.guideId as string),
+  );
+
+  // Step 5: Lane assignment by currentStateSim.
+  const byLane: Record<
+    "linear" | "adjacent" | "transformational",
+    ScoredCandidate[]
+  > = {
+    linear: [],
+    adjacent: [],
+    transformational: [],
+  };
+  for (const c of surviving) {
+    byLane[assignLane(c.currentStateSim)].push(c);
+  }
+
+  // Saved-guide override: if a lane is empty, pull the highest-arcSim saved
+  // guide that didn't naturally land there into it. Remove the picked guide
+  // from its natural lane to avoid duplication across lanes.
+  //
+  // Snapshot of empty lanes is taken once: only originally-empty lanes get
+  // backfilled from the saved set. We don't cascade — a pick that empties
+  // its natural lane mid-loop is not re-treated as eligible for backfill.
+  const emptyLanes = (
+    Object.keys(byLane) as Array<keyof typeof byLane>
+  ).filter((k) => byLane[k].length === 0);
+  if (emptyLanes.length > 0) {
+    const savedCandidates = surviving
+      .filter((c) => savedSet.has(c.guideId as string))
+      .sort((a, b) => b.arcSim - a.arcSim);
+    for (const emptyLane of emptyLanes) {
+      const pick = savedCandidates.find(
+        (c) => assignLane(c.currentStateSim) !== emptyLane,
+      );
+      if (pick) {
+        byLane[emptyLane].push(pick);
+        // Remove from its natural lane so a later iteration doesn't re-pick
+        // it and end up with the same guide in two lanes.
+        const natural = assignLane(pick.currentStateSim);
+        byLane[natural] = byLane[natural].filter((x) => x !== pick);
+      }
+    }
+  }
+
+  // Step 6a + 6b + 6c: pick strong-fit + bridge + aspirational cards per
+  // lane. Step 7 then top-ups extras for the slider expansion pool.
+  const builtLanes: LaneStub[] = await Promise.all(
+    (["linear", "adjacent", "transformational"] as const).map(async (kind) => {
+      const pool = byLane[kind];
+      const strong = pickStrong(pool);
+      const strongIds = new Set(strong.map((c) => c.guideId as string));
+      const bridge = pickBridge(pool, strongIds);
+      const usedIds = new Set([
+        ...strongIds,
+        ...bridge.map((c) => c.guideId as string),
+      ]);
+      const aspirational = await pickAspirational(
+        ctx,
+        pool,
+        usedIds,
+        profileEmbedding.arcSourceText ?? "",
+      );
+
+      // Step 7 — extras: anything remaining in the lane pool, ranked by
+      // arcSim desc, capped at LANE_BUDGET.EXTRA_MAX. The slider reveals
+      // these in the order we ship them.
+      const usedIds2 = new Set([
+        ...strongIds,
+        ...bridge.map((c) => c.guideId as string),
+        ...(aspirational ? [aspirational.guideId as string] : []),
+      ]);
+      const extras = pool
+        .filter((c) => !usedIds2.has(c.guideId as string))
+        .sort((a, b) => b.arcSim - a.arcSim)
+        .slice(0, LANE_BUDGET.EXTRA_MAX);
+
+      return {
+        kind,
+        cards: [
+          ...strong.map((c) => withSlot(c, "strong", "(stub)")),
+          ...bridge.map((c) => withSlot(c, "bridge", "(stub)")),
+          ...(aspirational
+            ? [withSlot(aspirational, "aspirational", "(stub)")]
+            : []),
+          ...extras.map((c) => withSlot(c, "extra", "(stub)")),
+        ],
+      };
+    }),
+  );
+
+  // Step 8 — why-match reasons. Cache-first read, single batched LLM call
+  // for uncached pairs across ALL lanes, persist new reasons, fall back to
+  // deterministic templates if the LLM throws.
+  const allCards = builtLanes.flatMap((l) => l.cards);
+  const cardGuideIds = allCards.map((c) => c.guideId);
+
+  const cachedRows: Array<Doc<"discover_match_reasons">> =
+    args.forceFreshReasons || cardGuideIds.length === 0
+      ? []
+      : await ctx.runQuery(internal.discover._readCachedReasons, {
+          userId: args.userId,
+          profileEmbeddingId: args.expectedProfileEmbeddingId,
+          guideIds: cardGuideIds,
+        });
+  const cachedByGuide = new Map<string, string>(
+    cachedRows.map((r) => [r.guideId as string, r.reason]),
+  );
+
+  // Dedup uncached cards by guideId — a guide could in principle land in
+  // two lanes (saved-override path); we only want one entry per guideId
+  // when we batch into the LLM call.
+  const uncachedByGuide = new Map<string, CardStub>();
+  for (const c of allCards) {
+    const gid = c.guideId as string;
+    if (!cachedByGuide.has(gid) && !uncachedByGuide.has(gid)) {
+      uncachedByGuide.set(gid, c);
+    }
+  }
+  const uncached = Array.from(uncachedByGuide.values());
+
+  const llmReasons = new Map<string, string>();
+  let guideMap = new Map<string, Doc<"career_guides">>();
+  if (uncached.length > 0) {
+    const guides: Doc<"career_guides">[] = await ctx.runQuery(
+      internal.discover._readGuideOverviews,
+      { guideIds: uncached.map((c) => c.guideId) },
+    );
+    guideMap = new Map(guides.map((g) => [g._id as string, g]));
+    const pairs = uncached.map((c) => {
+      const g = guideMap.get(c.guideId as string);
+      return {
+        guideId: c.guideId,
+        title: g?.title ?? "",
+        overview: g?.content?.overview ?? "",
+        slotKind: c.slotKind as Slot,
+      };
+    });
+    try {
+      const fresh = await callReasonsLLM({
+        arcSourceText: profileEmbedding.arcSourceText ?? "",
+        pairs,
+      });
+      for (const [gid, reason] of fresh) llmReasons.set(gid, reason);
+      // Persist freshly generated reasons so the next snapshot hits cache.
+      const entries = Array.from(llmReasons.entries()).map(
+        ([gid, reason]) => ({
+          guideId: gid as Id<"career_guides">,
+          reason,
+        }),
+      );
+      if (entries.length > 0) {
+        await ctx.runMutation(internal.discover._writeReasons, {
+          userId: args.userId,
+          profileEmbeddingId: args.expectedProfileEmbeddingId,
+          entries,
+        });
+      }
+    } catch (err) {
+      console.warn("discover.reasons_llm_failed", { err: String(err) });
+      // Fall back to deterministic per-slot templates. We don't persist
+      // these — caching a template would block a real reason from being
+      // generated on the next run.
+      for (const c of uncached) {
+        const g = guideMap.get(c.guideId as string);
+        llmReasons.set(c.guideId as string, defaultReasonFor(c.slotKind, g));
+      }
+    }
+  }
+
+  // Apply reasons to every card on every lane.
+  const lanesWithReasons: LaneStub[] = builtLanes.map((lane) => ({
+    ...lane,
+    cards: lane.cards.map((c) => {
+      const gid = c.guideId as string;
+      const reason =
+        cachedByGuide.get(gid) ??
+        llmReasons.get(gid) ??
+        defaultReasonFor(c.slotKind, guideMap.get(gid));
+      return { ...c, whyMatchReason: reason };
+    }),
+  }));
+
+  await ctx.runMutation(internal.discover._writeSnapshot, {
+    userId: args.userId,
+    profileId: args.profileId,
+    profileEmbeddingId: args.expectedProfileEmbeddingId,
+    lanes: lanesWithReasons,
+  });
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────
