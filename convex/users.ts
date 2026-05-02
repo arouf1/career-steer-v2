@@ -157,6 +157,15 @@ const cascadeDeleteUser = async (
     await ctx.db.delete(s._id);
   }
 
+  // Per-user seed rate-limit bucket (set by _requestGenerationForSeeding).
+  // Keyed in rate_limits as `seed:${userId}`. Cleaning it ensures a
+  // recreated account starts with a fresh seeding budget.
+  const seedRateLimit = await ctx.db
+    .query("rate_limits")
+    .withIndex("by_key", (q) => q.eq("key", `seed:${userId}`))
+    .unique();
+  if (seedRateLimit) await ctx.db.delete(seedRateLimit._id);
+
   await ctx.db.delete(userId);
 };
 

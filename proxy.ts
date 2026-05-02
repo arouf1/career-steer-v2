@@ -1,12 +1,21 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+// Routes that require an authenticated session. Unauthenticated visitors
+// (including users who just deleted their account) get redirected to /
+// rather than to Clerk's sign-in page so the homepage stays the single
+// entry point for the unauthed experience.
+const isProtectedRoute = createRouteMatcher(["/workspace(.*)"]);
+
 export const proxy = clerkMiddleware(async (auth, req) => {
-  if (req.nextUrl.pathname === "/") {
-    const { userId } = await auth();
-    if (userId) {
-      return NextResponse.redirect(new URL("/workspace/profile", req.url));
-    }
+  const { userId } = await auth();
+
+  if (isProtectedRoute(req) && !userId) {
+    return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (req.nextUrl.pathname === "/" && userId) {
+    return NextResponse.redirect(new URL("/workspace/profile", req.url));
   }
 });
 
