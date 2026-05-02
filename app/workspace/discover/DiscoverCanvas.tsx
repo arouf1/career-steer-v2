@@ -20,6 +20,7 @@ import {
   UserNodeView,
   LaneLabelNode,
   AnchorNode,
+  RingsNode,
 } from "./CanvasNodes";
 import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
 import { DensitySlider, type Density } from "./DensitySlider";
@@ -29,6 +30,7 @@ import {
   QUADRANT_CENTER,
   QUADRANT_HALF_WIDTH,
   QUADRANT_HALF_HEIGHT,
+  ANCHOR_OFFSET,
 } from "./lib/positionCard";
 
 const nodeTypes = {
@@ -36,11 +38,8 @@ const nodeTypes = {
   user: UserNodeView,
   laneLabel: LaneLabelNode,
   anchor: AnchorNode,
+  rings: RingsNode,
 };
-
-// Small margin past the outer card position so anchors sit slightly outside
-// the populated card area without dominating it.
-const ANCHOR_OFFSET = 80;
 
 const LANE_LABEL_TEXT = {
   linear: "Next steps",
@@ -164,8 +163,28 @@ function DiscoverCanvasInner() {
       selectable: false,
     }));
 
+    // Concentric rings centered on the user node — visual scale for
+    // "closer = closer fit." Sits above the quadrant tints (it's a React
+    // Flow node, so above any plain DOM siblings) and below the cards
+    // (later array entries render on top, and cards use hover:z-10 too).
+    const ringsNode: Node = {
+      id: "rings",
+      type: "rings",
+      position: { x: 0, y: 0 },
+      data: {},
+      draggable: false,
+      selectable: false,
+      zIndex: 0,
+    };
+
     return {
-      nodes: [...anchorNodes, userNode, ...labelNodes, ...guideNodes],
+      nodes: [
+        ...anchorNodes,
+        ringsNode,
+        userNode,
+        ...labelNodes,
+        ...guideNodes,
+      ],
       edges: [] as Edge[],
     };
   }, [snapshot, density, reactionByGuide, initials, fullName]);

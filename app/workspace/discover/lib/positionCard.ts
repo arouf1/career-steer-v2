@@ -84,23 +84,28 @@ export function positionCard(args: {
   return { x, y };
 }
 
+// Margin past the outer card position so the canvas's bounding-box anchors
+// sit slightly outside the populated card area without dominating it. Shared
+// with DiscoverCanvas so the anchor positions stay in lockstep with the
+// quadrant-cell centre math below.
+export const ANCHOR_OFFSET = 80;
+
 // Center of each quadrant — used by DiscoverCanvas for lane label positions.
-// Geometric center between the inner padding edge and the outer edge.
+//
+// The anchor nodes added in DiscoverCanvas establish the bounding-box extent
+// at ±(QUADRANT_HALF_WIDTH + ANCHOR_OFFSET, QUADRANT_HALF_HEIGHT + ANCHOR_OFFSET).
+// Each visual quadrant (one of the four tint cells) occupies a 1/2 × 1/2
+// fraction of that viewport. The centre of each cell — where the lane label
+// should sit — is at half of that extent.
+const VIEWPORT_HALF_WIDTH = QUADRANT_HALF_WIDTH + ANCHOR_OFFSET; // 800
+const VIEWPORT_HALF_HEIGHT = QUADRANT_HALF_HEIGHT + ANCHOR_OFFSET; // 600
+
 export const QUADRANT_CENTER: Record<Lane, { x: number; y: number }> = {
-  linear: {
-    x: -((INNER_PADDING + QUADRANT_HALF_WIDTH) / 2),
-    y: -((INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2),
-  },
-  adjacent: {
-    x: (INNER_PADDING + QUADRANT_HALF_WIDTH) / 2,
-    y: -((INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2),
-  },
-  earlier: {
-    x: -((INNER_PADDING + QUADRANT_HALF_WIDTH) / 2),
-    y: (INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2,
-  },
+  linear: { x: -VIEWPORT_HALF_WIDTH / 2, y: -VIEWPORT_HALF_HEIGHT / 2 }, // (-400, -300)
+  adjacent: { x: VIEWPORT_HALF_WIDTH / 2, y: -VIEWPORT_HALF_HEIGHT / 2 }, // (400, -300)
+  earlier: { x: -VIEWPORT_HALF_WIDTH / 2, y: VIEWPORT_HALF_HEIGHT / 2 }, // (-400, 300)
   transformational: {
-    x: (INNER_PADDING + QUADRANT_HALF_WIDTH) / 2,
-    y: (INNER_PADDING + QUADRANT_HALF_HEIGHT) / 2,
-  },
+    x: VIEWPORT_HALF_WIDTH / 2,
+    y: VIEWPORT_HALF_HEIGHT / 2,
+  }, // (400, 300)
 };

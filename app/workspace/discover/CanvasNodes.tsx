@@ -125,3 +125,59 @@ export function LaneLabelNode({ data }: NodeProps) {
 export function AnchorNode() {
   return <div className="size-px" aria-hidden />;
 }
+
+export function RingsNode() {
+  // 3 concentric hairlines at the user's centre. The SVG sits at the React
+  // Flow node's (0,0) anchor and overflows visibly outward in every direction.
+  // Each ring sits at a distance roughly aligned to the slot tiers:
+  //   inner (250) ≈ strong-fit cluster radius
+  //   mid (430)   ≈ bridge tier
+  //   outer (610) ≈ aspirational tier (just inside the outer card edge)
+  // Stroke is barely-visible cream — like graph paper. The effect is editorial,
+  // not chart-y.
+  return (
+    <div
+      className="pointer-events-none"
+      style={{ position: "relative", width: 0, height: 0, overflow: "visible" }}
+      aria-hidden
+    >
+      <svg
+        width={1400}
+        height={1400}
+        viewBox="-700 -700 1400 1400"
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          overflow: "visible",
+        }}
+      >
+        <circle
+          cx={0}
+          cy={0}
+          r={250}
+          fill="none"
+          stroke="oklch(0.9 0.005 35)"
+          strokeWidth={1}
+        />
+        <circle
+          cx={0}
+          cy={0}
+          r={430}
+          fill="none"
+          stroke="oklch(0.92 0.005 35)"
+          strokeWidth={1}
+        />
+        <circle
+          cx={0}
+          cy={0}
+          r={610}
+          fill="none"
+          stroke="oklch(0.93 0.005 35)"
+          strokeWidth={1}
+        />
+      </svg>
+    </div>
+  );
+}
