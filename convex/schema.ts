@@ -797,7 +797,9 @@ export default defineSchema({
     error: v.optional(v.string()),
     startedAt: v.number(),
     finishedAt: v.optional(v.number()),
-  }).index("by_guide_user", ["guideId", "userId"]),
+  })
+    .index("by_guide_user", ["guideId", "userId"])
+    .index("by_userId", ["userId"]),
 
   // Each row tracks one outreach draft generation. The Convex Agent
   // component owns the streamed message chunks (subscribed to via
@@ -821,7 +823,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_threadId", ["threadId"])
-    .index("by_person_user_created", ["personId", "userId", "createdAt"]),
+    .index("by_person_user_created", ["personId", "userId", "createdAt"])
+    .index("by_userId", ["userId"]),
 
   discover_canvases: defineTable({
     userId: v.id("users"),
