@@ -365,7 +365,7 @@ function DiscoverCanvasInner() {
           type="button"
           onClick={handleRefresh}
           aria-label="Rebuild canvas"
-          className="flex size-9 items-center justify-center rounded-md border border-hairline bg-paper-raised text-mute transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          className="flex size-9 items-center justify-center rounded-md border border-hairline bg-paper-raised text-ink transition-colors hover:bg-paper-lifted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
         >
           <RefreshCw className="size-4" />
         </button>
@@ -374,14 +374,12 @@ function DiscoverCanvasInner() {
             <button
               type="button"
               aria-label="Canvas settings"
-              className="flex size-9 items-center justify-center rounded-md border border-hairline bg-paper-raised text-mute transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              className="flex size-9 items-center justify-center rounded-md border border-hairline bg-paper-raised text-ink transition-colors hover:bg-paper-lifted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
             >
               <SlidersHorizontal className="size-4" />
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-64 p-4">
-            {/* DensitySlider has its own inline "Density" eyebrow, so we
-                skip a popover-level header here to avoid duplication. */}
             <DensitySlider onChange={setDensity} />
           </PopoverContent>
         </Popover>
@@ -399,7 +397,7 @@ function DiscoverCanvasInner() {
           onClick={zoomIn}
           aria-label="Zoom in"
           disabled={zoom >= ZOOM_MAX}
-          className="flex size-8 items-center justify-center text-mute transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          className="flex size-8 items-center justify-center text-ink transition-colors hover:bg-paper-lifted disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
         >
           <Plus className="size-4" />
         </button>
@@ -408,7 +406,7 @@ function DiscoverCanvasInner() {
           onClick={zoomOut}
           aria-label="Zoom out"
           disabled={zoom <= ZOOM_MIN}
-          className="flex size-8 items-center justify-center text-mute transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          className="flex size-8 items-center justify-center text-ink transition-colors hover:bg-paper-lifted disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
         >
           <Minus className="size-4" />
         </button>
@@ -417,7 +415,7 @@ function DiscoverCanvasInner() {
           onClick={zoomReset}
           aria-label="Reset zoom"
           disabled={zoom === 1}
-          className="flex size-8 items-center justify-center text-mute transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          className="flex size-8 items-center justify-center text-ink transition-colors hover:bg-paper-lifted disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
         >
           <Maximize className="size-4" />
         </button>

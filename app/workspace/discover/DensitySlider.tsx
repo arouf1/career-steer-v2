@@ -7,6 +7,12 @@ const STORAGE_KEY = "discover.density";
 const STOPS = [18, 36, 60] as const;
 export type Density = (typeof STOPS)[number];
 
+const STOP_LABELS: Record<Density, string> = {
+  18: "Focused",
+  36: "Explore",
+  60: "Wide",
+};
+
 export function DensitySlider({
   onChange,
 }: {
@@ -26,10 +32,14 @@ export function DensitySlider({
   }, [onChange]);
 
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-hairline bg-paper-raised p-3">
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-ink">
-        <span>Density</span>
-        <span className="font-medium">{value}</span>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] uppercase tracking-[0.18em] font-medium text-mute">
+          Density
+        </span>
+        <span className="text-sm font-medium text-ink">
+          {STOP_LABELS[value]}
+        </span>
       </div>
       <Slider
         min={0}
@@ -42,10 +52,12 @@ export function DensitySlider({
           localStorage.setItem(STORAGE_KEY, String(next));
           onChange(next);
         }}
-        className="w-32"
+        className="w-full"
       />
-      <div className="flex justify-between text-[9px] text-mute">
-        <span>18</span><span>36</span><span>60</span>
+      <div className="flex justify-between text-[10px] text-mute">
+        <span>{STOP_LABELS[18]}</span>
+        <span>{STOP_LABELS[36]}</span>
+        <span>{STOP_LABELS[60]}</span>
       </div>
     </div>
   );
