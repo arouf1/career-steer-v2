@@ -804,4 +804,71 @@ export default defineSchema({
   })
     .index("by_threadId", ["threadId"])
     .index("by_person_user_created", ["personId", "userId", "createdAt"]),
+
+  discover_canvases: defineTable({
+    userId: v.id("users"),
+    profileId: v.id("profiles"),
+    profileEmbeddingId: v.id("profile_embeddings"),
+    generatedAt: v.number(),
+    status: v.union(
+      v.literal("generating"),
+      v.literal("ready"),
+      v.literal("failed"),
+    ),
+    lanes: v.array(
+      v.object({
+        kind: v.union(
+          v.literal("linear"),
+          v.literal("adjacent"),
+          v.literal("transformational"),
+        ),
+        cards: v.array(
+          v.object({
+            guideId: v.id("career_guides"),
+            slotKind: v.union(
+              v.literal("strong"),
+              v.literal("bridge"),
+              v.literal("aspirational"),
+              v.literal("extra"),
+            ),
+            arcScore: v.number(),
+            currentStateScore: v.number(),
+            domainScore: v.number(),
+            wholeScore: v.number(),
+            whyMatchReason: v.string(),
+          }),
+        ),
+      }),
+    ),
+    failureReason: v.optional(v.string()),
+    attempts: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_status", ["status"]),
+
+  discover_snapshot_guides: defineTable({
+    snapshotId: v.id("discover_canvases"),
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+  })
+    .index("by_guideId", ["guideId"])
+    .index("by_snapshotId", ["snapshotId"]),
+
+  discover_reactions: defineTable({
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+    reaction: v.union(v.literal("saved"), v.literal("dismissed")),
+    reactedAt: v.number(),
+  })
+    .index("by_user_and_guide", ["userId", "guideId"])
+    .index("by_user_and_reaction", ["userId", "reaction"]),
+
+  discover_match_reasons: defineTable({
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+    profileEmbeddingId: v.id("profile_embeddings"),
+    reason: v.string(),
+    generatedAt: v.number(),
+  })
+    .index("by_user_and_guide", ["userId", "guideId"]),
 });
