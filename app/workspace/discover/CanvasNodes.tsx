@@ -104,13 +104,15 @@ export function UserNode({
 export function LaneLabel({
   label,
   count,
+  onFocus,
 }: {
   kind: "linear" | "adjacent" | "earlier" | "transformational";
   label: string;
   count: number;
+  onFocus?: () => void;
 }) {
-  return (
-    <div className="pointer-events-none flex flex-col items-center gap-1 whitespace-nowrap">
+  const content = (
+    <div className="flex flex-col items-center gap-1 whitespace-nowrap">
       <span className="font-medium uppercase tracking-[0.2em] text-base text-ink/85">
         {label}
       </span>
@@ -118,5 +120,20 @@ export function LaneLabel({
         {count} {count === 1 ? "guide" : "guides"}
       </span>
     </div>
+  );
+
+  if (count === 0 || !onFocus) {
+    // No cards to focus into — render as static content.
+    return <div className="pointer-events-none">{content}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onFocus}
+      className="rounded-md px-3 py-2 transition-colors hover:bg-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+    >
+      {content}
+    </button>
   );
 }

@@ -1,7 +1,7 @@
 // app/workspace/discover/DiscoverCanvas.tsx
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { Authenticated, useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -27,6 +27,7 @@ import {
 import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
 import { DensitySlider, type Density } from "./DensitySlider";
 import { DiscoverFailed, DiscoverGenerating } from "./DiscoverEmptyState";
+import { FocusedLaneView } from "./FocusedLaneView";
 import {
   positionCard,
   QUADRANT_HALF_HEIGHT,
@@ -84,6 +85,7 @@ function DiscoverCanvasInner() {
   const [density, setDensity] = useState<Density>(18);
   const [previewCard, setPreviewCard] = useState<CardPreviewData | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [focusedLane, setFocusedLane] = useState<LaneKey | null>(null);
 
   // Compute scale to fit the canvas inside the wrapper. Re-runs on resize and
   // when zoom changes. 0.88 leaves a generous visual margin around the canvas
@@ -257,6 +259,7 @@ function DiscoverCanvasInner() {
               kind={lane}
               label={LANE_LABEL_TEXT[lane]}
               count={count}
+              onFocus={() => setFocusedLane(lane)}
             />
           </div>
         );
@@ -437,6 +440,30 @@ function DiscoverCanvasInner() {
           Closer to you means closer fit · Direction means kind of move
         </p>
       </div>
+
+      {/*
+        Focus mode — full-canvas overlay for one lane. Mounts when a lane
+        label is clicked; back button or Escape returns. AnimatePresence
+        keeps the exit fade alive after focusedLane is cleared. Lives at
+        z-30, above all in-canvas chrome but below the preview sheet.
+      */}
+      <AnimatePresence>
+        {focusedLane && (
+          <FocusedLaneView
+            key={focusedLane}
+            lane={focusedLane}
+            label={LANE_LABEL_TEXT[focusedLane]}
+            cards={cards.filter((c) => c.lane === focusedLane)}
+            reactionByGuide={reactionByGuide}
+            onBack={() => setFocusedLane(null)}
+            onCardClick={(c) => {
+              const full = (c as unknown as { _full: unknown })._full;
+              setPreviewCard(full as CardPreviewData);
+              setFocusedLane(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <CardPreviewSheet
         card={previewCard}
