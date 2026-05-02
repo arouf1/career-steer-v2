@@ -192,3 +192,206 @@ describe("discover.generateSnapshot — quality floor (arcSim ≥ 0.3)", () => {
     ).rejects.toThrow(/profile-not-ready/);
   });
 });
+
+describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", () => {
+  it("excludes dismissed guides from the snapshot", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, dismissedGuideId, keptGuideId } =
+      await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-dismissal-test",
+          email: "dismiss@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // Both guides have arc-aligned vectors so they survive the arc floor;
+        // only the dismissal filter should remove `dismissedGuideId`.
+        const dismissedGuideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("dismissed", "Dismissed"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: dismissedGuideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const keptGuideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("kept", "Kept"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: keptGuideId,
+          wholeVector: [0.9, 0.1, 0, 0],
+          arcVector: [0.9, 0.1, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        await ctx.db.insert("discover_reactions", {
+          userId,
+          guideId: dismissedGuideId,
+          reaction: "dismissed",
+          reactedAt: Date.now(),
+        });
+
+        return {
+          userId,
+          profileId,
+          embeddingId,
+          dismissedGuideId,
+          keptGuideId,
+        };
+      });
+
+    await t.action(internal.discover.generateSnapshot, {
+      userId,
+      profileId,
+      expectedProfileEmbeddingId: embeddingId,
+      forceFreshReasons: true,
+    });
+
+    const snapshot = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_canvases")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique();
+    });
+    expect(snapshot).not.toBeNull();
+    const ids = snapshot!.lanes.flatMap((lane) =>
+      lane.cards.map((c) => c.guideId),
+    );
+    expect(ids).not.toContain(dismissedGuideId);
+    expect(ids).toContain(keptGuideId);
+  });
+
+  it("buckets candidates into linear / adjacent / transformational by currentStateSim", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, linearId, adjacentId, transId } =
+      await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-lane-test",
+          email: "lane@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // Linear: high currentStateSim (1.0 ≥ 0.7).
+        const linearId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("linear-a", "Linear A"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: linearId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // Adjacent: ~0.5 currentStateSim (≥ 0.45 and < 0.7).
+        const adjacentId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("adjacent-a", "Adjacent A"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: adjacentId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [0.5, 0.866, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // Transformational: orthogonal currentState (0 < 0.45).
+        const transId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("trans-a", "Transformational A"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: transId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [0, 1, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        return {
+          userId,
+          profileId,
+          embeddingId,
+          linearId,
+          adjacentId,
+          transId,
+        };
+      });
+
+    await t.action(internal.discover.generateSnapshot, {
+      userId,
+      profileId,
+      expectedProfileEmbeddingId: embeddingId,
+      forceFreshReasons: true,
+    });
+
+    const snapshot = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("discover_canvases")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique();
+    });
+    expect(snapshot).not.toBeNull();
+
+    const lanes = Object.fromEntries(
+      snapshot!.lanes.map((l) => [l.kind, l.cards.map((c) => c.guideId)]),
+    );
+
+    expect(lanes.linear).toEqual([linearId]);
+    expect(lanes.adjacent).toEqual([adjacentId]);
+    expect(lanes.transformational).toEqual([transId]);
+  });
+});

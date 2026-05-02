@@ -13,10 +13,11 @@ import type { Id, Doc } from "./_generated/dataModel";
 import {
   ARC_SIM_FLOOR,
   CANDIDATE_POOL_K,
+  LANE_BUDGET,
   REGEN_DEBOUNCE_MS,
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
-import { cosineSim } from "./lib/discoverScoring";
+import { cosineSim, assignLane } from "./lib/discoverScoring";
 
 /**
  * Resolve the calling user's userId. Throws if unauthenticated.
@@ -227,15 +228,78 @@ export const generateSnapshot = internalAction({
       .slice(0, CANDIDATE_POOL_K)
       .filter((c) => c.arcSim >= ARC_SIM_FLOOR);
 
-    // Degenerate write — Tasks 2.3+ refine into proper lane assignment +
-    // curation. For now, stash the surviving candidates in the linear lane
-    // as "strong" stubs so the floor-filter contract is observable in the
-    // persisted snapshot.
-    const lanes: LaneStub[] = [
-      { kind: "linear", cards: candidates.slice(0, 6).map(toCardStub) },
-      { kind: "adjacent", cards: [] },
-      { kind: "transformational", cards: [] },
-    ];
+    // Step 4: Drop dismissed guides for this user. We also collect the saved
+    // set up front since Step 5's saved-override needs it.
+    const reactions = await ctx.runQuery(internal.discover._readReactions, {
+      userId: args.userId,
+    });
+    const dismissed = new Set<string>(
+      reactions
+        .filter((r) => r.reaction === "dismissed")
+        .map((r) => r.guideId as string),
+    );
+    const savedSet = new Set<string>(
+      reactions
+        .filter((r) => r.reaction === "saved")
+        .map((r) => r.guideId as string),
+    );
+
+    const surviving = candidates.filter(
+      (c) => !dismissed.has(c.guideId as string),
+    );
+
+    // Step 5: Lane assignment by currentStateSim.
+    const byLane: Record<
+      "linear" | "adjacent" | "transformational",
+      ScoredCandidate[]
+    > = {
+      linear: [],
+      adjacent: [],
+      transformational: [],
+    };
+    for (const c of surviving) {
+      byLane[assignLane(c.currentStateSim)].push(c);
+    }
+
+    // Saved-guide override: if a lane is empty, pull the highest-arcSim saved
+    // guide that didn't naturally land there into it. Remove the picked guide
+    // from its natural lane to avoid duplication across lanes.
+    //
+    // Snapshot of empty lanes is taken once: only originally-empty lanes get
+    // backfilled from the saved set. We don't cascade — a pick that empties
+    // its natural lane mid-loop is not re-treated as eligible for backfill.
+    const emptyLanes = (
+      Object.keys(byLane) as Array<keyof typeof byLane>
+    ).filter((k) => byLane[k].length === 0);
+    if (emptyLanes.length > 0) {
+      const savedCandidates = surviving
+        .filter((c) => savedSet.has(c.guideId as string))
+        .sort((a, b) => b.arcSim - a.arcSim);
+      for (const emptyLane of emptyLanes) {
+        const pick = savedCandidates.find(
+          (c) => assignLane(c.currentStateSim) !== emptyLane,
+        );
+        if (pick) {
+          byLane[emptyLane].push(pick);
+          // Remove from its natural lane so a later iteration doesn't re-pick
+          // it and end up with the same guide in two lanes.
+          const natural = assignLane(pick.currentStateSim);
+          byLane[natural] = byLane[natural].filter((x) => x !== pick);
+        }
+      }
+    }
+
+    // Temp cap matches the curated-slot budget (strong + bridge + aspirational
+    // = 6). Task 2.4 replaces this slice with proper per-slot picking; Task
+    // 2.6 then layers extras on top up to LANE_BUDGET.TOTAL_MAX.
+    const CURATED_BUDGET =
+      LANE_BUDGET.STRONG + LANE_BUDGET.BRIDGE + LANE_BUDGET.ASPIRATIONAL;
+    const lanes: LaneStub[] = (
+      ["linear", "adjacent", "transformational"] as const
+    ).map((kind) => ({
+      kind,
+      cards: byLane[kind].slice(0, CURATED_BUDGET).map(toCardStub),
+    }));
 
     await ctx.runMutation(internal.discover._writeSnapshot, {
       userId: args.userId,
@@ -259,6 +323,16 @@ export const _readAllGuideEmbeddings = internalQuery({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("career_guide_embeddings").collect();
+  },
+});
+
+export const _readReactions = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_guide", (q) => q.eq("userId", args.userId))
+      .collect();
   },
 });
 
