@@ -59,11 +59,12 @@ function DiscoverCanvasInner() {
   const [density, setDensity] = useState<Density>(18);
   const [previewCard, setPreviewCard] = useState<CardPreviewData | null>(null);
 
-  // Subscribe to primitive initials, not the whole `user` object — Clerk's
-  // user reference changes on unrelated session ticks and would invalidate
-  // the `nodes` memo unnecessarily.
+  // Subscribe to primitive initials and fullName, not the whole `user`
+  // object — Clerk's user reference changes on unrelated session ticks and
+  // would invalidate the `nodes` memo unnecessarily.
   const initials =
     (user?.firstName?.[0] ?? "Y") + (user?.lastName?.[0] ?? "ou");
+  const fullName = user?.fullName ?? null;
 
   const reactionByGuide = useMemo(() => {
     const m = new Map<string, "saved">();
@@ -108,7 +109,7 @@ function DiscoverCanvasInner() {
       position: { x: -40, y: -40 }, // approximate centring with the 80px avatar
       data: {
         initials,
-        currentRoleChip: "You", // TODO: pull current role from profile via a query in a follow-up
+        currentRoleChip: fullName ?? undefined,
         onClick: () => {
           /* future: open user popover */
         },
@@ -132,7 +133,7 @@ function DiscoverCanvasInner() {
       nodes: [userNode, ...labelNodes, ...guideNodes],
       edges: [] as Edge[],
     };
-  }, [snapshot, density, reactionByGuide, initials]);
+  }, [snapshot, density, reactionByGuide, initials, fullName]);
 
   const handleRefresh = useCallback(() => {
     void manualRefresh({});

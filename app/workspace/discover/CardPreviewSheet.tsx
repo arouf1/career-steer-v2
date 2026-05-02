@@ -71,30 +71,34 @@ export function CardPreviewSheet({
                   ))}
                 </div>
               )}
-              <div className="flex items-center gap-2 pt-4">
-                <Button asChild>
+              <div className="flex flex-col gap-2 pt-4">
+                <Button asChild className="w-full justify-center">
                   <Link href={`/career-guides/${card.slug}`}>
                     Read full guide <ExternalLink className="ml-1 size-3.5" />
                   </Link>
                 </Button>
-                <Button
-                  variant={card.reaction === "saved" ? "default" : "outline"}
-                  onClick={async () => {
-                    await save({ guideId: card.guideId });
-                    onOpenChange(false);
-                  }}
-                >
-                  <Bookmark className="mr-1 size-4" /> Save
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={async () => {
-                    await dismiss({ guideId: card.guideId });
-                    onOpenChange(false);
-                  }}
-                >
-                  <X className="mr-1 size-4" /> Not for me
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant={card.reaction === "saved" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={async () => {
+                      await save({ guideId: card.guideId });
+                      onOpenChange(false);
+                    }}
+                  >
+                    <Bookmark className="mr-1 size-4" /> Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="flex-1"
+                    onClick={async () => {
+                      await dismiss({ guideId: card.guideId });
+                      onOpenChange(false);
+                    }}
+                  >
+                    <X className="mr-1 size-4" /> Not for me
+                  </Button>
+                </div>
               </div>
             </div>
           </>

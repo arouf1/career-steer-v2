@@ -26,7 +26,7 @@ export function DiscoverFailed({ onRetry }: { onRetry: () => void }) {
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
       <h2 className="text-lg font-medium text-ink">We couldn&apos;t build your canvas</h2>
       <p className="max-w-sm text-sm text-ink/60">
-        Something went wrong while matching you to guides. Try again — if it keeps failing, head to your profile and make sure it&apos;s complete.
+        Something went wrong while matching you to guides. Try again. If it keeps failing, head to your profile and make sure it&apos;s complete.
       </p>
       <Button onClick={onRetry}>Try again</Button>
     </div>

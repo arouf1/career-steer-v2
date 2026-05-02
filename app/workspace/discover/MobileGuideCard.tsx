@@ -37,22 +37,23 @@ export function MobileGuideCard({
       type="button"
       onClick={onTap}
       className={cn(
-        "relative flex w-full flex-col gap-2 rounded-lg border bg-background px-4 py-3 text-left shadow-sm",
-        isSaved && "border-amber-400 bg-amber-50/50",
+        "relative flex w-full flex-col gap-2 rounded-lg border bg-background px-4 py-3 text-left",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
+        isSaved && "border-hairline-strong bg-paper-raised",
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <Badge variant="secondary" className="text-[10px]">
           {SLOT_BADGE[card.slotKind]}
         </Badge>
-        <span className="text-xs text-ink/60">{matchScore}%</span>
+        <span className="text-xs text-body">{matchScore}%</span>
       </div>
       <div className="text-sm font-medium text-ink line-clamp-2">{card.title}</div>
-      <div className="text-xs italic text-ink/60 line-clamp-2">
+      <div className="text-xs italic text-body line-clamp-2">
         {card.whyMatchReason}
       </div>
       {isSaved && (
-        <Bookmark className="absolute right-3 top-3 size-3.5 fill-amber-500 text-amber-500" />
+        <Bookmark className="absolute right-3 top-3 size-3.5 fill-ink text-ink" />
       )}
     </button>
   );

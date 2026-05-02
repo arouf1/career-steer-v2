@@ -21,12 +21,12 @@ export function SavedGuideCard({ saved }: { saved: SavedGuide }) {
   const removeSave = useMutation(api.discover.removeSave);
   const score = saved.arcScore != null ? Math.round(saved.arcScore * 100) : null;
   return (
-    <div className="group relative flex flex-col gap-2 rounded-lg border border-hairline bg-paper p-4 shadow-sm">
+    <div className="group relative flex flex-col gap-2 rounded-lg border border-hairline-strong bg-paper-raised p-4">
       <button
         type="button"
         onClick={() => void removeSave({ guideId: saved.guideId })}
         aria-label={`Remove ${saved.title} from saved`}
-        className="absolute right-2 top-2 rounded-full p-1 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+        className="absolute right-2 top-2 rounded-full p-1 opacity-60 transition-opacity hover:opacity-100 hover:bg-paper-raised focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
       >
         <X className="size-4" />
       </button>
@@ -37,21 +37,21 @@ export function SavedGuideCard({ saved }: { saved: SavedGuide }) {
           </Badge>
         )}
         {score != null && (
-          <span className="text-xs text-ink/60">{score}% match</span>
+          <span className="text-xs text-body">{score}% match</span>
         )}
       </div>
       <Link
         href={`/career-guides/${saved.slug}`}
-        className="text-base font-medium text-ink hover:underline"
+        className="rounded-sm text-base font-medium text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
       >
         {saved.title}
       </Link>
       {saved.whyMatchReason && (
-        <p className="line-clamp-2 text-xs italic text-ink/60">
+        <p className="line-clamp-2 text-xs italic text-body">
           {saved.whyMatchReason}
         </p>
       )}
-      <span className="text-[11px] text-ink/40">
+      <span className="text-[11px] text-mute">
         Saved {new Date(saved.reactedAt).toLocaleDateString()}
       </span>
     </div>

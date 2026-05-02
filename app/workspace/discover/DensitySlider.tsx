@@ -26,8 +26,8 @@ export function DensitySlider({
   }, [onChange]);
 
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-hairline bg-paper/95 p-3 shadow-sm backdrop-blur">
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-ink/60">
+    <div className="flex flex-col gap-1 rounded-md border border-hairline bg-paper-raised p-3">
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-ink">
         <span>Density</span>
         <span className="font-medium">{value}</span>
       </div>
@@ -44,7 +44,7 @@ export function DensitySlider({
         }}
         className="w-32"
       />
-      <div className="flex justify-between text-[9px] text-ink/40">
+      <div className="flex justify-between text-[9px] text-mute">
         <span>18</span><span>36</span><span>60</span>
       </div>
     </div>
