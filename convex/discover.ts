@@ -408,7 +408,7 @@ export const generateSnapshot = internalAction({
     }
 
     // Step 6a + 6b + 6c: pick strong-fit + bridge + aspirational cards per
-    // lane. Extras for the slider land in Task 2.6.
+    // lane. Step 7 then top-ups extras for the slider expansion pool.
     const lanes: LaneStub[] = await Promise.all(
       (["linear", "adjacent", "transformational"] as const).map(async (kind) => {
         const pool = byLane[kind];
@@ -425,6 +425,20 @@ export const generateSnapshot = internalAction({
           usedIds,
           profileEmbedding.arcSourceText ?? "",
         );
+
+        // Step 7 — extras: anything remaining in the lane pool, ranked by
+        // arcSim desc, capped at LANE_BUDGET.EXTRA_MAX. The slider reveals
+        // these in the order we ship them.
+        const usedIds2 = new Set([
+          ...strongIds,
+          ...bridge.map((c) => c.guideId as string),
+          ...(aspirational ? [aspirational.guideId as string] : []),
+        ]);
+        const extras = pool
+          .filter((c) => !usedIds2.has(c.guideId as string))
+          .sort((a, b) => b.arcSim - a.arcSim)
+          .slice(0, LANE_BUDGET.EXTRA_MAX);
+
         return {
           kind,
           cards: [
@@ -433,6 +447,7 @@ export const generateSnapshot = internalAction({
             ...(aspirational
               ? [withSlot(aspirational, "aspirational", "(stub)")]
               : []),
+            ...extras.map((c) => withSlot(c, "extra", "(stub)")),
           ],
         };
       }),

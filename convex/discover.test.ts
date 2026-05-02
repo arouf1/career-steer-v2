@@ -811,3 +811,122 @@ describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () =
     }
   });
 });
+
+describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
+  it("includes up to 14 extras per lane beyond the curated 6", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-extras-test",
+        email: "extras@example.com",
+      });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      // Profile facets — currentStateVector aligned to [1,0,0,0] so all
+      // candidates land in linear; arcVector aligned so each candidate's
+      // arcSim is just its first component.
+      const embeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "I want to write things people remember",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      // 25 linear-lane candidates with slightly varied arcVectors so each has
+      // a unique arcSim above the floor (worst-case ~0.953 for i=24).
+      for (let i = 0; i < 25; i++) {
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed(`extras-${i}`, `Extras ${i}`),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1 - i * 0.01, i * 0.01, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+      }
+
+      return { userId, profileId, embeddingId };
+    });
+
+    // Stub the rerank seam so the aspirational pick is deterministic and
+    // doesn't touch the network. Picking index 0 of whatever it gets.
+    (globalThis as any).__testRerank__ = async (args: {
+      query: string;
+      documents: string[];
+      topN: number;
+    }) => {
+      if (args.documents.length === 0) return [];
+      return [{ index: 0, relevanceScore: 0.9 }];
+    };
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+
+      const snapshot = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+      });
+      expect(snapshot).not.toBeNull();
+      expect(snapshot!.status).toBe("ready");
+
+      const linearLane = snapshot!.lanes.find((l) => l.kind === "linear");
+      expect(linearLane).toBeDefined();
+
+      // Lane total cap (curated 6 + up to 14 extras = 20).
+      expect(linearLane!.cards.length).toBeLessThanOrEqual(20);
+
+      const extras = linearLane!.cards.filter((c) => c.slotKind === "extra");
+      // Cap on extras alone.
+      expect(extras.length).toBeLessThanOrEqual(14);
+      // Proof that we actually filled extras (we seeded 25 candidates, so
+      // after 6 curated there are 19 left → expect the cap of 14).
+      expect(extras.length).toBeGreaterThan(0);
+      expect(extras.length).toBe(14);
+
+      // Extras carry the stub why-match reason and the right slotKind shape.
+      for (const card of extras) {
+        expect(card.slotKind).toBe("extra");
+        expect(card.whyMatchReason).toBe("(stub)");
+      }
+
+      // Extras are ordered by arcScore desc (highest-arc first).
+      for (let i = 1; i < extras.length; i++) {
+        expect(extras[i - 1].arcScore).toBeGreaterThanOrEqual(
+          extras[i].arcScore,
+        );
+      }
+
+      // Adjacent + transformational lanes have no candidates in this seed.
+      const adjacent = snapshot!.lanes.find((l) => l.kind === "adjacent");
+      const transformational = snapshot!.lanes.find(
+        (l) => l.kind === "transformational",
+      );
+      expect(adjacent?.cards ?? []).toHaveLength(0);
+      expect(transformational?.cards ?? []).toHaveLength(0);
+    } finally {
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+});
