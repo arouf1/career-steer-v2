@@ -4,6 +4,10 @@
 
 B2C AI career coach + job-search/matching tool. MVP focuses on (1) personal career coaching — skill assessment, transition planning, interview prep — and (2) resume optimization / role matching. Other directions (B2B internal mobility, cohort communities) are deliberately out of MVP scope but the architecture should not actively block them.
 
+## V1 reference
+
+If — and only if — the user explicitly refers to "V1" of this app (e.g. "look at v1 of this app", "how did v1 do X", "check v1"), the V1 codebase lives at `/Users/aqilrouf/Documents/Projects/career-steer`. Read from there for reference; never write to it. Do not consult V1 unless the user explicitly invokes it.
+
 ## Operating principles (non-negotiable)
 
 1. **Claude is the primary developer.** All implementation work — coding, schema changes, deploys, debugging, verification — is done by Claude. The user is the product owner. Never propose stopping early, never hand routine engineering decisions back. Capacity is unlimited.
@@ -120,6 +124,16 @@ Before editing files in these areas, read the corresponding rule file:
 - Editing `proxy.ts` / auth flows → read `.claude/rules/auth-security.md` (Next 16 renamed `middleware.ts` → `proxy.ts`)
 - Editing AI features (`app/api/chat`, `lib/ai/**`) → read `.claude/rules/ai-sdk-patterns.md`
 - Editing `app/**` or `components/**` (visible UI) → read `.claude/rules/ui-quality.md`
+
+## Cross-feature impact: Discover
+
+`/workspace/discover` is a downstream consumer of the profile + career-guide pipelines. Its `discover_canvas` snapshots are precomputed per user from `profile_embeddings` ↔ `career_guide_embeddings`, lane-classified by `currentStateSim`, and ranked by `arcSim` with a curated mix (strong-fit / skill-bridge / aspirational) per lane. Whenever a change to **profiles, profile embeddings, career guides, career guide embeddings, the matching pipeline, or the embedding model/dimensions** could materially affect what discover shows, you must:
+
+1. Identify whether existing `discover_canvas` snapshots become stale or invalid (e.g. dimension change, facet semantics shift, new signal that should drive lane assignment).
+2. Plan a snapshot refresh — incremental for soft changes (re-rank existing slots) or full recompute for hard changes (schema/dimensions/facet semantics).
+3. Surface the impact in the change's plan/spec — never ship a profile or guide change without explicitly addressing whether discover needs to re-render.
+
+If unsure whether a change has discover impact, treat it as having impact and plan the recompute.
 
 ## Avoid
 
