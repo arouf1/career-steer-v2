@@ -243,6 +243,10 @@ export default defineSchema({
     arcVector: v.array(v.float64()),
     currentStateVector: v.array(v.float64()),
     domainVector: v.array(v.float64()),
+    // Text content used to compute arcVector. Used as the rerank query for
+    // the discover canvas's aspirational slot picker. Optional so existing
+    // rows stay valid until re-embedded.
+    arcSourceText: v.optional(v.string()),
     dimensions: v.number(),
     model: v.string(),
     generatedAt: v.number(),
