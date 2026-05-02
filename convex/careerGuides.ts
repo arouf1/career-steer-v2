@@ -64,6 +64,11 @@ const MIN_GROUNDED_TASKS = 4;
 const DEFERRED_ENRICHMENT_DELAY_MS = 60 * 60 * 1000;
 const VALIDATE_RATE = { max: 15, windowMs: 60_000 };
 const GENERATE_RATE = { max: 3, windowMs: 300_000 };
+// Per-user cap on system-driven seeding from profile setup. Tuned for ~10
+// jobs per profile with headroom for retries and re-seeds on profile edits.
+// Looser than the IP-bucketed GENERATE_RATE because a profile-setup burst
+// is legitimate; abuse vector is bounded by Clerk identity, not IP.
+const SEED_RATE = { max: 25, windowMs: 24 * 60 * 60 * 1000 };
 const IMAGE_MODEL_ID = "google/gemini-3.1-flash-image-preview";
 
 // Failed-content auto-retry policy. Initial attempt + 2 auto-retries = 3 total
@@ -525,6 +530,105 @@ export const _requestGeneration = internalMutation({
     const now = Date.now();
 
     // Reuse existing row unless it failed — failed rows get reset and rerun.
+    if (existingByTitle && existingByTitle.contentStatus !== "failed") {
+      return { slug: existingByTitle.slug };
+    }
+
+    const initialSlotIllustrations = buildInitialSlotIllustrations();
+
+    let guideId;
+    if (existingByTitle) {
+      guideId = existingByTitle._id;
+      await ctx.db.patch(guideId, {
+        contentStatus: "generating",
+        illustrationStatus: "generating",
+        illustrationStorageId: undefined,
+        slotIllustrations: initialSlotIllustrations,
+        content: undefined,
+        updatedAt: now,
+      });
+    } else {
+      guideId = await ctx.db.insert("career_guides", {
+        slug,
+        title: args.title,
+        titleNormalized,
+        contentStatus: "generating",
+        illustrationStatus: "generating",
+        slotIllustrations: initialSlotIllustrations,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await ctx.scheduler.runAfter(0, internal.careerGuides.generateContent, {
+      guideId,
+      title: args.title,
+    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.careerGuides.generateIllustration,
+      { guideId, title: args.title },
+    );
+    for (const slot of SECTION_SLOTS) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.careerGuides.generateSlotIllustration,
+        { guideId, title: args.title, slot },
+      );
+    }
+
+    return { slug: existingByTitle?.slug ?? slug };
+  },
+});
+
+// Seeding-flavored sibling of _requestGeneration. Identical slug-OCC dedup
+// pattern (so concurrent seeders for the same canonical title resolve to one
+// career_guides row), but rate-limited per userId instead of per clientIp
+// because profile-setup seeds 5–10 titles in a burst.
+//
+// IMPORTANT: pipeline parity. The existing _requestGeneration only schedules
+// generateContent + generateIllustration + generateSlotIllustration[]; the
+// rest of the chain (podcast script + TTS, embeddings + Discover fan-out,
+// guide branches prewarm, deferred Exa enrichment fallback) is fanned out
+// downstream by guideId from generateContent's _updateContentGrounded /
+// _updateContentDeferred completion handlers. Mirroring just the three
+// top-level schedules below inherits the complete pipeline. If anything is
+// added to _requestGeneration's top-level schedule list, mirror it here.
+export const _requestGenerationForSeeding = internalMutation({
+  args: { title: v.string(), userId: v.id("users") },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ slug: string } | { error: string }> => {
+    const limit = await tryConsumeRateLimit(ctx, {
+      key: `seed:${args.userId}`,
+      ...SEED_RATE,
+    });
+    if (!limit.ok) {
+      return { error: "Per-user seed rate limit hit." };
+    }
+
+    const slug = slugify(args.title);
+    const titleNormalized = normalizeTitle(args.title);
+    if (!slug || !titleNormalized) {
+      return { error: "Invalid title." };
+    }
+
+    const existingBySlug = await ctx.db
+      .query("career_guides")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .first();
+    const existingByTitle =
+      existingBySlug ??
+      (await ctx.db
+        .query("career_guides")
+        .withIndex("by_title_normalized", (q) =>
+          q.eq("titleNormalized", titleNormalized),
+        )
+        .first());
+
+    const now = Date.now();
+
     if (existingByTitle && existingByTitle.contentStatus !== "failed") {
       return { slug: existingByTitle.slug };
     }
