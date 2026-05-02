@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { generateText, Output } from "ai";
+import { z } from "zod";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { chatModel } from "../lib/ai/providers";
+import { expandTitleAbbreviations } from "./lib/titleAbbreviations";
 
 export const _lookup = internalQuery({
   args: { prefilteredKey: v.string() },
@@ -54,6 +59,88 @@ export const _writeThrough = internalMutation({
       canonicalTitle: args.canonicalTitle,
       confidence: args.confidence,
       cached: false as const,
+    };
+  },
+});
+
+// Gemini structured output rejects bound/array-length constraints (.int(),
+// .min/max, etc) — encode bounds in the prompt instead.
+const canonicalSchema = z.object({
+  canonical_title: z.string().describe(
+    "The canonical, fully-spelled-out form of this job title for use as a " +
+      "shared, public career-guide topic. Strip seniority qualifiers " +
+      "(Junior, Senior, Lead, Staff, Principal, etc) UNLESS the seniority " +
+      "is part of the role itself (e.g. 'Vice President', 'Chief Technology " +
+      "Officer'). Spell out abbreviations. Use Title Case. Examples: " +
+      "'Sr. Software Engineer' -> 'Software Engineer'; 'Sr. PM' -> " +
+      "'Product Manager'; 'VP of Engineering' -> 'Vice President of " +
+      "Engineering'.",
+  ),
+  confidence: z.number().describe(
+    "Your confidence in this canonicalization, from 0.0 to 1.0. Use 1.0 " +
+      "for unambiguous mappings, 0.5 for guesses, below 0.5 if the input " +
+      "is too ambiguous to canonicalize.",
+  ),
+});
+
+const CANONICAL_MODEL_ID = "google/gemini-3.1-pro-preview";
+
+export const getOrCreateCanonical = internalAction({
+  args: { rawTitle: v.string() },
+  handler: async (
+    ctx,
+    { rawTitle },
+  ): Promise<{
+    canonicalTitle: string;
+    confidence: number;
+    cached: boolean;
+  }> => {
+    const prefilteredKey = expandTitleAbbreviations(rawTitle);
+    if (!prefilteredKey) {
+      return { canonicalTitle: rawTitle.trim(), confidence: 0, cached: false };
+    }
+
+    const hit = await ctx.runQuery(internal.titleCanonicalization._lookup, {
+      prefilteredKey,
+    });
+    if (hit) {
+      return {
+        canonicalTitle: hit.canonicalTitle,
+        confidence: hit.confidence,
+        cached: true,
+      };
+    }
+
+    const model = chatModel(CANONICAL_MODEL_ID, { zdr: true });
+    const { experimental_output } = await generateText({
+      model,
+      experimental_output: Output.object({ schema: canonicalSchema }),
+      prompt:
+        "Canonicalize this job title to its general, public, " +
+        "seniority-stripped form for use as a shared career-guide topic. " +
+        "Output JSON matching the schema.\n\n" +
+        `Raw title: ${rawTitle}`,
+      maxOutputTokens: 200,
+    });
+
+    const canonical = experimental_output.canonical_title.trim();
+    const confidence = experimental_output.confidence;
+
+    const written = await ctx.runMutation(
+      internal.titleCanonicalization._writeThrough,
+      {
+        prefilteredKey,
+        sourceTitle: rawTitle,
+        canonicalTitle: canonical,
+        model: CANONICAL_MODEL_ID,
+        confidence,
+      },
+    );
+
+    return {
+      canonicalTitle: written.canonicalTitle,
+      confidence: written.confidence,
+      cached: written.cached,
     };
   },
 });

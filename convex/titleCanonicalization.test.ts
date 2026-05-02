@@ -69,6 +69,64 @@ describe("titleCanonicalization._writeThrough", () => {
   });
 });
 
+describe("titleCanonicalization.getOrCreateCanonical (cache-hit paths)", () => {
+  it("returns cached canonical without LLM call on cache hit", async () => {
+    const t = harness();
+    await t.mutation(internal.titleCanonicalization._writeThrough, {
+      prefilteredKey: "senior software engineer",
+      sourceTitle: "Sr SWE",
+      canonicalTitle: "Senior Software Engineer",
+      model: "google/gemini-3.1-pro-preview",
+      confidence: 0.95,
+    });
+
+    const result = await t.action(
+      internal.titleCanonicalization.getOrCreateCanonical,
+      { rawTitle: "Sr. SWE" },
+    );
+    expect(result.canonicalTitle).toBe("Senior Software Engineer");
+    expect(result.cached).toBe(true);
+  });
+
+  it("normalizes 'Sr. SWE' and 'Senior Software Engineer' to the same cache key", async () => {
+    const t = harness();
+    await t.mutation(internal.titleCanonicalization._writeThrough, {
+      prefilteredKey: "senior software engineer",
+      sourceTitle: "Sr. SWE",
+      canonicalTitle: "Senior Software Engineer",
+      model: "google/gemini-3.1-pro-preview",
+      confidence: 0.95,
+    });
+
+    const r1 = await t.action(
+      internal.titleCanonicalization.getOrCreateCanonical,
+      { rawTitle: "Sr. SWE" },
+    );
+    const r2 = await t.action(
+      internal.titleCanonicalization.getOrCreateCanonical,
+      { rawTitle: "Senior Software Engineer" },
+    );
+    expect(r1.canonicalTitle).toBe(r2.canonicalTitle);
+    expect(r1.cached).toBe(true);
+    expect(r2.cached).toBe(true);
+
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query("title_canonicalizations").collect(),
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("handles empty/whitespace input by returning trimmed raw with confidence 0", async () => {
+    const t = harness();
+    const result = await t.action(
+      internal.titleCanonicalization.getOrCreateCanonical,
+      { rawTitle: "   " },
+    );
+    expect(result.confidence).toBe(0);
+    expect(result.cached).toBe(false);
+  });
+});
+
 describe("titleCanonicalization._lookup", () => {
   it("returns null on miss and the row on hit", async () => {
     const t = harness();
