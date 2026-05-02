@@ -1028,6 +1028,44 @@ export const removeSave = mutation({
 });
 
 /**
+ * User-initiated discover refresh (Task 3.4).
+ *
+ * Invoked by the canvas UI when the user taps "refresh." Schedules a
+ * snapshot regeneration with `forceFreshReasons: true` so the why-match
+ * cache is bypassed — even if no underlying signal has changed, the user
+ * sees fresh phrasing on every card. Other regen triggers
+ * (`refillAfterDismiss`, profile-completion, embedding-regenerated) leave
+ * `forceFreshReasons: false` so unchanged cards reuse their cached reasons.
+ *
+ * The 30s debounce gate inside `scheduleSnapshotRegeneration` (`REGEN_
+ * DEBOUNCE_MS`) deliberately swallows rapid-fire clicks: firing this
+ * mutation 10 times within 30s only triggers one regen, which is what we
+ * want.
+ *
+ * Why `ctx.scheduler.runAfter(0, ...)` and not `ctx.runMutation(...)`:
+ * the regen mutation itself schedules `generateSnapshot` (a third hop),
+ * and the `runMutation` → scheduler composition has the same
+ * "Transaction already committed" failure mode in `convex-test` that
+ * `refillAfterDismiss` works around. Production semantics are identical
+ * — both paths queue the regen mutation; the dedup gate handles bursts.
+ */
+export const manualRefresh = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    await ctx.scheduler.runAfter(
+      0,
+      internal.discover.scheduleSnapshotRegeneration,
+      {
+        userId,
+        dedupKey: "manual",
+        forceFreshReasons: true,
+      },
+    );
+  },
+});
+
+/**
  * Refill the dismissed slot after a `dismissGuide` mutation.
  *
  * v1 simplicity: instead of surgically patching the dismissed card in the

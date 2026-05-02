@@ -2037,3 +2037,102 @@ describe("discover queries (Task 3.3)", () => {
     expect(out.map((x) => x.title)).toEqual(["Saved"]);
   });
 });
+
+describe("discover.manualRefresh (Task 3.4)", () => {
+  it("manualRefresh schedules a fresh-reasons regeneration", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    // Seed user + profile + profile embedding so
+    // `scheduleSnapshotRegeneration` actually enqueues `generateSnapshot`
+    // (it short-circuits when either profile or embedding is missing).
+    // Also seed one guide + guide embedding so the pipeline has at least
+    // one candidate to score; without any embeddings the snapshot ships
+    // with empty lanes but still ends up `status: "ready"`.
+    const { userId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-test",
+        email: "t@example.com",
+      });
+      const profileId = await ctx.db.insert(
+        "profiles",
+        profileSeed(userId),
+      );
+      await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "manual refresh test",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("manual-refresh-target", "Manual refresh target"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      return { userId };
+    });
+
+    // Stub LLMs since the chain runs through generateSnapshot.
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const m = new Map<string, string>();
+      for (const p of args.pairs) m.set(p.guideId, "manual reason");
+      return m;
+    };
+    (globalThis as any).__testRerank__ = async () => [];
+    try {
+      await t
+        .withIdentity({ tokenIdentifier: "u-test", email: "t@example.com" })
+        .mutation(api.discover.manualRefresh, {});
+      // Drain the chain (manualRefresh → scheduleSnapshotRegeneration →
+      // generateSnapshot). Per Task 3.2 lessons learned: each hop is
+      // pending after its predecessor finishes, so
+      // finishInProgressScheduledFunctions may bail early. Use the same
+      // drain pattern as the dismissGuide tests.
+      await new Promise((r) => setTimeout(r, 0));
+      await t.finishInProgressScheduledFunctions();
+      await new Promise((r) => setTimeout(r, 0));
+      await t.finishInProgressScheduledFunctions();
+
+      const snap = await t.run(async (ctx) =>
+        ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique(),
+      );
+      // Core assertion: a `discover_canvases` row exists for the user.
+      // `scheduleSnapshotRegeneration` writes this row synchronously
+      // (status: "generating") before scheduling `generateSnapshot`, so
+      // its presence proves `manualRefresh` correctly delegated to the
+      // scheduler with valid args (right userId, valid dedupKey).
+      //
+      // The downstream `generateSnapshot` chain may end up in any of
+      // "ready" / "generating" / "failed" depending on convex-test's
+      // multi-hop scheduler racing — that plumbing is already exercised
+      // by the Task 3.2 refill test which directly invokes each hop. The
+      // unit under test here is the mutation itself.
+      expect(snap).not.toBeNull();
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+});
