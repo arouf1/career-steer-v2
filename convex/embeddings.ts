@@ -61,6 +61,16 @@ export const upsert = internalMutation({
     } else {
       await ctx.db.insert("profile_embeddings", doc);
     }
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.discover.scheduleSnapshotRegeneration,
+      {
+        userId: args.userId,
+        dedupKey: "embedding",
+        forceFreshReasons: false,
+      },
+    );
   },
 });
 

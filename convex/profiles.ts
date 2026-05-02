@@ -269,6 +269,16 @@ export const markReviewed = mutation({
   handler: async (ctx) => {
     const profile = await userOwnedProfile(ctx);
     await ctx.db.patch(profile._id, { reviewed: true });
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.discover.scheduleSnapshotRegeneration,
+      {
+        userId: profile.userId,
+        dedupKey: "init",
+        forceFreshReasons: false,
+      },
+    );
   },
 });
 
