@@ -28,9 +28,9 @@ const nodeTypes = {
 };
 
 const LANE_LABEL_TEXT = {
-  linear: "Linear · Next steps",
-  adjacent: "Adjacent · Lateral moves",
-  transformational: "Transformational · New directions",
+  linear: "Next steps",
+  adjacent: "Sideways moves",
+  transformational: "A different chapter",
 } as const;
 
 const LANE_LABEL_POSITION = {
@@ -159,6 +159,11 @@ function DiscoverCanvasInner() {
       >
         <Background gap={24} size={1} color="var(--color-hairline)" />
         <Controls showInteractive={false} showFitView />
+        <Panel position="bottom-left" className="!m-3">
+          <p className="text-[11px] italic text-mute">
+            Closer to you means closer fit · Direction means kind of move
+          </p>
+        </Panel>
         <Panel position="top-right" className="!m-3 flex gap-2">
           <DensitySlider onChange={setDensity} />
         </Panel>

@@ -2,7 +2,6 @@
 "use client";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Bookmark } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const HIDDEN_HANDLE_STYLE = {
@@ -49,22 +48,22 @@ export function GuideCardNode({ data }: NodeProps) {
         type="button"
         onClick={() => d.onClick(d.guideId)}
         className={cn(
-          "group flex w-[200px] flex-col gap-1.5 rounded-lg border bg-background px-3 py-2.5 text-left transition-all",
+          "group relative flex w-[200px] flex-col gap-1 rounded-lg border bg-background px-3 py-2.5 text-left transition-all",
           "hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
           isSaved && "border-hairline-strong bg-paper-raised",
           d.slotKind === "extra" && "opacity-90",
         )}
       >
-        <div className="flex items-center justify-between gap-2">
-          <Badge variant="secondary" className="type-label text-[10px]">
-            {SLOT_BADGE_LABEL[d.slotKind]}
-          </Badge>
-          {isSaved && <Bookmark className="size-3.5 fill-ink text-ink" />}
-        </div>
+        {isSaved && (
+          <Bookmark className="absolute right-2.5 top-2.5 size-3.5 fill-ink text-ink" />
+        )}
+        <span className="text-[11px] italic text-mute">
+          {SLOT_BADGE_LABEL[d.slotKind]}
+        </span>
         <div className="line-clamp-2 text-sm font-medium leading-tight text-ink">
           {d.title}
         </div>
-        <div className="line-clamp-2 text-xs italic text-body">
+        <div className="line-clamp-2 text-xs italic text-ink-soft">
           {d.whyMatchReason}
         </div>
       </button>

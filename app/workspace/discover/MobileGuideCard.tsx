@@ -1,7 +1,6 @@
 // app/workspace/discover/MobileGuideCard.tsx
 "use client";
 import { Bookmark } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -42,14 +41,14 @@ export function MobileGuideCard({
         isSaved && "border-hairline-strong bg-paper-raised",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <Badge variant="secondary" className="text-[10px]">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] italic text-mute">
           {SLOT_BADGE[card.slotKind]}
-        </Badge>
-        <span className="text-xs text-body">{matchScore}%</span>
+        </span>
+        <span className="text-[11px] italic text-mute">{matchScore}% match</span>
       </div>
       <div className="text-sm font-medium text-ink line-clamp-2">{card.title}</div>
-      <div className="text-xs italic text-body line-clamp-2">
+      <div className="text-xs italic text-ink-soft line-clamp-2">
         {card.whyMatchReason}
       </div>
       {isSaved && (
