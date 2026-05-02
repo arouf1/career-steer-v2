@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { Authenticated, useQuery } from "convex/react";
 import { Bookmark } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { SavedGuideCard, type SavedGuide } from "./SavedGuideCard";
@@ -42,6 +42,14 @@ const byScore = (a: SavedGuide, b: SavedGuide) =>
   (b.arcScore ?? 0) - (a.arcScore ?? 0);
 
 export function SavedGuidesClient() {
+  return (
+    <Authenticated>
+      <SavedGuidesClientInner />
+    </Authenticated>
+  );
+}
+
+function SavedGuidesClientInner() {
   // Cast through the locally-narrowed `SavedGuide` shape: the Convex query
   // returns `lane: string | null` because the canvas snapshot's lane map is
   // built with `string` keys, but the runtime values are constrained to the

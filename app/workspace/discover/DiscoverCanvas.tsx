@@ -1,7 +1,7 @@
 // app/workspace/discover/DiscoverCanvas.tsx
 "use client";
 import { useMemo, useState, useCallback } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { Authenticated, useQuery, useMutation } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import {
   ReactFlow,
@@ -179,8 +179,10 @@ function DiscoverCanvasInner() {
 
 export function DiscoverCanvas() {
   return (
-    <ReactFlowProvider>
-      <DiscoverCanvasInner />
-    </ReactFlowProvider>
+    <Authenticated>
+      <ReactFlowProvider>
+        <DiscoverCanvasInner />
+      </ReactFlowProvider>
+    </Authenticated>
   );
 }

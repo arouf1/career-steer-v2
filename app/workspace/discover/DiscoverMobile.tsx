@@ -1,7 +1,7 @@
 // app/workspace/discover/DiscoverMobile.tsx
 "use client";
 import { useCallback, useMemo, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { Authenticated, useQuery, useMutation } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,6 +16,14 @@ const LANES = [
 ] as const;
 
 export function DiscoverMobile() {
+  return (
+    <Authenticated>
+      <DiscoverMobileInner />
+    </Authenticated>
+  );
+}
+
+function DiscoverMobileInner() {
   const { user } = useUser();
   const snapshot = useQuery(api.discover.getSnapshot);
   // Don't `?? []` here: a fresh `[]` literal would change reference every
