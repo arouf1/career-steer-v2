@@ -20,6 +20,7 @@ import {
   CANDIDATE_POOL_K,
   LANE_BUDGET,
   REGEN_DEBOUNCE_MS,
+  SIDEWAYS_WHOLE_SIM_FLOOR,
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
 import { cosineSim } from "./lib/discoverScoring";
@@ -529,13 +530,25 @@ async function runPipeline(
   );
   const linearCount = Math.ceil(sortedByWhole.length * 0.2);
   const adjacentEnd = Math.ceil(sortedByWhole.length * 0.5);
+  // Hybrid gate: sideways requires top 20-50% rank AND wholeSim ≥ floor. The
+  // floor stops cross-domain noise (Massage Therapist scoring 0.65 against an
+  // AI Engineer) from filling the lane just because rank-bucketing always
+  // assigns 30% of the pool to it. Below-floor candidates that would have
+  // landed in sideways fall through to transformational instead.
+  const adjacentSlice = sortedByWhole.slice(linearCount, adjacentEnd);
+  const adjacent = adjacentSlice.filter(
+    (c) => c.wholeSim >= SIDEWAYS_WHOLE_SIM_FLOOR,
+  );
+  const adjacentBelowFloor = adjacentSlice.filter(
+    (c) => c.wholeSim < SIDEWAYS_WHOLE_SIM_FLOOR,
+  );
   const byLane: Record<
     "linear" | "adjacent" | "transformational",
     ScoredCandidate[]
   > = {
     linear: sortedByWhole.slice(0, linearCount),
-    adjacent: sortedByWhole.slice(linearCount, adjacentEnd),
-    transformational: sortedByWhole.slice(adjacentEnd),
+    adjacent,
+    transformational: [...adjacentBelowFloor, ...sortedByWhole.slice(adjacentEnd)],
   };
 
   // Saved-guide override: if a lane ends up empty (only possible when the
