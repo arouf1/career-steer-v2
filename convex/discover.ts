@@ -1,5 +1,7 @@
 // convex/discover.ts
 import { v, ConvexError } from "convex/values";
+import { z } from "zod";
+import { generateText, Output } from "ai";
 import {
   internalAction,
   internalMutation,
@@ -19,7 +21,17 @@ import {
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
 import { cosineSim, assignLane } from "./lib/discoverScoring";
-import { rerank as openRouterRerank } from "../lib/ai/providers";
+import { rerank as openRouterRerank, chatModel } from "../lib/ai/providers";
+
+/**
+ * Model id for Step 8's batched why-match LLM. Matches the
+ * structured-output background-work model used by other Convex actions
+ * (enrichments, careerPaths, outreach), so cost / capability stays
+ * consistent across the codebase. See `lib/ai/prompts/career-paths.ts` for
+ * the canonical constant; we redeclare the literal here to avoid pulling
+ * in unrelated prompt strings.
+ */
+const REASONS_MODEL_ID = "google/gemini-3.1-pro-preview";
 
 /**
  * Test-injectable rerank seam. Production binding is the real OpenRouter
@@ -41,6 +53,84 @@ async function callRerank(args: {
     topN: args.topN,
     model: "cohere/rerank-4-pro",
   });
+}
+
+/**
+ * Step 8 — batched why-match reasons.
+ *
+ * Returns one one-line reason per input pair, keyed by `guideId`. Production
+ * binding calls Gemini 3.1 Pro via OpenRouter with structured output; tests
+ * inject a deterministic implementation via `globalThis.__testReasonsLLM__`
+ * (clean up in a `finally` so the stub doesn't leak).
+ *
+ * Schema: per memory note `feedback_gemini_structured_output_schema_limits`,
+ * Gemini structured output rejects bound/array-length constraints (`.int()`,
+ * `.min/max`, array-length). We keep the schema constraint-free and encode
+ * "one reason per input, ≤18 words" in the prompt instead.
+ */
+async function callReasonsLLM(args: {
+  arcSourceText: string;
+  pairs: Array<{
+    guideId: Id<"career_guides">;
+    title: string;
+    overview: string;
+    slotKind: Slot;
+  }>;
+}): Promise<Map<string, string>> {
+  const injected = (globalThis as any).__testReasonsLLM__;
+  if (injected) return injected(args);
+
+  const ReasonsSchema = z.object({
+    reasons: z.array(
+      z.object({
+        guideId: z.string(),
+        reason: z.string(),
+      }),
+    ),
+  });
+
+  const promptPairs = args.pairs.map((p) => ({
+    guideId: p.guideId,
+    title: p.title,
+    overview: p.overview.slice(0, 600),
+    slotKind: p.slotKind,
+  }));
+
+  const { output } = await generateText({
+    model: chatModel(REASONS_MODEL_ID, { zdr: true }),
+    output: Output.object({ schema: ReasonsSchema }),
+    prompt: `You are writing one-line "why this matches" reasons for a user's career-discovery canvas.
+
+USER'S ASPIRATIONS / WHAT THEY WANT NEXT (free text):
+${args.arcSourceText}
+
+For each guide below, write ONE sentence (≤18 words), in second person ("you"/"your"), explaining why this guide matches THIS user. The "slotKind" gives you the framing: "strong" = directly fits, "bridge" = transferable skills, "aspirational" = far from current life but resonates with what they want, "extra" = adjacent good-to-know.
+
+Return EXACTLY one reason per input guide. Do NOT skip any. The "guideId" in each output MUST be copied verbatim from the input.
+
+GUIDES:
+${JSON.stringify(promptPairs, null, 2)}`,
+  });
+
+  const map = new Map<string, string>();
+  for (const r of output.reasons) map.set(r.guideId, r.reason);
+  return map;
+}
+
+/**
+ * Deterministic per-slot fallback reason used when the batched LLM call
+ * throws. Pulls a representative skill from the guide's content when
+ * available; otherwise drops to a generic phrasing. Keeping this pure +
+ * module-scope so the cache write path can also use it for stub-grade
+ * reasons without re-implementing the templates.
+ */
+function defaultReasonFor(slot: Slot, g: any): string {
+  const skill = g?.content?.typicalSkills?.[0] ?? "your background";
+  if (slot === "strong") return `Strong fit on ${skill}.`;
+  if (slot === "bridge") return `Builds on your ${skill}.`;
+  if (slot === "aspirational")
+    return `A different direction matched to your aspirations.`;
+  return `Worth a look — overlaps with your ${skill}.`;
 }
 
 /**
@@ -409,7 +499,7 @@ export const generateSnapshot = internalAction({
 
     // Step 6a + 6b + 6c: pick strong-fit + bridge + aspirational cards per
     // lane. Step 7 then top-ups extras for the slider expansion pool.
-    const lanes: LaneStub[] = await Promise.all(
+    const builtLanes: LaneStub[] = await Promise.all(
       (["linear", "adjacent", "transformational"] as const).map(async (kind) => {
         const pool = byLane[kind];
         const strong = pickStrong(pool);
@@ -453,11 +543,103 @@ export const generateSnapshot = internalAction({
       }),
     );
 
+    // Step 8 — why-match reasons. Cache-first read, single batched LLM call
+    // for uncached pairs across ALL lanes, persist new reasons, fall back to
+    // deterministic templates if the LLM throws.
+    const allCards = builtLanes.flatMap((l) => l.cards);
+    const cardGuideIds = allCards.map((c) => c.guideId);
+
+    const cachedRows: Array<Doc<"discover_match_reasons">> =
+      args.forceFreshReasons || cardGuideIds.length === 0
+        ? []
+        : await ctx.runQuery(internal.discover._readCachedReasons, {
+            userId: args.userId,
+            profileEmbeddingId: args.expectedProfileEmbeddingId,
+            guideIds: cardGuideIds,
+          });
+    const cachedByGuide = new Map<string, string>(
+      cachedRows.map((r) => [r.guideId as string, r.reason]),
+    );
+
+    // Dedup uncached cards by guideId — a guide could in principle land in
+    // two lanes (saved-override path); we only want one entry per guideId
+    // when we batch into the LLM call.
+    const uncachedByGuide = new Map<string, CardStub>();
+    for (const c of allCards) {
+      const gid = c.guideId as string;
+      if (!cachedByGuide.has(gid) && !uncachedByGuide.has(gid)) {
+        uncachedByGuide.set(gid, c);
+      }
+    }
+    const uncached = Array.from(uncachedByGuide.values());
+
+    const llmReasons = new Map<string, string>();
+    let guideMap = new Map<string, Doc<"career_guides">>();
+    if (uncached.length > 0) {
+      const guides: Doc<"career_guides">[] = await ctx.runQuery(
+        internal.discover._readGuideOverviews,
+        { guideIds: uncached.map((c) => c.guideId) },
+      );
+      guideMap = new Map(guides.map((g) => [g._id as string, g]));
+      const pairs = uncached.map((c) => {
+        const g = guideMap.get(c.guideId as string);
+        return {
+          guideId: c.guideId,
+          title: g?.title ?? "",
+          overview: g?.content?.overview ?? "",
+          slotKind: c.slotKind as Slot,
+        };
+      });
+      try {
+        const fresh = await callReasonsLLM({
+          arcSourceText: profileEmbedding.arcSourceText ?? "",
+          pairs,
+        });
+        for (const [gid, reason] of fresh) llmReasons.set(gid, reason);
+        // Persist freshly generated reasons so the next snapshot hits cache.
+        const entries = Array.from(llmReasons.entries()).map(
+          ([gid, reason]) => ({
+            guideId: gid as Id<"career_guides">,
+            reason,
+          }),
+        );
+        if (entries.length > 0) {
+          await ctx.runMutation(internal.discover._writeReasons, {
+            userId: args.userId,
+            profileEmbeddingId: args.expectedProfileEmbeddingId,
+            entries,
+          });
+        }
+      } catch (err) {
+        console.warn("discover.reasons_llm_failed", { err: String(err) });
+        // Fall back to deterministic per-slot templates. We don't persist
+        // these — caching a template would block a real reason from being
+        // generated on the next run.
+        for (const c of uncached) {
+          const g = guideMap.get(c.guideId as string);
+          llmReasons.set(c.guideId as string, defaultReasonFor(c.slotKind, g));
+        }
+      }
+    }
+
+    // Apply reasons to every card on every lane.
+    const lanesWithReasons: LaneStub[] = builtLanes.map((lane) => ({
+      ...lane,
+      cards: lane.cards.map((c) => {
+        const gid = c.guideId as string;
+        const reason =
+          cachedByGuide.get(gid) ??
+          llmReasons.get(gid) ??
+          defaultReasonFor(c.slotKind, guideMap.get(gid));
+        return { ...c, whyMatchReason: reason };
+      }),
+    }));
+
     await ctx.runMutation(internal.discover._writeSnapshot, {
       userId: args.userId,
       profileId: args.profileId,
       profileEmbeddingId: args.expectedProfileEmbeddingId,
-      lanes,
+      lanes: lanesWithReasons,
     });
   },
 });
@@ -503,6 +685,74 @@ export const _readReactions = internalQuery({
       .query("discover_reactions")
       .withIndex("by_user_and_guide", (q) => q.eq("userId", args.userId))
       .collect();
+  },
+});
+
+/**
+ * Step 8 cache read. The `discover_match_reasons` table is indexed on
+ * `(userId, guideId)`; we narrow to the matching `profileEmbeddingId`
+ * with a follow-up `.filter()` so a stale reason for a previous embedding
+ * version doesn't get returned (the snapshot pipeline keys reasons to the
+ * exact embedding they were generated against).
+ */
+export const _readCachedReasons = internalQuery({
+  args: {
+    userId: v.id("users"),
+    profileEmbeddingId: v.id("profile_embeddings"),
+    guideIds: v.array(v.id("career_guides")),
+  },
+  handler: async (ctx, args) => {
+    const out: Doc<"discover_match_reasons">[] = [];
+    for (const guideId of args.guideIds) {
+      const row = await ctx.db
+        .query("discover_match_reasons")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", args.userId).eq("guideId", guideId),
+        )
+        .filter((q) => q.eq(q.field("profileEmbeddingId"), args.profileEmbeddingId))
+        .unique();
+      if (row) out.push(row);
+    }
+    return out;
+  },
+});
+
+/**
+ * Step 8 cache write. Inserts or replaces reasons for the
+ * (user, guide, embedding) tuple so subsequent snapshots hit cache. We
+ * never persist the deterministic-template fallback (only fresh LLM
+ * results), so a transient outage doesn't poison the cache.
+ */
+export const _writeReasons = internalMutation({
+  args: {
+    userId: v.id("users"),
+    profileEmbeddingId: v.id("profile_embeddings"),
+    entries: v.array(
+      v.object({
+        guideId: v.id("career_guides"),
+        reason: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    for (const e of args.entries) {
+      const existing = await ctx.db
+        .query("discover_match_reasons")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", args.userId).eq("guideId", e.guideId),
+        )
+        .filter((q) => q.eq(q.field("profileEmbeddingId"), args.profileEmbeddingId))
+        .unique();
+      const doc = {
+        userId: args.userId,
+        guideId: e.guideId,
+        profileEmbeddingId: args.profileEmbeddingId,
+        reason: e.reason,
+        generatedAt: Date.now(),
+      };
+      if (existing) await ctx.db.replace(existing._id, doc);
+      else await ctx.db.insert("discover_match_reasons", doc);
+    }
   },
 });
 

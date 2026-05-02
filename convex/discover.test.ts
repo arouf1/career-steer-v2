@@ -528,6 +528,15 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
         ? [{ index: idx, relevanceScore: 0.99 }]
         : [{ index: 0, relevanceScore: 0.5 }];
     };
+    // Stub Step 8 reasons LLM so we don't touch the network here.
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const map = new Map<string, string>();
+      for (const p of args.pairs) map.set(p.guideId, `reason for ${p.guideId}`);
+      return map;
+    };
 
     try {
       await t.action(internal.discover.generateSnapshot, {
@@ -569,6 +578,7 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
       expect(bridgeIds).toHaveLength(2);
     } finally {
       delete (globalThis as any).__testRerank__;
+      delete (globalThis as any).__testReasonsLLM__;
     }
   });
 
@@ -658,6 +668,15 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
     (globalThis as any).__testRerank__ = async () => {
       throw new Error("rerank-network-down");
     };
+    // Stub Step 8 reasons LLM so we don't touch the network here.
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const map = new Map<string, string>();
+      for (const p of args.pairs) map.set(p.guideId, `reason for ${p.guideId}`);
+      return map;
+    };
 
     try {
       await t.action(internal.discover.generateSnapshot, {
@@ -685,6 +704,7 @@ describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () 
       expect(fallbackCandidateIds).toContain(aspirationalCards[0].guideId);
     } finally {
       delete (globalThis as any).__testRerank__;
+      delete (globalThis as any).__testReasonsLLM__;
     }
   });
 });
@@ -873,6 +893,18 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
       if (args.documents.length === 0) return [];
       return [{ index: 0, relevanceScore: 0.9 }];
     };
+    // Stub the reasons LLM seam so we don't touch the network. Returns a
+    // simple keyed-by-guideId map; Step 8 wires reasons onto every card.
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const map = new Map<string, string>();
+      for (const p of args.pairs) {
+        map.set(p.guideId, `reason for ${p.guideId}`);
+      }
+      return map;
+    };
 
     try {
       await t.action(internal.discover.generateSnapshot, {
@@ -905,10 +937,11 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
       expect(extras.length).toBeGreaterThan(0);
       expect(extras.length).toBe(14);
 
-      // Extras carry the stub why-match reason and the right slotKind shape.
+      // Extras carry a non-empty why-match reason from the stubbed LLM.
       for (const card of extras) {
         expect(card.slotKind).toBe("extra");
-        expect(card.whyMatchReason).toBe("(stub)");
+        expect(card.whyMatchReason.length).toBeGreaterThan(0);
+        expect(card.whyMatchReason).not.toBe("(stub)");
       }
 
       // Extras are ordered by arcScore desc (highest-arc first).
@@ -927,6 +960,299 @@ describe("discover.generateSnapshot — Step 7 (extras pool)", () => {
       expect(transformational?.cards ?? []).toHaveLength(0);
     } finally {
       delete (globalThis as any).__testRerank__;
+      delete (globalThis as any).__testReasonsLLM__;
+    }
+  });
+});
+
+describe("discover.generateSnapshot — Step 8 (why-match reasons)", () => {
+  it("populates whyMatchReason from cache hits without calling the LLM", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, guideId } = await t.run(
+      async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-reasons-cache",
+          email: "reasons-cache@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          arcSourceText: "I want to lead a small team",
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("cached-reason", "Cached reason guide"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // Pre-seed a cached reason for this (user, guide, embedding) tuple.
+        await ctx.db.insert("discover_match_reasons", {
+          userId,
+          guideId,
+          profileEmbeddingId: embeddingId,
+          reason: "CACHED reason text",
+          generatedAt: Date.now(),
+        });
+
+        return { userId, profileId, embeddingId, guideId };
+      },
+    );
+
+    let llmCalls = 0;
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      llmCalls += 1;
+      const map = new Map<string, string>();
+      for (const p of args.pairs) map.set(p.guideId, "LIVE reason text");
+      return map;
+    };
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: false,
+      });
+
+      const snapshot = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+      });
+      expect(snapshot).not.toBeNull();
+      const card = snapshot!.lanes
+        .flatMap((l) => l.cards)
+        .find((c) => c.guideId === guideId);
+      expect(card).toBeDefined();
+      expect(card!.whyMatchReason).toBe("CACHED reason text");
+      expect(llmCalls).toBe(0);
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
+    }
+  });
+
+  it("batches uncached pairs into a single LLM call", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, guideIds } = await t.run(
+      async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-reasons-batch",
+          email: "reasons-batch@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          arcSourceText: "I want to ship beautiful tools",
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const guideIds: Id<"career_guides">[] = [];
+        for (let i = 0; i < 4; i++) {
+          const id = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`batch-${i}`, `Batch ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId: id,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [1 - i * 0.01, i * 0.01, 0, 0],
+            currentStateVector: [1, 0, 0, 0],
+            domainVector: [1, 0, 0, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+          guideIds.push(id);
+        }
+
+        return { userId, profileId, embeddingId, guideIds };
+      },
+    );
+
+    let callCount = 0;
+    let lastPairCount = 0;
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      arcSourceText: string;
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      callCount += 1;
+      lastPairCount = args.pairs.length;
+      const map = new Map<string, string>();
+      for (const p of args.pairs) {
+        map.set(p.guideId, `batched reason for ${p.guideId}`);
+      }
+      return map;
+    };
+    // Step 6c needs rerank stubbed too so the aspirational pick is determinstic.
+    (globalThis as any).__testRerank__ = async (args: {
+      query: string;
+      documents: string[];
+      topN: number;
+    }) => {
+      if (args.documents.length === 0) return [];
+      return [{ index: 0, relevanceScore: 0.9 }];
+    };
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+
+      const snapshot = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+      });
+      expect(snapshot).not.toBeNull();
+
+      const allCards = snapshot!.lanes.flatMap((l) => l.cards);
+      // All 4 seeded guides should be on the canvas.
+      const cardGuideIds = allCards.map((c) => c.guideId);
+      for (const id of guideIds) expect(cardGuideIds).toContain(id);
+
+      // Exactly one batched LLM call, covering every uncached card.
+      expect(callCount).toBe(1);
+      expect(lastPairCount).toBe(allCards.length);
+
+      // Every card got a non-stub reason from the batched call.
+      for (const card of allCards) {
+        expect(card.whyMatchReason).toBe(
+          `batched reason for ${card.guideId}`,
+        );
+      }
+
+      // Reasons were persisted to the cache.
+      const cached = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("discover_match_reasons")
+          .withIndex("by_user_and_guide", (q) => q.eq("userId", userId))
+          .collect();
+      });
+      const cachedByGuide = new Map(cached.map((r) => [r.guideId, r.reason]));
+      for (const card of allCards) {
+        expect(cachedByGuide.get(card.guideId)).toBe(
+          `batched reason for ${card.guideId}`,
+        );
+      }
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+
+  it("falls back to deterministic templates when the LLM throws", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, guideId } = await t.run(
+      async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-reasons-fallback",
+          email: "reasons-fallback@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          arcSourceText: "I want a calmer life",
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed("template-fallback", "Template fallback"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        return { userId, profileId, embeddingId, guideId };
+      },
+    );
+
+    (globalThis as any).__testReasonsLLM__ = async () => {
+      throw new Error("reasons-network-down");
+    };
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+
+      const snapshot = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+      });
+      expect(snapshot).not.toBeNull();
+      const card = snapshot!.lanes
+        .flatMap((l) => l.cards)
+        .find((c) => c.guideId === guideId);
+      expect(card).toBeDefined();
+      expect(card!.whyMatchReason).not.toBe("(stub)");
+      expect(card!.whyMatchReason.length).toBeGreaterThan(0);
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
     }
   });
 });
