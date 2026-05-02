@@ -6,17 +6,10 @@ import { ArrowLeft } from "lucide-react";
 import type { GuideCardData } from "./CanvasNodes";
 
 const LANE_TINT: Record<string, string> = {
-  linear: "oklch(0.985 0.008 70)",
-  adjacent: "oklch(0.98 0.005 220)",
-  earlier: "oklch(0.978 0.007 120)",
-  transformational: "oklch(0.978 0.008 290)",
-};
-
-const SLOT_ORDER: Record<string, number> = {
-  strong: 0,
-  bridge: 1,
-  aspirational: 2,
-  extra: 3,
+  linear: "oklch(0.975 0.011 70)",
+  adjacent: "oklch(0.973 0.009 220)",
+  earlier: "oklch(0.973 0.010 130)",
+  transformational: "oklch(0.973 0.011 290)",
 };
 
 const SLOT_LABEL: Record<GuideCardData["slotKind"], string> = {
@@ -26,7 +19,15 @@ const SLOT_LABEL: Record<GuideCardData["slotKind"], string> = {
   extra: "More",
 };
 
-export type FocusedCard = GuideCardData & { lane: string };
+// `x` / `y` are the card's position in the canvas's virtual coordinate
+// system, where the user node sits at (0, 0). Carrying them through
+// from DiscoverCanvas lets the focused grid mirror the canvas's
+// "closer = closer fit" ordering rather than re-sorting by slot tier.
+export type FocusedCard = GuideCardData & {
+  lane: string;
+  x: number;
+  y: number;
+};
 
 export function FocusedLaneView({
   lane,
@@ -52,13 +53,12 @@ export function FocusedLaneView({
     return () => window.removeEventListener("keydown", onKey);
   }, [onBack]);
 
-  // Sort: by slot tier (strong → bridge → aspirational → extra), then arcScore desc.
-  const sorted = [...cards].sort((a, b) => {
-    const slotDiff =
-      (SLOT_ORDER[a.slotKind] ?? 4) - (SLOT_ORDER[b.slotKind] ?? 4);
-    if (slotDiff !== 0) return slotDiff;
-    return b.arcScore - a.arcScore;
-  });
+  // Sort by squared Euclidean distance from the user node — mirrors the
+  // canvas where closer to (0, 0) means closer fit. Squared distance is
+  // sufficient since we only need ordering, not the actual magnitude.
+  const sorted = [...cards].sort(
+    (a, b) => a.x * a.x + a.y * a.y - (b.x * b.x + b.y * b.y),
+  );
 
   return (
     <motion.div

@@ -42,7 +42,10 @@ export function GuideCard({
       onClick={onClick}
       className={cn(
         "group relative flex w-[200px] flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-all",
-        "hover:z-10 hover:border-ink-deep hover:shadow-md focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
+        // Magnify and elevate visually on hover/focus. z-elevation lives
+        // on the wrapper div in DiscoverCanvas (the wrapper's transform
+        // creates a stacking context that would trap any z-index here).
+        "hover:scale-[2] hover:border-ink-deep hover:shadow-lg focus-visible:scale-[2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
         isSaved
           ? "border-hairline-strong bg-paper-raised"
           : "border-hairline bg-white",

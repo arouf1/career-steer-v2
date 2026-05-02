@@ -15,10 +15,10 @@ export function DiscoverGenerating() {
       {/* Quadrant tints — matches the live canvas exactly so the loader's
           geometry is the canvas's geometry. */}
       <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
-        <div className="bg-[oklch(0.985_0.008_70)]" />
-        <div className="bg-[oklch(0.98_0.005_220)]" />
-        <div className="bg-[oklch(0.978_0.007_120)]" />
-        <div className="bg-[oklch(0.978_0.008_290)]" />
+        <div className="bg-[oklch(0.975_0.011_70)]" />
+        <div className="bg-[oklch(0.973_0.009_220)]" />
+        <div className="bg-[oklch(0.973_0.010_130)]" />
+        <div className="bg-[oklch(0.973_0.011_290)]" />
       </div>
 
       {/* Skeleton cards — distributed across all four quadrants at fixed

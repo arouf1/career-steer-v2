@@ -56,15 +56,22 @@ const LANE_LABEL_TEXT = {
   transformational: "A different chapter",
 } as const;
 
-// Lane labels live OUTSIDE the scaled virtual canvas — positioned as a
-// percentage of the wrapper so they always land at the exact tint cell
-// centres regardless of the canvas zoom level.
-const LANE_LABEL_POS = {
-  linear: { left: "25%", top: "25%" },
-  adjacent: { left: "75%", top: "25%" },
-  earlier: { left: "25%", top: "75%" },
-  transformational: { left: "75%", top: "75%" },
-} as const;
+// Lane labels live OUTSIDE the scaled virtual canvas — anchored to the
+// outer top/bottom edge of the wrapper and centred horizontally over each
+// column. The previous placement at the visual centre of each tint cell
+// (25%/75%) collided with the aspirational rim of each quadrant: cards
+// scatter outward from the user node and at typical aspect ratios the
+// outermost cards land almost exactly where 25%/75% sits. Pushing labels
+// to the wrapper edge keeps them in empty space and out of the card cluster.
+const LANE_LABEL_POS: Record<
+  LaneKey,
+  { left: string; top?: string; bottom?: string }
+> = {
+  linear: { left: "25%", top: "1.25rem" },
+  adjacent: { left: "75%", top: "1.25rem" },
+  earlier: { left: "25%", bottom: "1.25rem" },
+  transformational: { left: "75%", bottom: "1.25rem" },
+};
 
 type LaneKey = keyof typeof LANE_LABEL_TEXT;
 
@@ -87,11 +94,13 @@ function DiscoverCanvasInner() {
   const [zoom, setZoom] = useState(1);
   const [focusedLane, setFocusedLane] = useState<LaneKey | null>(null);
 
-  // Compute scale to fit the canvas inside the wrapper. Re-runs on resize and
-  // when zoom changes. 0.88 leaves a generous visual margin around the canvas
-  // so the card cluster sits centrally with breathing room (and outermost
-  // cards never get clipped against the wrapper bounds). The user-controlled
-  // `zoom` multiplier rides on top of the auto-fit scale.
+  // Compute scale to fit the canvas inside the wrapper. Re-runs on resize
+  // and when zoom changes. The 1.2 multiplier zooms past the strict
+  // contain-fit so the card cluster fills the visible canvas — the
+  // virtual canvas already includes generous padding around the cluster
+  // (CANVAS_VIRTUAL_WIDTH = QUADRANT_HALF * 2 + 800), and that padding
+  // would double-up if we also shrank to 0.88 of the contain-fit. The
+  // user-controlled `zoom` multiplier rides on top of the auto-fit scale.
   //
   // Wrapper is held as state (callback ref pattern) rather than a useRef so
   // the resize-observer effect re-runs when the element actually mounts.
@@ -106,7 +115,7 @@ function DiscoverCanvasInner() {
     const update = () => {
       const sx = wrapper.clientWidth / CANVAS_VIRTUAL_WIDTH;
       const sy = wrapper.clientHeight / CANVAS_VIRTUAL_HEIGHT;
-      setScale(Math.min(sx, sy) * 0.88 * zoom);
+      setScale(Math.min(sx, sy) * 1.2 * zoom);
     };
     update();
     const ro = new ResizeObserver(update);
@@ -226,20 +235,21 @@ function DiscoverCanvasInner() {
         primary.
       */}
       <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
-        {/* top-left = Next steps — warm-yellow cream (most aspirational, draws eye) */}
-        <div className="bg-[oklch(0.985_0.008_70)]" />
-        {/* top-right = Sideways moves — cool-neutral cream */}
-        <div className="bg-[oklch(0.98_0.005_220)]" />
-        {/* bottom-left = Earlier chapters — slight green-cream (foundational, calm) */}
-        <div className="bg-[oklch(0.978_0.007_120)]" />
-        {/* bottom-right = A different chapter — lavender (alternative direction) */}
-        <div className="bg-[oklch(0.978_0.008_290)]" />
+        {/* top-left = Next steps — barely-tinted warm cream */}
+        <div className="bg-[oklch(0.975_0.011_70)]" />
+        {/* top-right = Sideways moves — barely-tinted cool cream */}
+        <div className="bg-[oklch(0.973_0.009_220)]" />
+        {/* bottom-left = Earlier chapters — barely-tinted green-cream */}
+        <div className="bg-[oklch(0.973_0.010_130)]" />
+        {/* bottom-right = A different chapter — barely-tinted lavender-cream */}
+        <div className="bg-[oklch(0.973_0.011_290)]" />
       </div>
 
       {/*
-        Lane labels — positioned at the visual centre of each tint cell
-        (25%/75% of the wrapper) so they're decoupled from the scaled
-        virtual canvas and always land where the eye expects them.
+        Lane labels — anchored to the wrapper's outer top/bottom edge and
+        centred horizontally over each column. Sits in the empty margin
+        around the card cluster, so the aspirational rim of each quadrant
+        no longer collides with its label.
       */}
       {(Object.keys(LANE_LABEL_TEXT) as Array<LaneKey>).map((lane) => {
         const pos = LANE_LABEL_POS[lane];
@@ -250,9 +260,8 @@ function DiscoverCanvasInner() {
             key={`label:${lane}`}
             className="absolute z-20"
             style={{
-              left: pos.left,
-              top: pos.top,
-              transform: "translate(-50%, -50%)",
+              ...pos,
+              transform: "translateX(-50%)",
             }}
           >
             <LaneLabel
@@ -346,7 +355,11 @@ function DiscoverCanvasInner() {
             return (
               <div
                 key={c.guideId as string}
-                className="absolute"
+                // Hover/focus elevation lives on the wrapper, not the
+                // button. The wrapper's `transform` creates its own
+                // stacking context, which would trap any z-index set on
+                // the inner button.
+                className="absolute hover:z-10 focus-within:z-10"
                 style={{
                   left: c.x,
                   top: c.y,
