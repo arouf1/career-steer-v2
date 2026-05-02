@@ -142,7 +142,7 @@ export function CareerGuideSearchHero() {
 
   return (
     <section className="border-b border-hairline">
-      <div className="mx-auto max-w-4xl px-6 py-20 text-center sm:py-28">
+      <div className="mx-auto max-w-4xl px-6 pb-10 pt-20 text-center sm:pb-14 sm:pt-28">
         <p className="type-label mb-6 text-mute">Career guides, written on demand</p>
         <h1 className="type-display text-ink">
           The honest guide to <span className="text-ink-soft">any</span> job.
