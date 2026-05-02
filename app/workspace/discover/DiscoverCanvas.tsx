@@ -166,6 +166,22 @@ function DiscoverCanvasInner() {
 
   return (
     <div className="relative h-full w-full bg-white">
+      {/*
+        Quadrant tints — barely-visible cream variants, one per canvas
+        region. Sit BEHIND React Flow's nodes via DOM order. Chroma stays
+        below 0.01 so they read as "tinted neutrals," not color blocks —
+        the brand register is editorial cream, not Memphis primary.
+      */}
+      <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
+        {/* top-left: shared between linear (top) and different (left) — cool neutral */}
+        <div className="bg-[oklch(0.98_0.006_220)]" />
+        {/* top-right: linear + adjacent — barely-warmer cream */}
+        <div className="bg-[oklch(0.985_0.007_70)]" />
+        {/* bottom-left: earlier + different — subtle lavender */}
+        <div className="bg-[oklch(0.975_0.006_290)]" />
+        {/* bottom-right: earlier + adjacent — slightly cooler cream */}
+        <div className="bg-[oklch(0.98_0.005_100)]" />
+      </div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -175,10 +191,11 @@ function DiscoverCanvasInner() {
         maxZoom={1.6}
         nodesDraggable={false}
         proOptions={{ hideAttribution: true }}
+        className="!bg-transparent"
       >
         <Background gap={24} size={1} color="oklch(0.92 0.005 35)" />
         <Controls showInteractive={false} showFitView />
-        <Panel position="bottom-left" className="!m-3">
+        <Panel position="bottom-center" className="!m-3">
           <p className="text-[11px] italic text-mute">
             Closer to you means closer fit · Direction means kind of move
           </p>

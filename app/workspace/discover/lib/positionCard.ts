@@ -64,8 +64,21 @@ export function positionCard(args: {
     SELF_RING_RADIUS + (1 - args.arcScore) * (MAX_RADIUS - SELF_RING_RADIUS);
   const radius = baseRadius + SLOT_JITTER[args.slotKind];
 
+  // L∞ (max-norm / Chebyshev) projection so the locus at "distance R" is a
+  // SQUARE inscribed at that radius — not a circle. With 4 cardinal-direction
+  // wedges, the cards in each lane then sit along one straight EDGE of the
+  // square frame around the user, instead of along an arc of a diamond.
+  //
+  // - At cardinal angles (0°, 90°, 180°, 270°): denom = 1 → unchanged.
+  // - At 45° corners: denom = √2/2 ≈ 0.707 → scale ×√2 ≈ 1.41 outward to
+  //   reach the corner of the square inscribed at `radius`.
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  const denom = Math.max(Math.abs(cos), Math.abs(sin));
+  const k = denom === 0 ? 0 : radius / denom;
+
   return {
-    x: radius * Math.cos(angleRad),
-    y: radius * Math.sin(angleRad),
+    x: k * cos,
+    y: k * sin,
   };
 }

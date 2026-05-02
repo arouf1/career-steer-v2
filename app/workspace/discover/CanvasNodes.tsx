@@ -50,7 +50,7 @@ export function GuideCardNode({ data }: NodeProps) {
         onClick={() => d.onClick(d.guideId)}
         className={cn(
           "group relative flex w-[200px] flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-all",
-          "hover:border-ink-deep hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
+          "hover:z-10 hover:border-ink-deep hover:shadow-md focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
           isSaved
             ? "border-hairline-strong bg-paper-raised"
             : "border-hairline bg-white",
@@ -60,13 +60,16 @@ export function GuideCardNode({ data }: NodeProps) {
         {isSaved && (
           <Bookmark className="absolute right-2.5 top-2.5 size-3.5 fill-ink text-ink" />
         )}
-        <span className="text-[11px] italic text-mute">
+        {/* Eyebrow — collapsed at rest, fades in on hover/focus. */}
+        <span className="max-h-0 overflow-hidden text-[11px] italic text-mute opacity-0 transition-all duration-200 group-hover:max-h-6 group-hover:opacity-100 group-focus-visible:max-h-6 group-focus-visible:opacity-100">
           {SLOT_BADGE_LABEL[d.slotKind]}
         </span>
+        {/* Title — always visible. */}
         <div className="line-clamp-2 text-sm font-medium leading-tight text-ink">
           {d.title}
         </div>
-        <div className="line-clamp-2 text-xs italic text-ink-soft">
+        {/* Why-match — collapsed at rest, expands on hover/focus. */}
+        <div className="line-clamp-2 max-h-0 overflow-hidden text-xs italic text-ink-soft opacity-0 transition-all duration-200 group-hover:max-h-12 group-hover:opacity-100 group-focus-visible:max-h-12 group-focus-visible:opacity-100">
           {d.whyMatchReason}
         </div>
       </button>
@@ -97,11 +100,17 @@ export function UserNodeView({ data }: NodeProps) {
 export function LaneLabelNode({ data }: NodeProps) {
   const d = data as unknown as LaneLabelData;
   return (
-    <div className="pointer-events-none flex items-center gap-2 whitespace-nowrap">
-      <span className="type-label text-[11px] tracking-wider text-ink">
-        {d.label.toUpperCase()}
+    <div className="pointer-events-none flex items-baseline gap-2 whitespace-nowrap">
+      {/*
+        Lane labels are now the canvas's primary navigational scaffold —
+        bumped from 11px to the project's `type-label` token (13px / 0.06em
+        tracking, weight 500) and widened slightly via `tracking-[0.18em]`
+        for editorial section-header presence. Count stays subdued at 11px.
+      */}
+      <span className="type-label uppercase tracking-[0.18em] text-ink">
+        {d.label}
       </span>
-      <span className="type-label text-[11px] text-mute">· {d.count}</span>
+      <span className="text-[11px] text-mute">· {d.count}</span>
     </div>
   );
 }
