@@ -22,7 +22,7 @@ import {
   REGEN_DEBOUNCE_MS,
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
-import { cosineSim, assignLane } from "./lib/discoverScoring";
+import { cosineSim } from "./lib/discoverScoring";
 import { rerank as openRouterRerank, chatModel } from "../lib/ai/providers";
 
 /**
@@ -502,26 +502,39 @@ async function runPipeline(
     (c) => !dismissed.has(c.guideId as string),
   );
 
-  // Step 5: Lane assignment by currentStateSim.
+  // Step 5: Lane assignment by currentStateSim percentile WITHIN the user's
+  // surviving candidate pool.
+  //
+  // Why percentile instead of absolute thresholds: Gemini's text-embedding
+  // distribution for career-related content concentrates around cosine 0.6-0.7
+  // regardless of true semantic distance — Massage Therapist vs AI Engineer
+  // scores ~0.65, same as Software Engineer vs AI Engineer. Absolute cutoffs
+  // therefore lump everything into one lane (whichever side of the threshold
+  // the cluster lands on). Bucketing by rank within THIS user's pool restores
+  // a meaningful spread: the closest 20% land in linear, the most distant 50%
+  // land in transformational, regardless of where the cluster sits.
+  //
+  // The fixed `LANE_THRESHOLDS` (LINEAR_MIN / ADJACENT_MIN) remain as soft
+  // floors — exposed via `assignLane` for the saved-override below — but no
+  // longer drive the primary bucketing.
+  const sortedByCurrent = [...surviving].sort(
+    (a, b) => b.currentStateSim - a.currentStateSim,
+  );
+  const linearCount = Math.ceil(sortedByCurrent.length * 0.2);
+  const adjacentEnd = Math.ceil(sortedByCurrent.length * 0.5);
   const byLane: Record<
     "linear" | "adjacent" | "transformational",
     ScoredCandidate[]
   > = {
-    linear: [],
-    adjacent: [],
-    transformational: [],
+    linear: sortedByCurrent.slice(0, linearCount),
+    adjacent: sortedByCurrent.slice(linearCount, adjacentEnd),
+    transformational: sortedByCurrent.slice(adjacentEnd),
   };
-  for (const c of surviving) {
-    byLane[assignLane(c.currentStateSim)].push(c);
-  }
 
-  // Saved-guide override: if a lane is empty, pull the highest-arcSim saved
-  // guide that didn't naturally land there into it. Remove the picked guide
-  // from its natural lane to avoid duplication across lanes.
-  //
-  // Snapshot of empty lanes is taken once: only originally-empty lanes get
-  // backfilled from the saved set. We don't cascade — a pick that empties
-  // its natural lane mid-loop is not re-treated as eligible for backfill.
+  // Saved-guide override: if a lane ends up empty (only possible when the
+  // candidate pool is very small — e.g. ≤ 4 candidates), pull a saved guide
+  // from elsewhere to fill it. Under percentile bucketing this rarely fires
+  // for active users; kept for the cold-start case.
   const emptyLanes = (
     Object.keys(byLane) as Array<keyof typeof byLane>
   ).filter((k) => byLane[k].length === 0);
@@ -530,15 +543,19 @@ async function runPipeline(
       .filter((c) => savedSet.has(c.guideId as string))
       .sort((a, b) => b.arcSim - a.arcSim);
     for (const emptyLane of emptyLanes) {
-      const pick = savedCandidates.find(
-        (c) => assignLane(c.currentStateSim) !== emptyLane,
-      );
+      const pick = savedCandidates.find((c) => {
+        const currentLane = (
+          ["linear", "adjacent", "transformational"] as const
+        ).find((kind) => byLane[kind].includes(c));
+        return currentLane !== undefined && currentLane !== emptyLane;
+      });
       if (pick) {
         byLane[emptyLane].push(pick);
-        // Remove from its natural lane so a later iteration doesn't re-pick
-        // it and end up with the same guide in two lanes.
-        const natural = assignLane(pick.currentStateSim);
-        byLane[natural] = byLane[natural].filter((x) => x !== pick);
+        for (const kind of ["linear", "adjacent", "transformational"] as const) {
+          if (kind !== emptyLane) {
+            byLane[kind] = byLane[kind].filter((x) => x !== pick);
+          }
+        }
       }
     }
   }
