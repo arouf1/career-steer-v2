@@ -12,12 +12,36 @@ import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import {
   ARC_SIM_FLOOR,
+  ASPIRATIONAL_RERANK_TOP_N,
   CANDIDATE_POOL_K,
   LANE_BUDGET,
   REGEN_DEBOUNCE_MS,
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
 import { cosineSim, assignLane } from "./lib/discoverScoring";
+import { rerank as openRouterRerank } from "../lib/ai/providers";
+
+/**
+ * Test-injectable rerank seam. Production binding is the real OpenRouter
+ * call; tests overwrite via `globalThis.__testRerank__` so the deterministic
+ * suite never touches the network. Tests should clean up with
+ * `delete (globalThis as any).__testRerank__` (preferably in a finally
+ * block) so the stub can't leak between tests.
+ */
+async function callRerank(args: {
+  query: string;
+  documents: string[];
+  topN: number;
+}): Promise<Array<{ index: number; relevanceScore: number }>> {
+  const injected = (globalThis as any).__testRerank__;
+  if (injected) return injected(args);
+  return openRouterRerank({
+    query: args.query,
+    documents: args.documents,
+    topN: args.topN,
+    model: "cohere/rerank-4-pro",
+  });
+}
 
 /**
  * Resolve the calling user's userId. Throws if unauthenticated.
@@ -199,6 +223,64 @@ function pickBridge(
 }
 
 /**
+ * Step 6c — aspirational pick. Pulls the top ASPIRATIONAL_RERANK_TOP_N
+ * remaining candidates by arcSim, fetches their overview text, and asks
+ * Cohere rerank (via the `callRerank` test seam) to pick the single
+ * most-resonant guide for the user's `arcSourceText`. If rerank throws
+ * (network down, provider hiccup) or returns nothing, falls back to the
+ * deterministic formula `max(arcSim - currentStateSim)` over the same
+ * remaining set so a snapshot still ships.
+ *
+ * `excluded` carries the strong + bridge guideIds for this lane so the
+ * aspirational slot never duplicates a card already on the lane.
+ */
+async function pickAspirational(
+  ctx: any,
+  pool: ScoredCandidate[],
+  excluded: Set<string>,
+  arcSourceText: string,
+): Promise<ScoredCandidate | undefined> {
+  const remaining = pool
+    .filter((c) => !excluded.has(c.guideId as string))
+    .sort((a, b) => b.arcSim - a.arcSim)
+    .slice(0, ASPIRATIONAL_RERANK_TOP_N);
+  if (remaining.length === 0) return undefined;
+
+  // Pull each candidate's overview text for rerank. `content` is optional
+  // on the schema; fall back to `title` so the rerank query always sees
+  // *some* text per candidate.
+  const guides = await ctx.runQuery(internal.discover._readGuideOverviews, {
+    guideIds: remaining.map((c) => c.guideId),
+  });
+  const docs = remaining.map((c) => {
+    const g = guides.find((x: any) => x._id === c.guideId);
+    return g?.content?.overview ?? g?.title ?? "";
+  });
+
+  try {
+    const ranked = await callRerank({
+      query: arcSourceText,
+      documents: docs,
+      topN: 1,
+    });
+    if (ranked.length > 0) {
+      const idx = ranked[0].index;
+      if (idx >= 0 && idx < remaining.length) return remaining[idx];
+    }
+  } catch (err) {
+    console.warn("discover.rerank_failed", { err: String(err) });
+  }
+
+  // Formula fallback: highest stretch (arcSim - currentStateSim) wins.
+  return remaining
+    .slice()
+    .sort(
+      (a, b) =>
+        b.arcSim - b.currentStateSim - (a.arcSim - a.currentStateSim),
+    )[0];
+}
+
+/**
  * Canonical card-shape factory. Tasks 2.5/2.6/2.7 build their own slot
  * pickers on top of this helper so the persisted shape stays consistent.
  */
@@ -325,23 +407,36 @@ export const generateSnapshot = internalAction({
       }
     }
 
-    // Step 6a + 6b: pick strong-fit + bridge cards per lane. The aspirational
-    // slot lands in Task 2.5; extras for the slider land in Task 2.6.
-    const lanes: LaneStub[] = (
-      ["linear", "adjacent", "transformational"] as const
-    ).map((kind) => {
-      const pool = byLane[kind];
-      const strong = pickStrong(pool);
-      const strongIds = new Set(strong.map((c) => c.guideId as string));
-      const bridge = pickBridge(pool, strongIds);
-      return {
-        kind,
-        cards: [
-          ...strong.map((c) => withSlot(c, "strong", "(stub)")),
-          ...bridge.map((c) => withSlot(c, "bridge", "(stub)")),
-        ],
-      };
-    });
+    // Step 6a + 6b + 6c: pick strong-fit + bridge + aspirational cards per
+    // lane. Extras for the slider land in Task 2.6.
+    const lanes: LaneStub[] = await Promise.all(
+      (["linear", "adjacent", "transformational"] as const).map(async (kind) => {
+        const pool = byLane[kind];
+        const strong = pickStrong(pool);
+        const strongIds = new Set(strong.map((c) => c.guideId as string));
+        const bridge = pickBridge(pool, strongIds);
+        const usedIds = new Set([
+          ...strongIds,
+          ...bridge.map((c) => c.guideId as string),
+        ]);
+        const aspirational = await pickAspirational(
+          ctx,
+          pool,
+          usedIds,
+          profileEmbedding.arcSourceText ?? "",
+        );
+        return {
+          kind,
+          cards: [
+            ...strong.map((c) => withSlot(c, "strong", "(stub)")),
+            ...bridge.map((c) => withSlot(c, "bridge", "(stub)")),
+            ...(aspirational
+              ? [withSlot(aspirational, "aspirational", "(stub)")]
+              : []),
+          ],
+        };
+      }),
+    );
 
     await ctx.runMutation(internal.discover._writeSnapshot, {
       userId: args.userId,
@@ -365,6 +460,24 @@ export const _readAllGuideEmbeddings = internalQuery({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("career_guide_embeddings").collect();
+  },
+});
+
+/**
+ * Reads guides by id for the Step 6c rerank prompt. Returns the full guide
+ * docs so the caller can pull `content?.overview` (preferred) or fall back
+ * to `title` when overviews are missing. Order is not guaranteed — callers
+ * resolve by id.
+ */
+export const _readGuideOverviews = internalQuery({
+  args: { guideIds: v.array(v.id("career_guides")) },
+  handler: async (ctx, args) => {
+    const out: Array<Doc<"career_guides">> = [];
+    for (const id of args.guideIds) {
+      const g = await ctx.db.get(id);
+      if (g) out.push(g);
+    }
+    return out;
   },
 });
 

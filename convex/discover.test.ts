@@ -396,6 +396,299 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
   });
 });
 
+describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () => {
+  it("uses rerank top-1 as the aspirational slot when rerank succeeds", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const {
+      userId,
+      profileId,
+      embeddingId,
+      strongIds,
+      bridgeIds,
+      aspirationalId,
+      otherAspirationalId,
+    } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-aspirational-rerank",
+        email: "asp-rerank@example.com",
+      });
+      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      // Profile facets — currentStateVector aligned so all candidates land
+      // in linear; arcVector aligned so arcSim drives strong picks.
+      const embeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "I want to write things people remember",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      // 3 strong picks: arcSim = 1.0, domainSim = 0.0.
+      const strongIds: Id<"career_guides">[] = [];
+      for (let i = 0; i < 3; i++) {
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed(`strong-${i}`, `Strong ${i}`),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [0, 1, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+        strongIds.push(guideId);
+      }
+
+      // 2 bridge picks: arcSim = 0.6, domainSim = 1.0.
+      const bridgeIds: Id<"career_guides">[] = [];
+      for (let i = 0; i < 2; i++) {
+        const guideId = await ctx.db.insert(
+          "career_guides",
+          guideSeed(`bridge-${i}`, `Bridge ${i}`),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [0.6, 0.8, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+        bridgeIds.push(guideId);
+      }
+
+      // Aspirational candidates: arcSim = 0.8 (above floor, below strong).
+      // Both share the same scores, so the rerank seam decides which wins.
+      const aspirationalId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("rerank-wins", "Rerank wins"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId: aspirationalId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [0.8, 0.6, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [0, 1, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      const otherAspirationalId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("rerank-loses", "Rerank loses"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId: otherAspirationalId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [0.8, 0.6, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [0, 1, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+
+      return {
+        userId,
+        profileId,
+        embeddingId,
+        strongIds,
+        bridgeIds,
+        aspirationalId,
+        otherAspirationalId,
+      };
+    });
+
+    // Inject a deterministic rerank: pick the index whose document text
+    // contains "Rerank wins". The test cleanup runs in finally so a thrown
+    // assertion doesn't leak the stub into other tests.
+    (globalThis as any).__testRerank__ = async (args: {
+      query: string;
+      documents: string[];
+      topN: number;
+    }) => {
+      const idx = args.documents.findIndex((d) => d.includes("Rerank wins"));
+      return idx >= 0
+        ? [{ index: idx, relevanceScore: 0.99 }]
+        : [{ index: 0, relevanceScore: 0.5 }];
+    };
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+
+      const snapshot = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+      });
+      expect(snapshot).not.toBeNull();
+      expect(snapshot!.status).toBe("ready");
+
+      const linearLane = snapshot!.lanes.find((l) => l.kind === "linear");
+      expect(linearLane).toBeDefined();
+
+      const aspirationalCards = linearLane!.cards.filter(
+        (c) => c.slotKind === "aspirational",
+      );
+      expect(aspirationalCards).toHaveLength(1);
+      expect(aspirationalCards[0].guideId).toBe(aspirationalId);
+      expect(aspirationalCards[0].guideId).not.toBe(otherAspirationalId);
+
+      // Sanity: strong + bridge counts unchanged by 6c.
+      expect(
+        linearLane!.cards.filter((c) => c.slotKind === "strong"),
+      ).toHaveLength(3);
+      expect(
+        linearLane!.cards.filter((c) => c.slotKind === "bridge"),
+      ).toHaveLength(2);
+
+      // Reference both strong + bridge id sets so the test data is exercised.
+      expect(strongIds).toHaveLength(3);
+      expect(bridgeIds).toHaveLength(2);
+    } finally {
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+
+  it("falls back to formula when rerank throws", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, fallbackCandidateIds } =
+      await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-aspirational-fallback",
+          email: "asp-fallback@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          arcSourceText: "I want to write things people remember",
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        // 3 strong + 2 bridge as before, plus 2 aspirational candidates.
+        for (let i = 0; i < 3; i++) {
+          const guideId = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`strong-${i}`, `Strong ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [1, 0, 0, 0],
+            currentStateVector: [1, 0, 0, 0],
+            domainVector: [0, 1, 0, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+        }
+        for (let i = 0; i < 2; i++) {
+          const guideId = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`bridge-${i}`, `Bridge ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [0.6, 0.8, 0, 0],
+            currentStateVector: [1, 0, 0, 0],
+            domainVector: [1, 0, 0, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+        }
+
+        const fallbackCandidateIds: Id<"career_guides">[] = [];
+        for (let i = 0; i < 2; i++) {
+          const guideId = await ctx.db.insert(
+            "career_guides",
+            guideSeed(`fallback-${i}`, `Fallback ${i}`),
+          );
+          await ctx.db.insert("career_guide_embeddings", {
+            guideId,
+            wholeVector: [1, 0, 0, 0],
+            arcVector: [0.8, 0.6, 0, 0],
+            currentStateVector: [1, 0, 0, 0],
+            domainVector: [0, 1, 0, 0],
+            dimensions: 4,
+            model: "test",
+            generatedAt: Date.now(),
+          });
+          fallbackCandidateIds.push(guideId);
+        }
+
+        return { userId, profileId, embeddingId, fallbackCandidateIds };
+      });
+
+    // Rerank throws; pickAspirational must fall back to the formula path.
+    (globalThis as any).__testRerank__ = async () => {
+      throw new Error("rerank-network-down");
+    };
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+
+      const snapshot = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique();
+      });
+      expect(snapshot).not.toBeNull();
+      const linearLane = snapshot!.lanes.find((l) => l.kind === "linear");
+      expect(linearLane).toBeDefined();
+      const aspirationalCards = linearLane!.cards.filter(
+        (c) => c.slotKind === "aspirational",
+      );
+      expect(aspirationalCards).toHaveLength(1);
+      // Formula fallback must pick from the leftover candidates (the 2
+      // "Fallback i" guides, since strong + bridge consumed the others).
+      expect(fallbackCandidateIds).toContain(aspirationalCards[0].guideId);
+    } finally {
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+});
+
 describe("discover.generateSnapshot — Step 6a/b (strong + bridge slots)", () => {
   it("picks top-3 strong + top-2 bridge per lane with correct slotKind", async () => {
     const t = convexTest({
