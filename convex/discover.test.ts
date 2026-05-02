@@ -2285,3 +2285,157 @@ describe("discover.manualRefresh (Task 3.4)", () => {
     }
   });
 });
+
+describe("discover.fanOutGuideUpdate (Task 4.2)", () => {
+  it("invalidates cached reasons + schedules regen for users whose snapshot contains the guide", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    // Seed: user + profile + profile_embedding + guide + guide_embedding
+    // + a "ready" snapshot referencing the guide via discover_snapshot_guides
+    // + a stale cached reason on discover_match_reasons.
+    const { userId, guideId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "u-fanout",
+        email: "fanout@example.com",
+      });
+      const profileId = await ctx.db.insert(
+        "profiles",
+        profileSeed(userId),
+      );
+      const profileEmbeddingId = await ctx.db.insert("profile_embeddings", {
+        profileId,
+        userId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        arcSourceText: "fanout test",
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("fanout-target", "Fanout target"),
+      );
+      await ctx.db.insert("career_guide_embeddings", {
+        guideId,
+        wholeVector: [1, 0, 0, 0],
+        arcVector: [1, 0, 0, 0],
+        currentStateVector: [1, 0, 0, 0],
+        domainVector: [1, 0, 0, 0],
+        dimensions: 4,
+        model: "test",
+        generatedAt: Date.now(),
+      });
+      const snapshotId = await ctx.db.insert("discover_canvases", {
+        userId,
+        profileId,
+        profileEmbeddingId,
+        generatedAt: Date.now(),
+        status: "ready",
+        lanes: [],
+        attempts: 0,
+      });
+      await ctx.db.insert("discover_snapshot_guides", {
+        snapshotId,
+        userId,
+        guideId,
+      });
+      await ctx.db.insert("discover_match_reasons", {
+        userId,
+        guideId,
+        profileEmbeddingId,
+        reason: "stale reason — should be invalidated",
+        generatedAt: Date.now(),
+      });
+      return { userId, guideId };
+    });
+
+    // Stub LLMs for the regen chain (regen runs Step 8 even with no
+    // candidates if the schedule fires; safer to stub).
+    (globalThis as any).__testReasonsLLM__ = async (args: {
+      pairs: Array<{ guideId: string }>;
+    }) => {
+      const m = new Map<string, string>();
+      for (const p of args.pairs) m.set(p.guideId, "fresh reason");
+      return m;
+    };
+    (globalThis as any).__testRerank__ = async () => [];
+    try {
+      await t.action(internal.discover.fanOutGuideUpdate, { guideId });
+
+      // The cached reason MUST be gone (invalidation ran in the mutation
+      // hop, before the regen schedule fires).
+      const reasonsAfterInvalidate = await t.run(async (ctx) =>
+        ctx.db
+          .query("discover_match_reasons")
+          .withIndex("by_user_and_guide", (q) =>
+            q.eq("userId", userId).eq("guideId", guideId),
+          )
+          .collect(),
+      );
+      expect(reasonsAfterInvalidate).toHaveLength(0);
+
+      // Drain the regen chain (fanOutGuideUpdate →
+      // scheduleSnapshotRegeneration → generateSnapshot). Per Task 3.2
+      // lessons learned, multi-hop schedule chains under convex-test need
+      // tick + drain + tick + drain.
+      await new Promise((r) => setTimeout(r, 0));
+      await t.finishInProgressScheduledFunctions();
+      await new Promise((r) => setTimeout(r, 0));
+      await t.finishInProgressScheduledFunctions();
+
+      // Core schedule assertion: the snapshot row was patched off "ready"
+      // (either to "generating" mid-chain or onward) — proving
+      // scheduleSnapshotRegeneration was actually invoked. The exact
+      // terminal status depends on convex-test's scheduler racing; the
+      // unit under test here is the fan-out wiring, not the downstream
+      // regen pipeline (already covered by other Phase 2/3 tests).
+      const snap = await t.run(async (ctx) =>
+        ctx.db
+          .query("discover_canvases")
+          .withIndex("by_userId", (q) => q.eq("userId", userId))
+          .unique(),
+      );
+      expect(snap).not.toBeNull();
+      expect(snap!.status).not.toBe("ready"); // Was "ready" before fan-out
+    } finally {
+      delete (globalThis as any).__testReasonsLLM__;
+      delete (globalThis as any).__testRerank__;
+    }
+  });
+
+  it("no-op when no users reference the guide", async () => {
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    // Seed an orphan guide — no discover_snapshot_guides row references it.
+    const { guideId } = await t.run(async (ctx) => {
+      const guideId = await ctx.db.insert(
+        "career_guides",
+        guideSeed("orphan-guide", "Orphan guide"),
+      );
+      return { guideId };
+    });
+
+    // Should complete cleanly with nothing to do — no users, no reasons,
+    // no snapshots created.
+    await t.action(internal.discover.fanOutGuideUpdate, { guideId });
+
+    const snaps = await t.run(async (ctx) =>
+      ctx.db.query("discover_canvases").collect(),
+    );
+    expect(snaps).toHaveLength(0);
+
+    const reasons = await t.run(async (ctx) =>
+      ctx.db.query("discover_match_reasons").collect(),
+    );
+    expect(reasons).toHaveLength(0);
+  });
+});

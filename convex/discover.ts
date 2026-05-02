@@ -758,6 +758,61 @@ export const _readReactions = internalQuery({
 });
 
 /**
+ * Phase 4.2 helper — affected-user lookup for guide fan-out.
+ *
+ * Returns the deduped set of `userId`s whose live snapshot currently
+ * contains `guideId`, by scanning the `discover_snapshot_guides` junction
+ * table on the indexed `by_guideId` field. A single user may appear more
+ * than once in the junction (saved-override edge case where a saved guide
+ * shows up across lanes); we dedup via `Set` so the caller schedules at
+ * most one regen per user.
+ *
+ * Bounded by N = number of users with this guide on their canvas. Indexed,
+ * NOT a table scan — see `convex-patterns.md` "indexes over filters".
+ */
+export const _readUsersForGuide = internalQuery({
+  args: { guideId: v.id("career_guides") },
+  handler: async (ctx, args): Promise<Id<"users">[]> => {
+    const rows = await ctx.db
+      .query("discover_snapshot_guides")
+      .withIndex("by_guideId", (q) => q.eq("guideId", args.guideId))
+      .collect();
+    return Array.from(new Set(rows.map((r) => r.userId)));
+  },
+});
+
+/**
+ * Phase 4.2 helper — cached-reason invalidation for guide fan-out.
+ *
+ * Deletes any `discover_match_reasons` rows for `(userId, guideId)` across
+ * the supplied user set so the next regen produces fresh framing against
+ * the updated guide's vectors/content. Uses the `by_user_and_guide` index
+ * (indexed two-key lookup per user, no scan).
+ *
+ * `userIds` is supplied by the caller — we don't redo the
+ * `discover_snapshot_guides` query here, both to keep the contract clean
+ * and to avoid racing the action's read-then-mutate split (the action has
+ * already collected the set the regen will be scheduled against).
+ */
+export const _invalidateReasonsForGuide = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    userIds: v.array(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    for (const userId of args.userIds) {
+      const row = await ctx.db
+        .query("discover_match_reasons")
+        .withIndex("by_user_and_guide", (q) =>
+          q.eq("userId", userId).eq("guideId", args.guideId),
+        )
+        .unique();
+      if (row) await ctx.db.delete(row._id);
+    }
+  },
+});
+
+/**
  * Step 8 cache read. The `discover_match_reasons` table is indexed on
  * `(userId, guideId)`; we narrow to the matching `profileEmbeddingId`
  * with a follow-up `.filter()` so a stale reason for a previous embedding
@@ -1100,6 +1155,69 @@ export const refillAfterDismiss = internalAction({
         forceFreshReasons: false,
       },
     );
+  },
+});
+
+/**
+ * Phase 4.2 fan-out trigger — fired from `guideEmbeddings.upsert` after
+ * a career guide's embedding row has been written. For every user whose
+ * live snapshot currently contains the guide:
+ *
+ *   1. Evict the cached `discover_match_reasons` row for `(userId, guideId)`
+ *      so the next regen produces fresh framing against the updated guide
+ *      (cached reasons are keyed on `profileEmbeddingId`, but the guide
+ *      side has changed too — the reason is a function of both, so we drop
+ *      it to be safe).
+ *   2. Schedule a snapshot regeneration via
+ *      `scheduleSnapshotRegeneration`. The 30s per-user debounce there
+ *      coalesces concurrent fan-outs (e.g. multiple guides re-embed at
+ *      once); `forceFreshReasons: false` lets unaffected cards still hit
+ *      cache during the next regen.
+ *
+ * Hooked at `guideEmbeddings.upsert` (NOT at content-update mutations) so
+ * the regen always reads the freshly-written embedding vectors. Hooking at
+ * content-update would race the embedding regeneration job, and the
+ * debounce would suppress the second (correct) fire.
+ *
+ * Affected-user discovery uses `discover_snapshot_guides.by_guideId` —
+ * one indexed query, bounded by N affected users per guide. No table scan
+ * (see `convex-patterns.md`). Cached-reason invalidation runs in a single
+ * mutation hop so all deletes share one transaction.
+ *
+ * Schedule pattern: each per-user regen is scheduled via
+ * `ctx.scheduler.runAfter(0, ...)` (matching `refillAfterDismiss` and the
+ * Phase 4.1 triggers) — `convex-test`'s multi-hop transaction state can
+ * race when an action `runMutation`s into a function that itself
+ * schedules. Production semantics are equivalent.
+ */
+export const fanOutGuideUpdate = internalAction({
+  args: { guideId: v.id("career_guides") },
+  handler: async (ctx, args) => {
+    const userIds: Id<"users">[] = await ctx.runQuery(
+      internal.discover._readUsersForGuide,
+      { guideId: args.guideId },
+    );
+    if (userIds.length === 0) {
+      // No live snapshot references this guide — nothing to invalidate or
+      // regenerate. Common path for newly-published guides whose first
+      // embedding lands before any user's snapshot has surfaced them.
+      return;
+    }
+    await ctx.runMutation(internal.discover._invalidateReasonsForGuide, {
+      guideId: args.guideId,
+      userIds,
+    });
+    for (const userId of userIds) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.discover.scheduleSnapshotRegeneration,
+        {
+          userId,
+          dedupKey: `guide:${args.guideId}`,
+          forceFreshReasons: false,
+        },
+      );
+    }
   },
 });
 
