@@ -38,6 +38,15 @@ export default defineSchema({
       endDate: v.optional(v.string()),
     })),
     skills: v.array(v.string()),
+
+    // Set when seedGuidesFromProfile finishes for this profile. Combined
+    // with guidesSeedChecksum, gates re-seeding on subsequent markReviewed
+    // calls — same canonical-title set → no-op.
+    guidesSeededAt: v.optional(v.number()),
+    guidesSeedChecksum: v.optional(v.string()),
+    // Slugs returned by _requestGenerationForSeeding for this profile's
+    // most recent seeding pass. Used for audit + future Discover follow-up.
+    seedingGuideSlugs: v.optional(v.array(v.string())),
   }).index("by_userId", ["userId"]),
 
   profile_enrichments: defineTable({
@@ -800,4 +809,18 @@ export default defineSchema({
   })
     .index("by_threadId", ["threadId"])
     .index("by_person_user_created", ["personId", "userId", "createdAt"]),
+
+  // Cache for the LLM canonicalizer (convex/titleCanonicalization.ts).
+  // Keyed by the deterministic prefilter output (expandTitleAbbreviations).
+  // Same prefilter input → same row forever, so canonicalization is
+  // deterministic-after-first-call and the LLM is consulted at most once
+  // per unique prefiltered key across the entire user base.
+  title_canonicalizations: defineTable({
+    prefilteredKey: v.string(),
+    sourceTitle: v.string(),
+    canonicalTitle: v.string(),
+    model: v.string(),
+    confidence: v.number(),
+    createdAt: v.number(),
+  }).index("by_prefiltered_key", ["prefilteredKey"]),
 });
