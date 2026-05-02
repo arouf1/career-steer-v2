@@ -32,6 +32,8 @@ export const upsert = internalMutation({
     arcVector: v.array(v.float64()),
     currentStateVector: v.array(v.float64()),
     domainVector: v.array(v.float64()),
+    // Required on writes; field on table is optional only for legacy rows.
+    arcSourceText: v.string(),
     dimensions: v.number(),
     model: v.string(),
   },
@@ -48,6 +50,7 @@ export const upsert = internalMutation({
       arcVector: args.arcVector,
       currentStateVector: args.currentStateVector,
       domainVector: args.domainVector,
+      arcSourceText: args.arcSourceText,
       dimensions: args.dimensions,
       model: args.model,
       generatedAt: Date.now(),
@@ -58,6 +61,16 @@ export const upsert = internalMutation({
     } else {
       await ctx.db.insert("profile_embeddings", doc);
     }
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.discover.scheduleSnapshotRegeneration,
+      {
+        userId: args.userId,
+        dedupKey: "embedding",
+        forceFreshReasons: false,
+      },
+    );
   },
 });
 
@@ -217,6 +230,7 @@ export const generate = internalAction({
         arcVector,
         currentStateVector,
         domainVector,
+        arcSourceText: texts.arc,
         dimensions: EMBED_DIM,
         model: EMBED_MODEL,
       });

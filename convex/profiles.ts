@@ -270,10 +270,21 @@ export const markReviewed = mutation({
     const profile = await userOwnedProfile(ctx);
     await ctx.db.patch(profile._id, { reviewed: true });
 
+    await ctx.scheduler.runAfter(
+      0,
+      internal.discover.scheduleSnapshotRegeneration,
+      {
+        userId: profile.userId,
+        dedupKey: "init",
+        forceFreshReasons: false,
+      },
+    );
+
     // Seed public career guides for the canonical job titles in this
     // profile's work history. Idempotent — re-running markReviewed on an
     // unchanged experience array is a no-op via the checksum gate in
-    // seedGuidesFromProfile.
+    // seedGuidesFromProfile. Runs in parallel with the discover snapshot
+    // regen above; both are independent fan-outs.
     await ctx.scheduler.runAfter(
       0,
       internal.profileGuideSeeding.seedGuidesFromProfile,

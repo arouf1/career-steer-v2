@@ -57,6 +57,20 @@ export const upsert = internalMutation({
     } else {
       await ctx.db.insert("career_guide_embeddings", doc);
     }
+
+    // Phase 4.2 — fan-out: when a guide's embeddings change, every user
+    // whose current snapshot includes the guide should regenerate against
+    // the fresh vectors. Hook lives ONLY at the upsert (not at
+    // careerGuides content-update mutations) because the matching-relevant
+    // signal is the vectors, not the content text. Hooking earlier would
+    // race the regen against stale embeddings while the embedding job is
+    // still in flight, and the per-user 30s debounce would suppress the
+    // useful second fire. See `discover.fanOutGuideUpdate` for the
+    // affected-user lookup (indexed via `discover_snapshot_guides.by_guideId`)
+    // + cached-reason invalidation.
+    await ctx.scheduler.runAfter(0, internal.discover.fanOutGuideUpdate, {
+      guideId: args.guideId,
+    });
   },
 });
 

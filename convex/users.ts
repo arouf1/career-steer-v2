@@ -1,5 +1,6 @@
 import { mutation, query, internalMutation, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { components } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 export const current = query({
@@ -92,6 +93,69 @@ const cascadeDeleteUser = async (
     .withIndex("by_userId", (q) => q.eq("userId", userId))
     .collect();
   for (const row of personalizations) await ctx.db.delete(row._id);
+
+  // Discover canvas + junction rows (Phase 1+ tables). The snapshot is 1:1
+  // per user; junction rows are bounded by N cards in the snapshot
+  // (≤ 3 lanes × 20 max). We use by_snapshotId rather than adding a
+  // by_userId index on discover_snapshot_guides — keeps the schema lean.
+  const canvas = await ctx.db
+    .query("discover_canvases")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .unique();
+  if (canvas) {
+    const junctionRows = await ctx.db
+      .query("discover_snapshot_guides")
+      .withIndex("by_snapshotId", (q) => q.eq("snapshotId", canvas._id))
+      .collect();
+    for (const r of junctionRows) await ctx.db.delete(r._id);
+    await ctx.db.delete(canvas._id);
+  }
+
+  // Discover reactions (saved + dismissed). Compound index prefix scan.
+  const reactions = await ctx.db
+    .query("discover_reactions")
+    .withIndex("by_user_and_guide", (q) => q.eq("userId", userId))
+    .collect();
+  for (const r of reactions) await ctx.db.delete(r._id);
+
+  // Discover match-reason cache. Compound index prefix scan.
+  const reasons = await ctx.db
+    .query("discover_match_reasons")
+    .withIndex("by_user_and_guide", (q) => q.eq("userId", userId))
+    .collect();
+  for (const r of reasons) await ctx.db.delete(r._id);
+
+  // People search results — LinkedIn profiles found via guide-driven search.
+  // by_user_url has userId as prefix, so a direct .eq scan is correct.
+  const people = await ctx.db
+    .query("key_people")
+    .withIndex("by_user_url", (q) => q.eq("userId", userId))
+    .collect();
+  for (const p of people) await ctx.db.delete(p._id);
+
+  // In-flight people-search runs (state for UI skeletons).
+  const runs = await ctx.db
+    .query("key_people_runs")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .collect();
+  for (const r of runs) await ctx.db.delete(r._id);
+
+  // Outreach drafts. Each row carries a threadId pointing into the Convex
+  // Agent component's tables (private to the component). We schedule the
+  // component's own deletion mutation for each thread — it will recursively
+  // delete the thread's messages and streams pages off the parent commit.
+  const streams = await ctx.db
+    .query("outreach_streams")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .collect();
+  for (const s of streams) {
+    await ctx.scheduler.runAfter(
+      0,
+      components.agent.threads.deleteAllForThreadIdAsync,
+      { threadId: s.threadId },
+    );
+    await ctx.db.delete(s._id);
+  }
 
   await ctx.db.delete(userId);
 };

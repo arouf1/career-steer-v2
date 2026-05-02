@@ -252,6 +252,10 @@ export default defineSchema({
     arcVector: v.array(v.float64()),
     currentStateVector: v.array(v.float64()),
     domainVector: v.array(v.float64()),
+    // Text content used to compute arcVector. Used as the rerank query for
+    // the discover canvas's aspirational slot picker. Optional so existing
+    // rows stay valid until re-embedded.
+    arcSourceText: v.optional(v.string()),
     dimensions: v.number(),
     model: v.string(),
     generatedAt: v.number(),
@@ -370,6 +374,24 @@ export default defineSchema({
             relatedRoles: v.array(v.string()),
           }),
         }),
+        // Typical career stage this guide describes. Mirrors the
+        // `profile_enrichments.careerStage` vocabulary (minus "transitioning"
+        // — guides describe destinations, not transitions). Drives the
+        // discover canvas's 4-lane bucketing: comparing user stage vs guide
+        // stage assigns a candidate to next-step / sideways / earlier-chapter
+        // lanes (anything missing falls through to "a different chapter").
+        // Optional so legacy guides remain valid until backfilled by
+        // `triggerCareerStageBackfill`.
+        typicalCareerStage: v.optional(
+          v.union(
+            v.literal("early-career"),
+            v.literal("mid-career"),
+            v.literal("senior-IC"),
+            v.literal("manager"),
+            v.literal("director"),
+            v.literal("exec"),
+          ),
+        ),
       }),
     ),
     illustrationStorageId: v.optional(v.id("_storage")),
@@ -784,7 +806,9 @@ export default defineSchema({
     error: v.optional(v.string()),
     startedAt: v.number(),
     finishedAt: v.optional(v.number()),
-  }).index("by_guide_user", ["guideId", "userId"]),
+  })
+    .index("by_guide_user", ["guideId", "userId"])
+    .index("by_userId", ["userId"]),
 
   // Each row tracks one outreach draft generation. The Convex Agent
   // component owns the streamed message chunks (subscribed to via
@@ -808,7 +832,76 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_threadId", ["threadId"])
-    .index("by_person_user_created", ["personId", "userId", "createdAt"]),
+    .index("by_person_user_created", ["personId", "userId", "createdAt"])
+    .index("by_userId", ["userId"]),
+
+  discover_canvases: defineTable({
+    userId: v.id("users"),
+    profileId: v.id("profiles"),
+    profileEmbeddingId: v.id("profile_embeddings"),
+    generatedAt: v.number(),
+    status: v.union(
+      v.literal("generating"),
+      v.literal("ready"),
+      v.literal("failed"),
+    ),
+    lanes: v.array(
+      v.object({
+        kind: v.union(
+          v.literal("linear"),
+          v.literal("adjacent"),
+          v.literal("earlier"),
+          v.literal("transformational"),
+        ),
+        cards: v.array(
+          v.object({
+            guideId: v.id("career_guides"),
+            slotKind: v.union(
+              v.literal("strong"),
+              v.literal("bridge"),
+              v.literal("aspirational"),
+              v.literal("extra"),
+            ),
+            arcScore: v.number(),
+            currentStateScore: v.number(),
+            domainScore: v.number(),
+            wholeScore: v.number(),
+            whyMatchReason: v.string(),
+          }),
+        ),
+      }),
+    ),
+    failureReason: v.optional(v.string()),
+    attempts: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_status", ["status"]),
+
+  discover_snapshot_guides: defineTable({
+    snapshotId: v.id("discover_canvases"),
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+  })
+    .index("by_guideId", ["guideId"])
+    .index("by_snapshotId", ["snapshotId"]),
+
+  discover_reactions: defineTable({
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+    reaction: v.union(v.literal("saved"), v.literal("dismissed")),
+    reactedAt: v.number(),
+  })
+    .index("by_user_and_guide", ["userId", "guideId"])
+    .index("by_user_and_reaction", ["userId", "reaction"]),
+
+  discover_match_reasons: defineTable({
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+    profileEmbeddingId: v.id("profile_embeddings"),
+    reason: v.string(),
+    generatedAt: v.number(),
+  })
+    .index("by_user_and_guide", ["userId", "guideId"]),
 
   // Cache for the LLM canonicalizer (convex/titleCanonicalization.ts).
   // Keyed by the deterministic prefilter output (expandTitleAbbreviations).

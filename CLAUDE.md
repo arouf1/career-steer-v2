@@ -12,6 +12,7 @@ If — and only if — the user explicitly refers to "V1" of this app (e.g. "loo
 
 1. **Claude is the primary developer.** All implementation work — coding, schema changes, deploys, debugging, verification — is done by Claude. The user is the product owner. Never propose stopping early, never hand routine engineering decisions back. Capacity is unlimited.
 2. **Latest versions only, verified at install time.** Before any `npm install` / `pnpm add` / dep bump, run `npm view <pkg> version` and pin to the latest stable. Never use a version pulled from training-data memory. This applies to *every* package, every time.
+3. **Engineer at top-tier caliber. Recommend the best long-term, enterprise-grade solution — not the easiest path.** Lead with the architecturally correct answer (e.g. structured occupation taxonomy + LLM canonicalization, not "lowercase the string and merge by hand later"). Tradeoffs are still worth surfacing, but frame them as "here's the right answer; here's what it costs," not "here's the cheap answer; upgrade once it hurts." Only fall back to a lighter path when there's a real reason — validated unknowns, an unproven product hypothesis, or a stated cost constraint — never just because it's faster to write. The bar: would a staff engineer at a top-tier company building this for the long haul make this choice? Don't gold-plate genuinely simple problems, but don't undersell the durable answer either.
 
 ## Tech stack
 

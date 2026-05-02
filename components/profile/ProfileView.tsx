@@ -1,7 +1,8 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import type { Doc } from "@/convex/_generated/dataModel";
+import { DeleteAccountDialog } from "@/components/profile/DeleteAccountDialog";
 
 type Props = {
   profile: Doc<"profiles">;
@@ -26,15 +27,30 @@ export function ProfileView({ profile, onEdit }: Props) {
         {location && (
           <p className="type-caption text-mute">{location}</p>
         )}
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onEdit}
-            className="type-label inline-flex items-center gap-2 self-start rounded-pill border border-hairline-strong px-5 py-2 text-ink transition-colors hover:border-ink"
+            className="type-label inline-flex items-center gap-2 rounded-pill border border-hairline-strong px-5 py-2 text-ink transition-colors hover:border-ink"
           >
             <Pencil className="h-4 w-4" aria-hidden="true" strokeWidth={1.75} />
             Edit profile
           </button>
+          <DeleteAccountDialog
+            trigger={
+              <button
+                type="button"
+                className="type-label inline-flex items-center gap-2 rounded-pill border border-state-error/40 px-5 py-2 text-state-error transition-colors hover:border-state-error hover:bg-state-error/5"
+              >
+                <Trash2
+                  className="h-4 w-4"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+                Delete account
+              </button>
+            }
+          />
         </div>
       </header>
 
