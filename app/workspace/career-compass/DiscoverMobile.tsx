@@ -1,4 +1,4 @@
-// app/workspace/discover/DiscoverMobile.tsx
+// app/workspace/career-compass/DiscoverMobile.tsx
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Authenticated, useQuery, useMutation } from "convex/react";
@@ -72,7 +72,7 @@ function DiscoverMobileInner() {
           <div className="truncate text-sm font-medium text-ink">
             {user?.fullName ?? "You"}
           </div>
-          <div className="truncate text-xs text-ink/60">Discover</div>
+          <div className="truncate text-xs text-ink/60">Career Compass</div>
         </div>
       </header>
 

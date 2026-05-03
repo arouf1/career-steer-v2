@@ -17,7 +17,7 @@ import {
 
 const items = [
   { title: "Profile", url: "/workspace/profile", icon: User, external: false },
-  { title: "Discover", url: "/workspace/discover", icon: Compass, external: false },
+  { title: "Career Compass", url: "/workspace/career-compass", icon: Compass, external: false },
   { title: "Saved guides", url: "/workspace/saved-guides", icon: Bookmark, external: false },
   { title: "Career guides", url: "/career-guides", icon: BookOpen, external: true },
 ] as const;

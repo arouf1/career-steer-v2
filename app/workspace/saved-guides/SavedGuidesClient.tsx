@@ -107,10 +107,10 @@ function SavedGuidesClientInner() {
         <Bookmark className="size-12 text-ink/30" />
         <h2 className="text-lg font-medium text-ink">No saved guides yet</h2>
         <p className="text-sm text-ink/60">
-          Bookmark guides from Discover and they&apos;ll appear here.
+          Bookmark guides from Career Compass and they&apos;ll appear here.
         </p>
-        <Link href="/workspace/discover" className="text-sm underline">
-          Open Discover →
+        <Link href="/workspace/career-compass" className="text-sm underline">
+          Open Career Compass →
         </Link>
       </div>
     );
@@ -122,7 +122,7 @@ function SavedGuidesClientInner() {
         <div>
           <h1 className="text-2xl font-medium text-ink">Saved guides</h1>
           <p className="text-sm text-ink/60">
-            {saved.length} guides you&apos;ve bookmarked from Discover
+            {saved.length} guides you&apos;ve bookmarked from Career Compass
           </p>
         </div>
         <div className="flex items-center gap-2">

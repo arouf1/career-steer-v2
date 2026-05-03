@@ -1,4 +1,4 @@
-// app/workspace/discover/DensitySlider.tsx
+// app/workspace/career-compass/DensitySlider.tsx
 "use client";
 import { useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";

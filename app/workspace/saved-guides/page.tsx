@@ -5,7 +5,7 @@ import { SavedGuidesClient } from "./SavedGuidesClient";
 
 export const metadata = {
   title: "Saved guides",
-  description: "Career guides you've bookmarked from Discover.",
+  description: "Career guides you've bookmarked from Career Compass.",
 };
 
 export default async function SavedGuidesPage() {

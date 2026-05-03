@@ -7,7 +7,7 @@ test.describe("Discover golden path", () => {
   test.skip(!process.env.E2E_DISCOVER_USER_TOKEN, "needs seeded user token");
 
   test("desktop: lands, opens preview, saves, sees in saved-guides", async ({ page }) => {
-    await page.goto("/workspace/discover");
+    await page.goto("/workspace/career-compass");
 
     // Phase 9.3 changed lane labels to editorial copy; assert against the new copy.
     await expect(page.getByText("Next steps")).toBeVisible();
@@ -27,7 +27,7 @@ test.describe("Discover golden path", () => {
   test("mobile viewport renders lane tabs not canvas", async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
     const page = await ctx.newPage();
-    await page.goto("/workspace/discover");
+    await page.goto("/workspace/career-compass");
     // Mobile DiscoverMobile renders Tabs with the original lane labels
     // ("Linear" / "Adjacent" / "Transformational"). Phase 9.3 only updated
     // the desktop canvas labels; mobile tab labels were left as-is.

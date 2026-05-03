@@ -1,4 +1,4 @@
-// app/workspace/discover/MobileGuideCard.tsx
+// app/workspace/career-compass/MobileGuideCard.tsx
 "use client";
 import { Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";

@@ -1,15 +1,15 @@
-// app/workspace/discover/page.tsx
+// app/workspace/career-compass/page.tsx
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { DiscoverCanvas } from "./DiscoverCanvas";
 import { DiscoverMobile } from "./DiscoverMobile";
 
 export const metadata = {
-  title: "Discover",
+  title: "Career Compass",
   description: "Career guides matched to you, arranged by direction and fit.",
 };
 
-export default async function DiscoverPage() {
+export default async function CareerCompassPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 

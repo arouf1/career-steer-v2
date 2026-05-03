@@ -126,9 +126,9 @@ Before editing files in these areas, read the corresponding rule file:
 - Editing AI features (`app/api/chat`, `lib/ai/**`) → read `.claude/rules/ai-sdk-patterns.md`
 - Editing `app/**` or `components/**` (visible UI) → read `.claude/rules/ui-quality.md`
 
-## Cross-feature impact: Discover
+## Cross-feature impact: Career Compass (a.k.a. Discover internally)
 
-`/workspace/discover` is a downstream consumer of the profile + career-guide pipelines. Its `discover_canvas` snapshots are precomputed per user from `profile_embeddings` ↔ `career_guide_embeddings`, lane-classified by `currentStateSim`, and ranked by `arcSim` with a curated mix (strong-fit / skill-bridge / aspirational) per lane. Whenever a change to **profiles, profile embeddings, career guides, career guide embeddings, the matching pipeline, or the embedding model/dimensions** could materially affect what discover shows, you must:
+`/workspace/career-compass` (internal name: Discover; backing data: `discover_canvas`) is a downstream consumer of the profile + career-guide pipelines. Its `discover_canvas` snapshots are precomputed per user from `profile_embeddings` ↔ `career_guide_embeddings`, lane-classified by `currentStateSim`, and ranked by `arcSim` with a curated mix (strong-fit / skill-bridge / aspirational) per lane. Whenever a change to **profiles, profile embeddings, career guides, career guide embeddings, the matching pipeline, or the embedding model/dimensions** could materially affect what Career Compass shows, you must:
 
 1. Identify whether existing `discover_canvas` snapshots become stale or invalid (e.g. dimension change, facet semantics shift, new signal that should drive lane assignment).
 2. Plan a snapshot refresh — incremental for soft changes (re-rank existing slots) or full recompute for hard changes (schema/dimensions/facet semantics).

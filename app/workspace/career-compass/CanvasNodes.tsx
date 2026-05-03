@@ -1,4 +1,4 @@
-// app/workspace/discover/CanvasNodes.tsx
+// app/workspace/career-compass/CanvasNodes.tsx
 "use client";
 import { Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";

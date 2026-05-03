@@ -1,4 +1,4 @@
-// app/workspace/discover/FocusedLaneView.tsx
+// app/workspace/career-compass/FocusedLaneView.tsx
 "use client";
 import { useEffect } from "react";
 import { motion } from "motion/react";
