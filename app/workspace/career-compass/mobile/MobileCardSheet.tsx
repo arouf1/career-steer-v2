@@ -2,16 +2,11 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, Bookmark, Check, X } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 import type { CompassCard } from "../lib/mobileCompassTypes";
 
 const SLOT_LABEL: Record<CompassCard["slotKind"], string> = {
@@ -37,20 +32,20 @@ type Props = {
 };
 
 /**
- * Mobile-side card detail sheet — vaul bottom drawer.
+ * Mobile-side card detail sheet. Right-slide motion.aside (matches
+ * desktop CardPreviewSheet + OutreachDraftDrawer).
  *
- * `dismissible={false}` disables vaul's drag-to-dismiss gesture, which
- * was the root cause of the elastic-bounce-back behaviour on long
- * content (vaul interpreted downward scrolls inside the body as
- * dismiss attempts). Without that gesture, the inner overflow-y-auto
- * runs cleanly. User closes via backdrop tap or the X button.
- *
- * Layout follows the iOS-sheet pattern (see memory entry
- * `feedback_ios_sheet_pattern.md`):
- *   - DrawerContent has explicit pixel height via inline style
- *   - Body content scrolls with reserved bottom padding for the CTA
- *   - CTA is absolutely positioned at `bottom-0` with safe-area-inset
- *     padding so it always clears whatever Safari chrome is overlaying
+ * iOS sheet pattern (see memory `feedback_ios_sheet_pattern.md`):
+ *   - `inset-y-0 right-0` for sheet sizing — spans the full layout
+ *     viewport on iOS, constant regardless of URL bar state
+ *   - CTA absolutely positioned at `bottom-0` with
+ *     env(safe-area-inset-bottom) padding so it always clears
+ *     whatever Safari chrome is currently overlaying
+ *   - Body has matching padding-bottom so content scrolls under the
+ *     CTA without ever hiding behind it
+ *   - iOS-friendly body scroll lock (position: fixed at -scrollY)
+ *     so Safari sees the page as "not scrolling" and stops
+ *     transitioning its URL bar mid-session
  */
 export function MobileCardSheet({
   card,
@@ -72,29 +67,72 @@ export function MobileCardSheet({
     if (!open) setOverviewExpanded(false);
   }, [open, card?.guideId]);
 
-  return (
-    <Drawer open={open} onOpenChange={onOpenChange} dismissible={false}>
-      <DrawerContent
-        className="bg-paper"
-        // Inline pixel height. vaul's default `h-auto max-h-[80vh]`
-        // doesn't give the inner overflow-y-auto a definite parent
-        // height to engage against. `92dvh` leaves a small strip of
-        // page peeking above the drawer so the user remembers the
-        // page is still there.
-        style={{ height: "92dvh", maxHeight: "92dvh" }}
-      >
-        {card && (
-          <>
-            <DrawerTitle className="sr-only">{card.title}</DrawerTitle>
-            <DrawerDescription className="sr-only">
-              {SLOT_LABEL[card.slotKind]} · {card.whyMatchReason}
-            </DrawerDescription>
+  // iOS-friendly body scroll lock. Pin body via position: fixed at a
+  // negative top offset equal to current scrollY. Safari reads that
+  // as "the page isn't scrolling" and stops transitioning the URL
+  // bar — visual viewport stays stable, fixed elements stay anchored.
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.position = prev.position;
+      document.body.style.top = prev.top;
+      document.body.style.width = prev.width;
+      document.body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
 
+  // Close on Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onOpenChange(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onOpenChange]);
+
+  return (
+    <AnimatePresence>
+      {open && card && (
+        <>
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 bg-ink/30 backdrop-blur-[2px]"
+            onClick={() => onOpenChange(false)}
+            aria-hidden
+          />
+          <motion.aside
+            key="aside"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ duration: 0.35, ease: [0.2, 0.65, 0.3, 1] }}
+            className="fixed inset-y-0 right-0 z-50 w-full overflow-hidden border-l border-hairline bg-paper sm:max-w-lg"
+            role="dialog"
+            aria-label={`Preview of ${card.title}`}
+            aria-modal="true"
+          >
             {/* Scrollable body. paddingBottom reserves room for the
                 absolute-positioned CTA below — content scrolls under
                 the CTA's space without ever hiding behind it. */}
             <div
-              className="h-full overflow-y-auto overscroll-contain px-5 pt-2"
+              className="h-full overflow-y-auto overscroll-contain px-5 pt-4"
               style={{
                 paddingBottom:
                   "calc(env(safe-area-inset-bottom, 0px) + 96px)",
@@ -219,7 +257,9 @@ export function MobileCardSheet({
               </section>
             </div>
 
-            {/* CTA pinned to the drawer's bottom edge. */}
+            {/* CTA pinned to the layout viewport's bottom edge.
+                env(safe-area-inset-bottom) adjusts dynamically as
+                Safari's bottom URL bar expands/minimizes. */}
             <div
               className="absolute inset-x-0 bottom-0 z-10 border-t border-hairline bg-paper px-5 pt-3"
               style={{
@@ -238,9 +278,9 @@ export function MobileCardSheet({
                 />
               </Link>
             </div>
-          </>
-        )}
-      </DrawerContent>
-    </Drawer>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   );
 }

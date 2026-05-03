@@ -28,6 +28,8 @@ type Props = {
   /** Continuous scroll offset of the lane feed in pixels. */
   scrollY: MotionValue<number>;
   initials: string;
+  /** Tap a quadrant → switch the lane pager to that lane. */
+  onQuadrantTap?: (lane: CompassLane) => void;
   /** One-shot reactive flash. Bump `ts` to refire. */
   lastFlash?: {
     guideId: string;
@@ -65,6 +67,7 @@ export function MobileCompass({
   dragProgress,
   scrollY,
   initials,
+  onQuadrantTap,
   lastFlash,
   prefersReducedMotion = false,
 }: Props) {
@@ -209,6 +212,23 @@ export function MobileCompass({
               />
             ))}
 
+          {/* Transparent tap targets — one per quadrant. Sit above the
+              tints, dots, and labels so a tap anywhere in the quadrant
+              triggers the lane switch. The active-quadrant darkening is
+              the only visual feedback (no flash); we want the compass
+              to feel like a quiet, responsive instrument, not a button
+              row. */}
+          {onQuadrantTap &&
+            COMPASS_LANE_ORDER.map((lane) => (
+              <QuadrantHit
+                key={`hit:${lane}`}
+                lane={lane}
+                count={laneCounts[lane]}
+                isActive={lane === activeLane}
+                onTap={() => onQuadrantTap(lane)}
+              />
+            ))}
+
           <YouAvatar
             initials={initials}
             prefersReducedMotion={prefersReducedMotion}
@@ -296,6 +316,39 @@ function LaneLabel({
     >
       {COMPASS_LANE_LABEL[lane]}
     </motion.text>
+  );
+}
+
+function QuadrantHit({
+  lane,
+  count,
+  isActive,
+  onTap,
+}: {
+  lane: CompassLane;
+  count: number;
+  isActive: boolean;
+  onTap: () => void;
+}) {
+  return (
+    <path
+      d={quadrantClipPath(lane)}
+      fill="transparent"
+      // SVG paths default to `pointer-events: visiblePainted`, which
+      // means transparent fills don't capture clicks. `all` makes the
+      // entire path's geometry a hit zone regardless of fill.
+      style={{ cursor: "pointer", pointerEvents: "all" }}
+      onClick={onTap}
+      tabIndex={0}
+      role="button"
+      aria-label={`${COMPASS_LANE_TITLE[lane]}, ${count} ${count === 1 ? "option" : "options"}${isActive ? ", selected" : ""}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onTap();
+        }
+      }}
+    />
   );
 }
 
