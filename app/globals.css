@@ -35,6 +35,12 @@
   --color-hairline: hsl(35 18% 86%);
   --color-hairline-strong: hsl(35 18% 80%);
 
+  /* shadcn surface tokens — mapped onto the warm-sunset palette so primitives
+     (Popover, HoverCard, DropdownMenu, ContextMenu, etc.) inherit the brand
+     surface instead of falling through to transparent. */
+  --color-popover: hsl(35 30% 99%);             /* matches --color-paper-lifted */
+  --color-popover-foreground: oklch(0.25 0.015 30); /* matches --color-ink */
+
   /* Accent maps to a warm-paper surface tone. shadcn primitives consume this
      as their default hover/selection background (Skeleton, Button ghost,
      calendar range, command/select focus, etc.) — so it must read as a

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Authenticated, Unauthenticated } from "convex/react";
-import { SignOutButton, UserButton } from "@clerk/nextjs";
+import { UserPopover } from "@/components/auth/UserPopover";
 
 const navLink =
   "type-label hidden sm:inline-flex items-center rounded-pill h-8 px-3 text-body transition-colors hover:text-ink";
@@ -50,15 +50,7 @@ export function SiteNav() {
           </Unauthenticated>
 
           <Authenticated>
-            <SignOutButton>
-              <button
-                type="button"
-                className="type-label inline-flex items-center rounded-pill h-8 px-4 text-ink transition-colors hover:text-ink-deep"
-              >
-                Sign out
-              </button>
-            </SignOutButton>
-            <UserButton />
+            <UserPopover />
           </Authenticated>
         </nav>
       </div>
