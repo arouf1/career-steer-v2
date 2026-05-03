@@ -8,10 +8,10 @@ import { z } from "zod";
 export const PERSONALIZATION_MODEL_ID = "google/gemini-3-flash-preview";
 
 // Bound counts (4–6 strengths, 3–5 transferable / gaps, 80–120 word summary,
-// 150–200 word fit narrative) are described in prompt + .describe() copy and
-// NOT enforced via Zod constraints. Gemini structured output rejects
-// .min/.max/.int/array-length constraints; encoding bounds in prose is the
-// project-standard workaround.
+// 150–200 word fit narrative, 14–22 word "why" per skill row) are described in
+// prompt + .describe() copy and NOT enforced via Zod constraints. Gemini
+// structured output rejects .min/.max/.int/array-length constraints; encoding
+// bounds in prose is the project-standard workaround.
 const PersonalizedRegionalSchema = z.object({
   countryCode: z
     .string()
@@ -68,19 +68,58 @@ export const GuidePersonalizationSchema = z.object({
     ),
   skillsAssessment: z.object({
     strengths: z
-      .array(z.string())
+      .array(
+        z.object({
+          skill: z
+            .string()
+            .describe(
+              "Short noun phrase naming the strength (e.g. 'Quantitative data analysis'). No sentence form, no symbols.",
+            ),
+          why: z
+            .string()
+            .describe(
+              "14-22 word sentence in second person explaining why this strength matters specifically for THIS role. Name the concrete leverage it gives you (a daily task it makes easy, a stakeholder pressure it absorbs, a decision it sharpens). Avoid generic praise.",
+            ),
+        }),
+      )
       .describe(
-        "4-6 specific skills the reader already brings, drawn from their CV or enriched profile. Each item is a short noun phrase, not a sentence.",
+        "4-6 specific strengths the reader already brings, drawn from their CV or enriched profile. Each row pairs a short skill phrase with the role-specific reason it counts.",
       ),
     transferable: z
-      .array(z.string())
+      .array(
+        z.object({
+          skill: z
+            .string()
+            .describe(
+              "Short noun phrase naming an adjacent skill the reader has (e.g. 'Cross-functional project coordination').",
+            ),
+          why: z
+            .string()
+            .describe(
+              "14-22 word sentence in second person explaining the bridge: what about this skill maps onto a real demand of THIS role even though the labels differ.",
+            ),
+        }),
+      )
       .describe(
-        "3-5 skills from the reader's background that travel well to this role even if they are not direct matches. Short phrases.",
+        "3-5 skills from the reader's background that travel well into this role even if they are not direct matches. Each row pairs the skill with the bridge.",
       ),
     gaps: z
-      .array(z.string())
+      .array(
+        z.object({
+          skill: z
+            .string()
+            .describe(
+              "Short noun phrase naming the missing capability (e.g. 'Regulatory documentation for clinical trials').",
+            ),
+          why: z
+            .string()
+            .describe(
+              "14-22 word sentence in second person explaining why this gap matters in THIS role: name what you can't do credibly without it, or what it unlocks.",
+            ),
+        }),
+      )
       .describe(
-        "3-5 honest gaps the reader would need to close to thrive in this role. Short phrases, no fluff.",
+        "3-5 honest gaps the reader would need to close to thrive in this role. Each row pairs the gap with the role-specific consequence of leaving it open.",
       ),
     summary: z
       .string()
@@ -162,7 +201,15 @@ Voice rules:
 - Be specific. Reference at least one concrete detail from the reader's profile (a role title, a company, a skill, a sector, or their location) in the fit narrative and in the skills summary.
 - Be honest. If the fit is weak in a meaningful way, say so. Do not flatter.
 - Use hyphens (-), never em-dashes.
-- No bullet symbols or formatting characters in array items - just the phrase.
+- No bullet symbols or formatting characters in any field - just the phrase or sentence.
+
+"Why" rules for every skill row (strengths, transferable, gaps):
+- Each "why" is one sentence, 14-22 words, in second person.
+- Name a concrete consequence inside THIS role - a real task it makes easy, a stakeholder pressure it absorbs, a decision it sharpens, or what stays out of reach without it.
+- Reference the role's actual day-to-day or risk profile when you can. Generic praise ("strong skill, very useful") is forbidden.
+- For strengths: explain the leverage you already get from it in this role.
+- For transferable: explain the bridge - what about it maps onto a demand of this role even though the labels differ.
+- For gaps: explain what you can't do credibly without it, or what it unlocks once closed. No softening.
 
 Output rules:
 - Return JSON matching the provided schema exactly.
@@ -314,10 +361,10 @@ Produce JSON matching the schema with three pieces:
 
 1. whyYoureAFit (150-200 words): A direct, honest analysis of how this role fits *you* given the profile above. Reference specific things from your background. If you're a strong fit, say why concretely. If it's a stretch, name the stretch. If your location is set and the role's regional outlook gives you an angle (e.g. demand in your country, salary band relative to your context), use it.
 
-2. skillsAssessment:
-   - strengths (4-6): Skills you already bring that directly match this role. Pull from enriched skills + recent experience. Each item is a short phrase (e.g. "stakeholder communication", not "you have experience with stakeholder communication").
-   - transferable (3-5): Skills from your background that don't directly map but would translate well. Short phrases.
-   - gaps (3-5): Skills you would need to develop. Be specific (e.g. "regulatory documentation for clinical trials", not just "domain knowledge").
+2. skillsAssessment: every row is { skill, why }. The "skill" is a short noun phrase; the "why" is a 14-22 word second-person sentence that ties the skill to a specific demand of THIS role. Generic descriptions are not acceptable.
+   - strengths (4-6): Skills you already bring that directly match this role. Pull from enriched skills + recent experience. skill = short phrase ("stakeholder communication"); why = the leverage it gives you here ("you'll absorb the daily push from clinical leads who need fast, well-framed updates without escalation").
+   - transferable (3-5): Skills from your background that don't directly map but translate well. skill = short phrase; why = the bridge ("running cross-functional launches at Stripe maps onto coordinating compliance, design, and risk reviews when shipping a new product line here").
+   - gaps (3-5): Skills you would need to develop. skill = specific phrase ("regulatory documentation for clinical trials", not "domain knowledge"); why = what stays out of reach without it ("without it you can't sign off on study reports for the FDA submissions this team owns end-to-end").
    - summary (80-120 words): An honest narrative weighing where you stand against this role's demands. Mention the location angle if relevant.
 
 3. regional: A country-tailored regional block for the reader's home country.

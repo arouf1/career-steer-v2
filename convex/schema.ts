@@ -667,10 +667,22 @@ export default defineSchema({
     content: v.optional(
       v.object({
         whyYoureAFit: v.string(),
+        // Each bucket is { skill, why }-shaped. v.union with the legacy
+        // string[] shape keeps pre-2026-05 rows readable; the trigger detects
+        // legacy rows and forces a regen so the union can be tightened later.
         skillsAssessment: v.object({
-          strengths: v.array(v.string()),
-          transferable: v.array(v.string()),
-          gaps: v.array(v.string()),
+          strengths: v.union(
+            v.array(v.string()),
+            v.array(v.object({ skill: v.string(), why: v.string() })),
+          ),
+          transferable: v.union(
+            v.array(v.string()),
+            v.array(v.object({ skill: v.string(), why: v.string() })),
+          ),
+          gaps: v.union(
+            v.array(v.string()),
+            v.array(v.object({ skill: v.string(), why: v.string() })),
+          ),
           summary: v.string(),
         }),
         // Per-user regional content. Generated only when the user's country

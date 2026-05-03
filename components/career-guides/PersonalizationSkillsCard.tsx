@@ -64,17 +64,32 @@ export function PersonalizationSkillsCard({ guideId, fallback }: Props) {
   return <PersonalizedSkillsView assessment={row.content.skillsAssessment} />;
 }
 
+type SkillRow = { skill: string; why: string };
+
+// Convex schema unions legacy string[] with the new {skill, why}[] shape.
+// Normalising here lets the view render uniformly and gracefully fall back
+// for any pre-shape-change row that hasn't regenerated yet.
+const normalizeBucket = (
+  items: ReadonlyArray<string | SkillRow>,
+): SkillRow[] =>
+  items.map((item) =>
+    typeof item === "string" ? { skill: item, why: "" } : item,
+  );
+
 function PersonalizedSkillsView({
   assessment,
 }: {
   assessment: {
-    strengths: string[];
-    transferable: string[];
-    gaps: string[];
+    strengths: ReadonlyArray<string | SkillRow>;
+    transferable: ReadonlyArray<string | SkillRow>;
+    gaps: ReadonlyArray<string | SkillRow>;
     summary: string;
   };
 }) {
-  const { strengths, transferable, gaps, summary } = assessment;
+  const strengths = normalizeBucket(assessment.strengths);
+  const transferable = normalizeBucket(assessment.transferable);
+  const gaps = normalizeBucket(assessment.gaps);
+  const { summary } = assessment;
 
   return (
     <section
@@ -143,7 +158,7 @@ function SkillGroup({
 }: {
   label: string;
   intro: string;
-  items: string[];
+  items: SkillRow[];
   dotClass: string;
 }) {
   if (items.length === 0) return null;
@@ -155,17 +170,23 @@ function SkillGroup({
       <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink/65">
         {intro}
       </p>
-      <ul className="mt-4 space-y-3">
+      <ul className="mt-5 space-y-5">
         {items.map((item) => (
-          <li
-            key={item}
-            className="flex items-start gap-3 text-[17px] leading-[1.75] text-ink/85"
-          >
+          <li key={item.skill} className="flex items-start gap-3">
             <span
               aria-hidden
-              className={`mt-[0.7rem] h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`}
+              className={`mt-[0.65rem] h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`}
             />
-            <span>{item}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[17px] leading-[1.45] text-ink">
+                {item.skill}
+              </p>
+              {item.why && (
+                <p className="mt-1 text-[15px] leading-[1.65] text-ink/65">
+                  {item.why}
+                </p>
+              )}
+            </div>
           </li>
         ))}
       </ul>
@@ -203,11 +224,26 @@ function SkillsSkeleton() {
           >
             <div className="h-3 w-40 rounded-pill bg-ink/5" />
             <div className="mt-3 h-2.5 w-[60%] rounded-pill bg-ink/5" />
-            <div className="mt-5 space-y-3">
-              <div className="h-3 w-[78%] rounded-pill bg-ink/5" />
-              <div className="h-3 w-[64%] rounded-pill bg-ink/5" />
-              <div className="h-3 w-[72%] rounded-pill bg-ink/5" />
-              <div className="h-3 w-[58%] rounded-pill bg-ink/5" />
+            <div className="mt-5 space-y-5">
+              {[
+                ["52%", ["88%", "72%"]],
+                ["44%", ["82%", "64%"]],
+                ["48%", ["86%", "70%"]],
+              ].map(([head, body], i) => (
+                <div key={i} className="space-y-2">
+                  <div
+                    className="h-3 rounded-pill bg-ink/5"
+                    style={{ width: head as string }}
+                  />
+                  {(body as string[]).map((w, j) => (
+                    <div
+                      key={j}
+                      className="h-2.5 rounded-pill bg-ink/[0.04]"
+                      style={{ width: w }}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         ))}

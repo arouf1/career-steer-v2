@@ -112,6 +112,25 @@ const fetchRegionalExaSnippets = async (
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+// Legacy rows stored each skill bucket as string[]. New rows store
+// Array<{skill, why}>. The schema validator unions both for read
+// compatibility, but the UI and product copy now expect the {skill, why}
+// shape. When we see a legacy row, treat it as stale and regenerate so the
+// reader gets the richer "why" content on next view.
+const hasLegacySkillsShape = (
+  content: Doc<"career_guide_personalizations">["content"],
+): boolean => {
+  if (!content) return false;
+  const buckets = [
+    content.skillsAssessment.strengths,
+    content.skillsAssessment.transferable,
+    content.skillsAssessment.gaps,
+  ];
+  return buckets.some(
+    (bucket) => bucket.length > 0 && typeof bucket[0] === "string",
+  );
+};
+
 const resolveAuthedUser = async (
   ctx: QueryCtx | MutationCtx,
 ): Promise<Doc<"users"> | null> => {
@@ -250,7 +269,13 @@ export const trigger = mutation({
       const locationFresh =
         (existing.locationAtGeneration ?? null) ===
         (profile.location ?? null);
-      if (existing.status === "complete" && stampFresh && locationFresh) {
+      const shapeFresh = !hasLegacySkillsShape(existing.content);
+      if (
+        existing.status === "complete" &&
+        stampFresh &&
+        locationFresh &&
+        shapeFresh
+      ) {
         return { state: "noop", reason: "up-to-date" };
       }
     }
@@ -394,9 +419,15 @@ export const _writeResult = internalMutation({
         content: v.object({
           whyYoureAFit: v.string(),
           skillsAssessment: v.object({
-            strengths: v.array(v.string()),
-            transferable: v.array(v.string()),
-            gaps: v.array(v.string()),
+            strengths: v.array(
+              v.object({ skill: v.string(), why: v.string() }),
+            ),
+            transferable: v.array(
+              v.object({ skill: v.string(), why: v.string() }),
+            ),
+            gaps: v.array(
+              v.object({ skill: v.string(), why: v.string() }),
+            ),
             summary: v.string(),
           }),
           regional: v.optional(
