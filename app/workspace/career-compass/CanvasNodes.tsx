@@ -1,5 +1,6 @@
 // app/workspace/career-compass/CanvasNodes.tsx
 "use client";
+import { useId } from "react";
 import { Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -22,7 +23,7 @@ const SLOT_BADGE_LABEL: Record<GuideCardData["slotKind"], string> = {
   strong: "Strong fit",
   bridge: "Skill bridge",
   aspirational: "Aspirational",
-  extra: "More",
+  extra: "More to explore",
 };
 
 export function GuideCard({
@@ -55,7 +56,9 @@ export function GuideCard({
       {isSaved && (
         <Bookmark className="absolute right-2.5 top-2.5 size-3.5 fill-ink text-ink" />
       )}
-      {/* Eyebrow — collapsed at rest, fades in on hover/focus. */}
+      {/* Eyebrow — collapsed at rest, fades in on hover/focus. The
+          arc-labelled rings carry the per-band classification across the
+          whole canvas, so the per-card label is only surfaced on focus. */}
       <span className="max-h-0 overflow-hidden text-[11px] italic text-mute opacity-0 transition-all duration-200 group-hover:max-h-6 group-hover:opacity-100 group-focus-visible:max-h-6 group-focus-visible:opacity-100">
         {SLOT_BADGE_LABEL[card.slotKind]}
       </span>
@@ -80,14 +83,35 @@ export function UserNode({
   currentRoleChip?: string;
   onClick?: () => void;
 }) {
+  const arcId = useId();
   const avatar = (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex size-20 items-center justify-center rounded-full bg-ink text-paper text-2xl font-medium ring-4 ring-paper transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ink/20 focus-visible:ring-offset-2 focus-visible:ring-offset-paper hover:scale-105"
-    >
-      <span>{initials}</span>
-    </button>
+    <div className="relative inline-flex items-center justify-center">
+      {/* "YOU" arc'd above the avatar. Outside the button so it stays steady
+          while the avatar scales 105% on hover. */}
+      <svg
+        aria-hidden="true"
+        width="96"
+        height="18"
+        viewBox="0 0 96 18"
+        className="pointer-events-none absolute -top-[22px] left-1/2 -translate-x-1/2 overflow-visible"
+      >
+        <defs>
+          <path id={arcId} d="M 8 16 A 90 90 0 0 1 88 16" fill="none" />
+        </defs>
+        <text className="fill-current text-[9px] font-medium uppercase tracking-[0.22em] text-mute">
+          <textPath href={`#${arcId}`} startOffset="50%" textAnchor="middle">
+            You
+          </textPath>
+        </text>
+      </svg>
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex size-20 items-center justify-center rounded-full bg-ink text-paper text-2xl font-medium ring-4 ring-paper transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ink/20 focus-visible:ring-offset-2 focus-visible:ring-offset-paper hover:scale-105"
+      >
+        <span>{initials}</span>
+      </button>
+    </div>
   );
 
   if (!currentRoleChip) return avatar;

@@ -299,11 +299,13 @@ function DiscoverCanvasInner() {
           }}
         >
           {/*
-            Concentric rings centered on the user node — visual scale for
-            "closer = closer fit." Generated at 160px intervals out to a
-            wide outer radius so zooming out reveals progressively fainter
-            rings. SVG sits at the origin div with overflow:visible so the
-            circles render outside the 1px viewport.
+            Concentric rings centered on the user node — fit-strength scale
+            for "closer = closer fit." Three named rings at 360 / 520 / 680
+            mark the slot-tier boundaries (strong / bridge / aspirational)
+            from positionCard.ts; the unnamed rings between/beyond them are
+            visual rhythm. Labels arc along the top of each named ring.
+            SVG sits at the origin div with overflow:visible so the circles
+            render outside the 1px viewport.
           */}
           <svg
             className="pointer-events-none absolute"
@@ -331,6 +333,40 @@ function DiscoverCanvasInner() {
                   stroke={stroke}
                   strokeWidth={1}
                 />
+              );
+            })}
+            {/* Ring band labels. Path traces the upper semicircle of each
+                named ring so the text rides along its top, centered at
+                12 o'clock via startOffset=50%. dy lifts the baseline above
+                the ring stroke so they don't sit on the line. */}
+            {[
+              { r: 360, label: "Strong fit" },
+              { r: 520, label: "Skill bridge" },
+              { r: 680, label: "Aspirational" },
+            ].map(({ r, label }) => {
+              const pathId = `ring-label-${r}`;
+              return (
+                <g key={r}>
+                  <defs>
+                    <path
+                      id={pathId}
+                      d={`M ${-r} 0 A ${r} ${r} 0 0 1 ${r} 0`}
+                      fill="none"
+                    />
+                  </defs>
+                  <text
+                    className="fill-current text-[11px] font-medium uppercase tracking-[0.22em] text-mute"
+                    dy={-6}
+                  >
+                    <textPath
+                      href={`#${pathId}`}
+                      startOffset="50%"
+                      textAnchor="middle"
+                    >
+                      {label}
+                    </textPath>
+                  </text>
+                </g>
               );
             })}
           </svg>
