@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-// Gemini 3.1 Pro through OpenRouter — matches v1 and the project's
-// PERSONALIZATION/CONTENT model slug. Routed via `chatModel(OUTREACH_MODEL_ID,
-// { zdr: true })` so structured + streaming both opt into ZDR.
-export const OUTREACH_MODEL_ID = "google/gemini-3.1-pro-preview";
+// Gemini 3 Flash through OpenRouter — outreach drafts are short, templated,
+// and high-volume so the cheaper/faster flash slug is the right fit. Routed
+// via `chatModel(OUTREACH_MODEL_ID, { zdr: true })` so streaming opts into ZDR.
+export const OUTREACH_MODEL_ID = "google/gemini-3-flash-preview";
 
 // Faster, cheaper sibling used to parse structured profile data out of
 // raw LinkedIn snippet text. Same slug v2 already uses for branch + judge
