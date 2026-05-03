@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { action, internalQuery } from "./_generated/server";
+import { action, internalQuery, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { rerank } from "../lib/ai/providers";
@@ -492,5 +492,122 @@ export const guidesForMe = action({
       });
     }
     return out;
+  },
+});
+
+// ─── Snapshot-backed guides for profile page ────────────────────────────
+//
+// `guidesForMeFromSnapshot` projects the user's `discover_canvases` row
+// onto the four Career Compass lanes — same source of truth, same
+// lane keys, same labels surfaced in the canvas (`DiscoverCanvas.tsx`'s
+// `LANE_META`). We read the precomputed lanes rather than running a
+// second, divergent ranker.
+//
+// Status is surfaced explicitly so the UI can render a "Calibrate your
+// Compass" CTA when the snapshot is missing/generating/failed instead of
+// silently showing nothing. Auth follows the speculative-read pattern
+// from `discover.getSnapshot` (return "missing" rather than throw, so
+// the JWT race on first render doesn't surface as an uncaught error).
+
+// Profile-page tease: show three cards per lane; the fourth grid slot
+// is a CTA to the full Career Compass canvas.
+const PROFILE_LANE_LIMIT = 3;
+
+export type ProfileGuideCard = {
+  slug: string;
+  title: string;
+  illustrationUrl: string | null;
+  overviewSnippet: string;
+  whyMatchReason: string;
+};
+
+export type GuidesFromSnapshot = {
+  status: "missing" | "generating" | "ready" | "failed";
+  lanes: {
+    linear: ProfileGuideCard[];
+    adjacent: ProfileGuideCard[];
+    earlier: ProfileGuideCard[];
+    transformational: ProfileGuideCard[];
+  };
+  failureReason: string | null;
+};
+
+export const guidesForMeFromSnapshot = query({
+  args: {},
+  handler: async (ctx): Promise<GuidesFromSnapshot> => {
+    const empty = {
+      linear: [] as ProfileGuideCard[],
+      adjacent: [] as ProfileGuideCard[],
+      earlier: [] as ProfileGuideCard[],
+      transformational: [] as ProfileGuideCard[],
+    };
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity)
+      return { status: "missing", lanes: empty, failureReason: null };
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!user)
+      return { status: "missing", lanes: empty, failureReason: null };
+    const snap = await ctx.db
+      .query("discover_canvases")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (!snap)
+      return { status: "missing", lanes: empty, failureReason: null };
+    if (snap.status !== "ready") {
+      return {
+        status: snap.status,
+        lanes: empty,
+        failureReason: snap.failureReason ?? null,
+      };
+    }
+
+    const lanesByKind = new Map(snap.lanes.map((l) => [l.kind, l.cards]));
+
+    const hydrate = async (
+      cards: Array<{
+        guideId: Id<"career_guides">;
+        whyMatchReason: string;
+      }>,
+    ): Promise<ProfileGuideCard[]> => {
+      const limited = cards.slice(0, PROFILE_LANE_LIMIT);
+      return Promise.all(
+        limited.map(async (c) => {
+          const g = await ctx.db.get(c.guideId);
+          const overview = g?.content?.overview ?? "";
+          const snippet =
+            overview.length > GUIDE_OVERVIEW_SNIPPET_LENGTH
+              ? `${overview.slice(0, GUIDE_OVERVIEW_SNIPPET_LENGTH).trimEnd()}…`
+              : overview;
+          const url = g?.illustrationStorageId
+            ? await ctx.storage.getUrl(g.illustrationStorageId)
+            : null;
+          return {
+            slug: g?.slug ?? "",
+            title: g?.title ?? "(missing)",
+            illustrationUrl: url,
+            overviewSnippet: snippet,
+            whyMatchReason: c.whyMatchReason,
+          };
+        }),
+      );
+    };
+
+    const [linear, adjacent, earlier, transformational] = await Promise.all([
+      hydrate(lanesByKind.get("linear") ?? []),
+      hydrate(lanesByKind.get("adjacent") ?? []),
+      hydrate(lanesByKind.get("earlier") ?? []),
+      hydrate(lanesByKind.get("transformational") ?? []),
+    ]);
+
+    return {
+      status: "ready",
+      lanes: { linear, adjacent, earlier, transformational },
+      failureReason: null,
+    };
   },
 });
