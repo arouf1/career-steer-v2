@@ -68,31 +68,16 @@ export function MobileCardSheet({
     if (!open) setOverviewExpanded(false);
   }, [open, card?.guideId]);
 
-  // Actively measure the visible viewport height. CSS height units
-  // (`vh`/`dvh`/`svh` and even `inset-y-0` via fixed positioning) all
-  // rely on the browser's layout-time viewport resolution, which iOS
-  // Safari does inconsistently across sheet mounts in the same session
-  // — exactly the symptom of "the same card sometimes shows the footer
-  // and sometimes doesn't." `window.visualViewport.height` is the
-  // value iOS *actually* uses for paint regardless of toolbar state,
-  // so applying it as an inline pixel height is deterministic.
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    const update = () => {
-      const h = window.visualViewport?.height ?? window.innerHeight;
-      if (h > 0) setViewportHeight(h);
-    };
-    update();
-    window.visualViewport?.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("scroll", update);
-    window.addEventListener("resize", update);
-    return () => {
-      window.visualViewport?.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [open]);
+  // Sheet height uses `100svh` (smallest viewport height). On iOS
+  // Safari, the URL bar transitions cause every "live" viewport unit
+  // (vh/dvh) and visualViewport-measured height to be subtly wrong
+  // mid-transition — content was rendering past the visible area
+  // even when measurements said it fit. `svh` is the *smallest*
+  // viewport (URL bar fully visible) and never changes, so the sheet
+  // is always smaller-or-equal-to the visible area regardless of
+  // URL bar state. Trade-off: a small strip of cream may be visible
+  // below the sheet when the URL bar is collapsed, but the Read full
+  // guide CTA is reliably reachable on every card.
 
   // Lock body scroll while the sheet is open.
   useEffect(() => {
@@ -134,22 +119,12 @@ export function MobileCardSheet({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.35, ease: [0.2, 0.65, 0.3, 1] }}
-            // Single scroll container architecture (rather than the
-            // anchored-footer-with-flex-1-body pattern). Multiple
-            // iterations of the latter produced inconsistent footer
-            // visibility on iOS Safari — same card sometimes showing
-            // the CTA, sometimes not — because the flex cascade was
-            // resolving against a viewport height that iOS resolves
-            // unreliably across mounts. With one scroll container,
-            // everything (header, content, CTA) is in linear flow;
-            // the user reaches the CTA by scrolling. No height math,
-            // no flex-cascade gotchas — works on every card every time.
-            className="fixed inset-y-0 right-0 z-50 w-full overflow-hidden border-l border-hairline bg-paper sm:max-w-lg"
-            style={
-              viewportHeight
-                ? { height: `${viewportHeight}px` }
-                : undefined
-            }
+            // Single scroll container architecture, sized via `100svh`
+            // (smallest viewport — URL bar fully visible). Always fits
+            // within the visible area on iOS Safari regardless of URL
+            // bar state.
+            className="fixed right-0 top-0 z-50 w-full overflow-hidden border-l border-hairline bg-paper sm:max-w-lg"
+            style={{ height: "100svh", maxHeight: "100svh" }}
             role="dialog"
             aria-label={`Preview of ${card.title}`}
             aria-modal="true"
