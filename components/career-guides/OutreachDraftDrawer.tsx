@@ -51,12 +51,36 @@ export function OutreachDraftDrawer({ person, onClose }: Props) {
     [draft.outreachType],
   );
 
-  // Lock body scroll while the drawer is open.
+  // Lock body scroll while the drawer is open. The simple
+  // `body { overflow: hidden }` lock isn't enough on iOS Safari —
+  // the browser still transitions its URL bar in response to inner
+  // scrolls, which re-anchors `position: fixed` elements (the drawer)
+  // to a different visual viewport mid-session and cuts off the
+  // bottom CTA. The robust iOS pattern pins the body via
+  // `position: fixed` at a negative top offset equal to the current
+  // scrollY. Safari reads that as "the page isn't scrolling," so it
+  // stops transitioning its URL bar entirely, the visual viewport
+  // stays stable, and the drawer's footer stays where it should.
+  // (Same pattern as MobileCardSheet — see memory entry
+  // `feedback_ios_sheet_pattern.md`.)
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.position = prev.position;
+      document.body.style.top = prev.top;
+      document.body.style.width = prev.width;
+      document.body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
     };
   }, []);
 
