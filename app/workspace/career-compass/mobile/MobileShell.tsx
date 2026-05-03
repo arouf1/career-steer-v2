@@ -199,6 +199,13 @@ function MobileShellInner() {
 
   return (
     <div className="relative flex h-full flex-col bg-paper">
+      {/* Discrete hint — the canvas reveals more on a larger screen. Kept
+          deliberately quiet (mute, small, no chrome) so it never competes
+          with the compass itself. */}
+      <p className="px-4 pt-2 text-center text-[11px] leading-snug text-mute/70">
+        Best viewed on a larger screen
+      </p>
+
       {/* Compass header. Each lane below has its own scroll, so this is a
           regular flex item (not sticky); the compass shrinks via the
           active lane's scrollTop reported up through `onScrollY`. */}
