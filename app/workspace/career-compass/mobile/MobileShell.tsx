@@ -183,6 +183,16 @@ function MobileShellInner() {
     [prefersReducedMotion, scrollY],
   );
 
+  const handleQuadrantTap = useCallback(
+    (lane: CompassLane) => {
+      const idx = COMPASS_LANE_ORDER.indexOf(lane);
+      if (idx === -1 || idx === activeIndex) return;
+      setActiveIndex(idx);
+      triggerHaptic(prefersReducedMotion);
+    },
+    [activeIndex, prefersReducedMotion],
+  );
+
   const handleIndexChange = useCallback((idx: number) => {
     setActiveIndex(idx);
   }, []);
@@ -201,6 +211,7 @@ function MobileShellInner() {
           dragProgress={dragProgress}
           scrollY={scrollY}
           initials={initials}
+          onQuadrantTap={handleQuadrantTap}
           lastFlash={lastFlash}
           prefersReducedMotion={prefersReducedMotion}
         />
