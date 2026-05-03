@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAction } from "convex/react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
@@ -38,7 +37,6 @@ export function DeleteAccountDialog({ trigger }: Props) {
   const [confirmInput, setConfirmInput] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-  const router = useRouter();
   // Server-side action: deletes the Clerk user via the Backend SDK and
   // cascades all Convex data in one atomic-ish call. Uses the admin secret
   // key so it works regardless of Clerk's "allow self delete" dashboard
@@ -72,14 +70,21 @@ export function DeleteAccountDialog({ trigger }: Props) {
       return;
     }
 
-    // Sign out + redirect home. Clerk session is already invalid since the
-    // user was deleted server-side; this clears the local session state.
+    // After deletion the Clerk session token is invalid (its user was just
+    // wiped) and the __client cookie still carries the last sign_in_attempt,
+    // which references an external_account that no longer exists. signOut()
+    // can 401 against the deleted user, and a soft Next navigation would let
+    // that stale state survive into the next SignIn modal as
+    // "External Account was not found." Best-effort signOut, then ALWAYS
+    // hard-reload to "/" so Clerk JS re-bootstraps from scratch.
     setStatus({ kind: "signing-out" });
     try {
-      await signOut({ redirectUrl: "/" });
+      await signOut();
     } catch {
-      router.replace("/");
+      // Expected when the session belongs to the just-deleted user. The
+      // hard reload below is what actually resets Clerk client state.
     }
+    window.location.replace("/");
   }
 
   function onOpenChange(next: boolean) {
