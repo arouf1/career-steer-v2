@@ -68,16 +68,15 @@ export function MobileCardSheet({
     if (!open) setOverviewExpanded(false);
   }, [open, card?.guideId]);
 
-  // Sheet height uses `100svh` (smallest viewport height). On iOS
-  // Safari, the URL bar transitions cause every "live" viewport unit
-  // (vh/dvh) and visualViewport-measured height to be subtly wrong
-  // mid-transition — content was rendering past the visible area
-  // even when measurements said it fit. `svh` is the *smallest*
-  // viewport (URL bar fully visible) and never changes, so the sheet
-  // is always smaller-or-equal-to the visible area regardless of
-  // URL bar state. Trade-off: a small strip of cream may be visible
-  // below the sheet when the URL bar is collapsed, but the Read full
-  // guide CTA is reliably reachable on every card.
+  // Sheet sizing uses `inset-y-0` (no explicit height) so it spans the
+  // full layout viewport — which on iOS Safari is constant regardless
+  // of where the URL bar is. The Read full guide CTA is anchored via
+  // absolute positioning at `bottom-0` and pads itself with
+  // `env(safe-area-inset-bottom)`, which Safari adjusts dynamically to
+  // clear whatever chrome is currently overlaying (the bottom URL bar
+  // when expanded, just the home indicator when minimized). The
+  // scrollable body has matching padding-bottom so its content never
+  // hides behind the absolutely-positioned CTA.
 
   // Lock body scroll while the sheet is open.
   useEffect(() => {
@@ -119,28 +118,26 @@ export function MobileCardSheet({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.35, ease: [0.2, 0.65, 0.3, 1] }}
-            // Single scroll container architecture, sized via `100svh`
-            // (smallest viewport — URL bar fully visible). Always fits
-            // within the visible area on iOS Safari regardless of URL
-            // bar state.
-            className="fixed right-0 top-0 z-50 w-full overflow-hidden border-l border-hairline bg-paper sm:max-w-lg"
-            style={{ height: "100svh", maxHeight: "100svh" }}
+            // `inset-y-0` spans the full layout viewport on iOS — constant
+            // regardless of URL bar state — and the absolutely-positioned
+            // CTA at `bottom-0` with safe-area-inset padding clears
+            // whatever chrome Safari is currently overlaying.
+            className="fixed inset-y-0 right-0 z-50 w-full overflow-hidden border-l border-hairline bg-paper sm:max-w-lg"
             role="dialog"
             aria-label={`Preview of ${card.title}`}
             aria-modal="true"
           >
+            {/* Scrollable body. `paddingBottom` reserves room for the
+                absolutely-positioned CTA below — content scrolls *under*
+                the CTA's space without ever hiding behind it. */}
             <div
               className="h-full overflow-y-auto overscroll-contain px-5 pt-4"
               style={{
-                // Generous bottom buffer: safe-area inset alone (the iOS
-                // home indicator height, ~34px on Pro Max) doesn't give
-                // enough daylight below the CTA when content totals
-                // close to the visible viewport — the CTA ends up
-                // half-occluded by the indicator area without enough
-                // overflow to actually engage scroll. +40px on top of
-                // the safe-area inset always leaves a clear gap.
+                // CTA box height (~58px button + 16px top + 12px bottom +
+                // border) plus safe-area inset for the home indicator or
+                // bottom URL bar overlay.
                 paddingBottom:
-                  "calc(env(safe-area-inset-bottom, 0px) + 40px)",
+                  "calc(env(safe-area-inset-bottom, 0px) + 96px)",
               }}
             >
               {/* Header */}
@@ -260,22 +257,29 @@ export function MobileCardSheet({
                   Not for me
                 </button>
               </section>
+            </div>
 
-              {/* Read full guide CTA — sits at the natural end of scroll
-                  content. Always present, always reachable via scroll. */}
-              <div className="mt-6 border-t border-hairline pt-5">
-                <Link
-                  href={`/career-guides/${card.slug}`}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-pill bg-ink px-5 py-3 text-[14px] font-medium text-paper transition-colors hover:bg-ink-deep"
-                >
-                  Read full guide
-                  <ArrowUpRight
-                    className="h-3.5 w-3.5"
-                    aria-hidden
-                    strokeWidth={1.75}
-                  />
-                </Link>
-              </div>
+            {/* CTA pinned to the layout viewport's bottom edge.
+                `env(safe-area-inset-bottom)` adjusts dynamically as
+                Safari's bottom URL bar expands/minimizes, so the button
+                always clears whatever chrome is currently overlaying. */}
+            <div
+              className="absolute inset-x-0 bottom-0 z-10 border-t border-hairline bg-paper px-5 pt-3"
+              style={{
+                paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
+              }}
+            >
+              <Link
+                href={`/career-guides/${card.slug}`}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-pill bg-ink px-5 py-3 text-[14px] font-medium text-paper transition-colors hover:bg-ink-deep"
+              >
+                Read full guide
+                <ArrowUpRight
+                  className="h-3.5 w-3.5"
+                  aria-hidden
+                  strokeWidth={1.75}
+                />
+              </Link>
             </div>
           </motion.aside>
         </>
