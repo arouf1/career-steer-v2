@@ -134,13 +134,17 @@ export function MobileCardSheet({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.35, ease: [0.2, 0.65, 0.3, 1] }}
-            // Inline pixel height from `window.visualViewport` is the
-            // authoritative way to size to the visible area on iOS
-            // Safari. CSS-only approaches (`h-[100dvh]`, `inset-y-0`)
-            // were giving inconsistent results between sheet mounts in
-            // the same session. `inset-y-0` stays as a fallback for
-            // browsers without visualViewport support.
-            className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-hairline bg-paper sm:max-w-lg"
+            // Single scroll container architecture (rather than the
+            // anchored-footer-with-flex-1-body pattern). Multiple
+            // iterations of the latter produced inconsistent footer
+            // visibility on iOS Safari — same card sometimes showing
+            // the CTA, sometimes not — because the flex cascade was
+            // resolving against a viewport height that iOS resolves
+            // unreliably across mounts. With one scroll container,
+            // everything (header, content, CTA) is in linear flow;
+            // the user reaches the CTA by scrolling. No height math,
+            // no flex-cascade gotchas — works on every card every time.
+            className="fixed inset-y-0 right-0 z-50 w-full overflow-hidden border-l border-hairline bg-paper sm:max-w-lg"
             style={
               viewportHeight
                 ? { height: `${viewportHeight}px` }
@@ -150,33 +154,33 @@ export function MobileCardSheet({
             aria-label={`Preview of ${card.title}`}
             aria-modal="true"
           >
-            {/* Header — slot label + title + why-match + close. Stays
-                anchored at the top via flex-shrink-0 (default for
-                non-flex-1 children). */}
-            <header className="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
-              <div className="min-w-0">
-                <p className={eyebrowCls}>{SLOT_LABEL[card.slotKind]}</p>
-                <h2 className="mt-1 font-serif text-[20px] leading-tight text-ink">
-                  {card.title}
-                </h2>
-                <p className="mt-2 text-[14px] italic leading-snug text-mute">
-                  {card.whyMatchReason}
-                </p>
+            <div
+              className="h-full overflow-y-auto overscroll-contain px-5 py-4"
+              style={{
+                paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3 pb-4">
+                <div className="min-w-0">
+                  <p className={eyebrowCls}>{SLOT_LABEL[card.slotKind]}</p>
+                  <h2 className="mt-1 font-serif text-[20px] leading-tight text-ink">
+                    {card.title}
+                  </h2>
+                  <p className="mt-2 text-[14px] italic leading-snug text-mute">
+                    {card.whyMatchReason}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="-mr-1 shrink-0 rounded-pill p-2 text-mute transition-colors hover:bg-paper-raised hover:text-ink"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" aria-hidden strokeWidth={1.75} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="-mr-1 shrink-0 rounded-pill p-2 text-mute transition-colors hover:bg-paper-raised hover:text-ink"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" aria-hidden strokeWidth={1.75} />
-              </button>
-            </header>
 
-            {/* Body — flex-1 takes remaining height between header and
-                footer; min-h-0 lets it shrink so overflow-y-auto engages
-                when content exceeds the available space. */}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
               {/* Hero image */}
               {image && (
                 <div className="relative mb-5 aspect-[16/10] overflow-hidden rounded-md border border-hairline bg-paper-raised">
@@ -273,29 +277,23 @@ export function MobileCardSheet({
                   Not for me
                 </button>
               </section>
-            </div>
 
-            {/* Footer CTA — anchored at the bottom of the panel.
-                Safe-area-inset-bottom keeps it clear of the iOS home
-                indicator. */}
-            <footer
-              className="border-t border-hairline px-5 pt-3"
-              style={{
-                paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
-              }}
-            >
-              <Link
-                href={`/career-guides/${card.slug}`}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-pill bg-ink px-5 py-3 text-[14px] font-medium text-paper transition-colors hover:bg-ink-deep"
-              >
-                Read full guide
-                <ArrowUpRight
-                  className="h-3.5 w-3.5"
-                  aria-hidden
-                  strokeWidth={1.75}
-                />
-              </Link>
-            </footer>
+              {/* Read full guide CTA — sits at the natural end of scroll
+                  content. Always present, always reachable via scroll. */}
+              <div className="mt-6 border-t border-hairline pt-5">
+                <Link
+                  href={`/career-guides/${card.slug}`}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-pill bg-ink px-5 py-3 text-[14px] font-medium text-paper transition-colors hover:bg-ink-deep"
+                >
+                  Read full guide
+                  <ArrowUpRight
+                    className="h-3.5 w-3.5"
+                    aria-hidden
+                    strokeWidth={1.75}
+                  />
+                </Link>
+              </div>
+            </div>
           </motion.aside>
         </>
       )}
