@@ -65,7 +65,13 @@ export function MobileLaneFeed({
   }
 
   return (
-    <div className="flex flex-col px-4 pb-12 pt-1">
+    // Min-height pushes the lane feed to fill most of the visible area
+    // even when the lane is sparse. Combined with `mt-auto` on the
+    // end-of-list marker below, this floats the marker to the bottom of
+    // the visible page, so the cream space between content and marker
+    // reads as intentional whitespace rather than missing content.
+    // Math: 100dvh − ~140px of compass header / topbar chrome.
+    <div className="flex min-h-[calc(100dvh-160px)] flex-col px-4 pb-10 pt-1">
       {/* Lane title block — confident editorial header. Always rendered
           (even when this lane is empty) so the user keeps their bearings
           while swiping. Eyebrow uses the short-form compass label. */}
@@ -84,7 +90,10 @@ export function MobileLaneFeed({
       </header>
 
       {cards.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 px-6 pt-10 text-center">
+        // `flex-1 + items-center justify-center` vertically centres the
+        // empty-lane copy in the available viewport space, keeping the
+        // page from feeling top-heavy.
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
           <p className="max-w-[26ch] font-serif text-[15px] italic leading-relaxed text-mute">
             Swipe left or right to see your other directions.
           </p>
@@ -132,11 +141,13 @@ export function MobileLaneFeed({
             );
           })}
 
-          {/* End-of-list marker — gives a sense of completion so the cream
-              space below doesn't feel like a blank stretch. */}
+          {/* End-of-list marker — `mt-auto` floats it to the bottom of
+              the lane feed, which is min-height-locked to viewport-ish.
+              Sparse lanes thus end at the visible bottom rather than
+              tight against the cards with empty cream below. */}
           <div
             aria-hidden
-            className="mt-10 mb-2 flex items-center justify-center gap-3 px-12 opacity-70"
+            className="mt-auto pt-10 flex items-center justify-center gap-3 px-12 opacity-70"
           >
             <span className="h-px flex-1 bg-hairline" />
             <span className="font-serif text-[11px] italic text-mute">

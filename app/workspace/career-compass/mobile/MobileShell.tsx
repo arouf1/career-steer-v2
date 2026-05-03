@@ -3,11 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Authenticated, useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { useMotionValue, useReducedMotion } from "motion/react";
-import { ChevronDown } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import { usePullToRefresh } from "@/lib/client/usePullToRefresh";
 import { COMPASS_LANE_ORDER } from "../lib/mobileCompassGeometry";
 import type { CompassCard, CompassLane } from "../lib/mobileCompassTypes";
 import { MobileCompass } from "./MobileCompass";
@@ -157,13 +156,13 @@ function MobileShellInner() {
   const initials =
     (user?.firstName?.[0] ?? "Y") + (user?.lastName?.[0] ?? "ou");
 
-  // Pull-to-refresh handler — calls manualRefresh, returns a promise that
-  // resolves once we've kicked off the regeneration. The snapshot status
-  // will flip to "generating" via subscription which puts the compass back
-  // into sonar state.
-  const handleRefresh = useCallback(async () => {
-    await manualRefresh({});
-    // No need to await further — the compass observes the status.
+  // Refresh handler — bound to the explicit refresh button in the compass
+  // header. Pull-to-refresh was removed: with vertical scroll, horizontal
+  // lane swipes, and bottom-sheet drag-down all happening on the same
+  // surface, an additional pull-down gesture mis-fired too often. An
+  // explicit affordance is more honest on a gesture-busy screen.
+  const handleRefresh = useCallback(() => {
+    void manualRefresh({});
   }, [manualRefresh]);
 
   const handleUserSettle = useCallback(() => {
@@ -174,32 +173,9 @@ function MobileShellInner() {
     setActiveIndex(idx);
   }, []);
 
-  // Page-level scroll lives at the shell so each lane can size to its own
-  // content (no internal scroll containers, no empty space under sparse
-  // lanes). usePullToRefresh hooks into the same container; its axis lock
-  // means horizontal swipes inside the lanes still pass through to Embla.
-  const { containerRef, indicatorOpacity, refreshing, willTrigger } =
-    usePullToRefresh({ onRefresh: handleRefresh });
-
   return (
     <div className="relative flex h-full flex-col bg-paper">
-      {/* Pull-to-refresh indicator — pinned over the compass header. */}
       <div
-        aria-hidden
-        className="pointer-events-none absolute left-0 right-0 top-1 z-20 flex items-center justify-center"
-        style={{ opacity: indicatorOpacity }}
-      >
-        <ChevronDown
-          className={
-            "size-4 transition-transform duration-200 " +
-            (willTrigger ? "rotate-180 text-ink" : "text-mute")
-          }
-          strokeWidth={1.75}
-        />
-      </div>
-
-      <div
-        ref={containerRef}
         onScroll={(e) => scrollY.set(e.currentTarget.scrollTop)}
         className="flex-1 overflow-y-auto overscroll-contain"
       >
@@ -218,6 +194,20 @@ function MobileShellInner() {
             lastFlash={lastFlash}
             prefersReducedMotion={prefersReducedMotion}
           />
+
+          {/* Refresh affordance — small, top-right, only visible while the
+              snapshot is ready (no point offering refresh during loading
+              or failure since the failure path has its own retry CTA). */}
+          {compassState === "ready" && (
+            <button
+              type="button"
+              onClick={handleRefresh}
+              aria-label="Refresh career landscape"
+              className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full text-mute transition-colors hover:bg-paper-raised hover:text-ink active:bg-paper-raised"
+            >
+              <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
+            </button>
+          )}
 
           {compassState === "failed" && (
             <div className="mt-4 flex flex-col items-center gap-2 px-4">
@@ -262,14 +252,6 @@ function MobileShellInner() {
           />
         )}
 
-        {refreshing && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute left-0 right-0 top-1 z-20 flex items-center justify-center py-2"
-          >
-            <span className="text-[11px] italic text-mute">Refreshing…</span>
-          </div>
-        )}
       </div>
 
       <MobileCardSheet
