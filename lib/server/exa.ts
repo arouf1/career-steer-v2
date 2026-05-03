@@ -125,6 +125,66 @@ const PROFILE_PHOTO_PATTERN = "profile-displayphoto-shrink_";
 const PROFILE_PHOTO_URL_RE =
   /https:\/\/media\.licdn\.com\/dms\/image\/[^"\s)]*profile-displayphoto-shrink_[^"\s)]*/;
 
+// ── Single-URL content fetch (used by LinkedIn import) ───────────────────
+// `exa.getContents([url], { text: true })` is Exa's "scrape this exact URL
+// and give me the readable text" call. It is what V1 used for the LinkedIn
+// import path and what we use here too — LinkedIn has no public API and the
+// Exa scraper handles the auth wall well enough to get the public profile
+// content for retry-able fetches.
+
+export type ExaContentResult = {
+  url: string;
+  title: string;
+  text: string;
+  author?: string;
+  publishedDate?: string;
+};
+
+export async function exaGetContents(
+  url: string,
+  opts?: { signal?: AbortSignal },
+): Promise<ExaContentResult> {
+  const exa = getClient();
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    if (opts?.signal?.aborted) throw new Error("aborted");
+    try {
+      const res = await exa.getContents([url], { text: true });
+      const first = (res.results ?? [])[0];
+      if (!first || typeof first.text !== "string" || first.text.length === 0) {
+        throw new Error("Exa returned no text content for the URL");
+      }
+      return {
+        url: typeof first.url === "string" ? first.url : url,
+        title: typeof first.title === "string" ? first.title : url,
+        text: first.text,
+        author:
+          typeof (first as { author?: unknown }).author === "string"
+            ? ((first as { author: string }).author)
+            : undefined,
+        publishedDate:
+          typeof (first as { publishedDate?: unknown }).publishedDate ===
+          "string"
+            ? ((first as { publishedDate: string }).publishedDate)
+            : undefined,
+      };
+    } catch (err) {
+      lastError = err;
+      if (attempt === RETRY_ATTEMPTS) break;
+      const base = isRateLimit(err)
+        ? RATE_LIMIT_BACKOFF_MS
+        : TRANSIENT_BACKOFF_MS;
+      const jitter = Math.floor(Math.random() * 200);
+      await sleep(base * attempt + jitter, opts?.signal);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Exa getContents failed: ${String(lastError)}`);
+}
+
 export async function exaSearchLinkedIn(
   query: string,
   opts?: {

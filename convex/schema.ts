@@ -11,7 +11,11 @@ export default defineSchema({
 
   profiles: defineTable({
     userId: v.id("users"),
-    sourceFormat: v.union(v.literal("pdf"), v.literal("docx")),
+    sourceFormat: v.union(
+      v.literal("pdf"),
+      v.literal("docx"),
+      v.literal("linkedin"),
+    ),
     rawText: v.string(),
     parsedAt: v.number(),
     reviewed: v.boolean(),
@@ -19,6 +23,10 @@ export default defineSchema({
       countInWindow: v.number(),
       windowStartedAt: v.number(),
     }),
+    // Set only for sourceFormat === "linkedin" — captures the URL that was
+    // scraped so we can show provenance and (later) build a re-sync feature
+    // without a schema migration.
+    linkedinUrl: v.optional(v.string()),
     name: v.optional(v.union(v.string(), v.null())),
     headline: v.optional(v.union(v.string(), v.null())),
     summary: v.optional(v.union(v.string(), v.null())),
