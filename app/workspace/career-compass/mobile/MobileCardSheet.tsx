@@ -75,21 +75,24 @@ export function MobileCardSheet({
       shouldScaleBackground={false}
     >
       <DrawerContent
-        className={
-          // Override vaul's default 80vh cap so the sheet has more breathing
-          // room. Use `dvh` (dynamic viewport height) — `vh` always refers
-          // to the *largest* viewport on iOS Safari (URL bar collapsed), so
-          // a 92vh drawer overshoots the visible area when the URL bar is
-          // up and the bottom CTA gets pushed off-screen. `dvh` adjusts as
-          // the URL bar shows/hides, keeping the footer reachable.
-          //
-          // Tailwind v4 syntax for `!important` is the SUFFIX form
-          // (`h-[92dvh]!`) — the v3 prefix `!h-[92dvh]` silently doesn't
-          // apply !important under v4. Without it, vaul's
-          // `max-h-[80vh]` baked into shadcn's wrapper ties twMerge on
-          // the same property and the override didn't always win.
-          "bg-paper data-[vaul-drawer-direction=bottom]:h-[92dvh]! data-[vaul-drawer-direction=bottom]:max-h-[92dvh]!"
-        }
+        className="bg-paper"
+        // Pin the drawer height via inline style (always wins over class-
+        // based defaults) instead of relying on a Tailwind class override.
+        // Earlier attempts using `!h-[92vh]` (v3 prefix syntax) and then
+        // `h-[92dvh]!` (v4 suffix syntax) were inconsistent — sometimes
+        // the override applied, sometimes vaul's baked-in max-h-[80vh]
+        // won the cascade and the "Read full guide" footer got pushed
+        // below the visible area on cards with longer content. Inline
+        // style sidesteps that whole class-of-bugs.
+        //
+        // `dvh` (dynamic viewport height) tracks the iOS Safari URL bar
+        // showing/hiding so the drawer never overshoots the visible
+        // area. `100dvh - 8vh` keeps a small strip of compass peeking
+        // above so the user remembers there's a page behind the sheet.
+        style={{
+          height: "92dvh",
+          maxHeight: "92dvh",
+        }}
       >
         {/* Visually-hidden title/description satisfy vaul's a11y
             requirements without taking layout space. */}
