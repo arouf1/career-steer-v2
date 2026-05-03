@@ -19,7 +19,6 @@ import {
   ASPIRATIONAL_RERANK_TOP_N,
   CANDIDATE_POOL_K,
   LANE_BUDGET,
-  LANE_DOMAIN_SIM_FLOOR,
   LANE_WHOLE_SIM_FLOOR,
   REGEN_DEBOUNCE_MS,
   SNAPSHOT_MAX_ATTEMPTS,
@@ -506,39 +505,32 @@ async function runPipeline(
     (c) => !dismissed.has(c.guideId as string),
   );
 
-  // Step 5: 4-lane bucketing using career stage comparison + per-lane wholeSim
-  // floor (and, for `earlier`, an additional domainSim floor).
+  // Step 5: 3-lane embedding bucketing + a separate experience-override
+  // path into the 'earlier' lane.
   //
   // Lane semantics:
   //   linear            ("Next steps")        — guide stage > user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.linear
   //   adjacent          ("Sideways moves")    — guide stage == user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.adjacent
-  //   earlier           ("Earlier chapters")  — guide stage < user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.earlier AND domainSim ≥ LANE_DOMAIN_SIM_FLOOR.earlier
-  //   transformational  ("A different chapter") — fails any of the above gates OR stage missing
+  //   earlier           ("Earlier chapters")  — guide.slug ∈ profile.seedingGuideSlugs (literal past role)
+  //   transformational  ("A different chapter") — fails the linear/adjacent gates OR stage missing
   //
-  // Per-lane wholeSim floors (linear/adjacent: 0.72, earlier: 0.68): the
-  // stage signal disambiguates forward/sideways/earlier, but the wholeSim
-  // floor's job is narrower — keep cross-domain noise out of the three
-  // high-signal lanes.
+  // The 'earlier' lane is intentionally NOT defined by embedding similarity.
+  // It strictly admits guides whose slug appears in profile.seedingGuideSlugs
+  // — i.e., roles the user has actually held, as captured by
+  // internal.profileGuideSeeding.seedGuidesFromProfile from profile.experience.
+  // Embedding-based admission to earlier (the previous wholeSim ≥ 0.68 +
+  // domainSim ≥ 0.72 path) was an approximation of past-roleness back when
+  // we had no other signal — it admitted cross-domain noise (Actuary, SEO
+  // Manager) that wasn't actually in the user's history. Now we have the
+  // literal data, so the approximation is gone.
   //
-  // Why earlier also gets a domainSim gate: the lane is rendered as "Earlier
-  // chapters", which reads as roles in the user's own past. wholeSim alone
-  // admits cross-domain stage-down roles (e.g. for a Head of ML, "Actuary"
-  // and "SEO Manager" both cleared the wholeSim 0.68 floor at ~0.69-0.70
-  // despite being unrelated industries). The domainSim floor restores label
-  // honesty — a role only enters `earlier` if it both sits at a lower stage
-  // AND shares the user's professional domain. Cross-domain stage-down roles
-  // fall through to `transformational` ("a different chapter"), which is
-  // exactly the lane intended for cross-domain pivots.
+  // Per-lane wholeSim floors (linear/adjacent: 0.72): the stage signal
+  // disambiguates forward/sideways, the floor keeps cross-domain noise out
+  // of the high-signal lanes.
   //
   // When user or guide stage is missing the candidate falls through to
   // transformational rather than guessing — so guides that haven't been
   // backfilled with `typicalCareerStage` yet still have a place to land.
-  //
-  // Why this replaces percentile-based wholeSim bucketing: senior users (Head
-  // of ML, Director) were seeing roles like Data Engineer / AI Engineer in
-  // "Next steps" because the previous bucketing had no concept of seniority.
-  // Career stage comparison fixes that: lateral/downward roles now route to
-  // sideways/earlier instead of misrepresented as next-steps.
   const enrichment = await ctx.runQuery(
     internal.discover._readProfileEnrichment,
     { profileId: args.profileId },
@@ -590,17 +582,20 @@ async function runPipeline(
       continue;
     }
 
+    // The earlier lane is *strictly* "roles the user has held" via the
+    // override above. Embedding-only admissions used to live here as an
+    // approximation of past-roleness (gated by wholeSim/domainSim floors) —
+    // that approximation is obsolete now that profile.seedingGuideSlugs
+    // gives us the literal data, and the floors had a long history of
+    // admitting cross-domain noise (Actuary, SEO Manager, etc.) that
+    // shouldn't be there. So everything below routes between
+    // forward/sideways/transformational only; cross-domain stage-down roles
+    // fall through to transformational where they semantically belong.
     const cmp = compareStages(userStage, guideStage);
     if (cmp === "forward" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.linear) {
       byLane.linear.push(c);
     } else if (cmp === "sideways" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.adjacent) {
       byLane.adjacent.push(c);
-    } else if (
-      cmp === "earlier" &&
-      c.wholeSim >= LANE_WHOLE_SIM_FLOOR.earlier &&
-      c.domainSim >= LANE_DOMAIN_SIM_FLOOR.earlier
-    ) {
-      byLane.earlier.push(c);
     } else {
       byLane.transformational.push(c);
     }

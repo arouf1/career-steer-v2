@@ -384,7 +384,14 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
         tokenIdentifier: "u-lane-test",
         email: "lane@example.com",
       });
-      const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+      // seedingGuideSlugs includes "earlier" so the earlier-stage guide
+      // below enters the earlier lane via the experience override (the only
+      // path into earlier after the lane-tightening change). Without this
+      // the guide would fall through to transformational.
+      const profileId = await ctx.db.insert("profiles", {
+        ...profileSeed(userId),
+        seedingGuideSlugs: ["earlier"],
+      });
       await ctx.db.insert(
         "profile_enrichments",
         enrichmentSeed({ profileId, userId, careerStage: "manager" }),
@@ -497,35 +504,33 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
     expect(lanes.transformational).toEqual([noStageId]);
   });
 
-  it("routes lower-stage guides with weak domain similarity to transformational, not earlier", async () => {
-    // Regression for the EARLIER-CHAPTERS label honesty fix: a guide whose
-    // typicalCareerStage is below the user's AND whose wholeSim clears the
-    // earlier floor (0.68) MUST still be excluded from the earlier lane when
-    // its domainSim is below LANE_DOMAIN_SIM_FLOOR.earlier (0.72). Such
-    // guides represent cross-domain stage-down roles (e.g. an Actuary vs a
-    // Head of ML) — they aren't earlier chapters of the user's domain and
-    // belong in transformational ("a different chapter") instead.
+  it("admits to 'earlier' only via seedingGuideSlugs override; non-seeded stage-down guides go to transformational", async () => {
+    // Regression for the lane-tightening change: 'earlier' is now strictly
+    // "roles the user has held" — embedding-only admissions (the old
+    // wholeSim/domainSim floors) are gone. Two guides at the same lower
+    // stage and high embedding similarity to the user: one whose slug is
+    // in profile.seedingGuideSlugs, one not. Only the seeded one enters
+    // 'earlier'; the unseeded one — even with perfect cosine — goes to
+    // transformational. This is the explicit replacement for the old
+    // "domainSim floor keeps Actuary out" test, since there's no longer
+    // an embedding path into earlier for either case.
     const t = convexTest({
       schema,
       modules: import.meta.glob("./**/*.ts"),
     });
 
-    // Build a unit-length 4-vector whose cosine against [1,0,0,0] is `cos`.
-    // Used to seed guide embeddings at a controlled similarity.
-    const vecAtCos = (cos: number): number[] => [
-      cos,
-      Math.sqrt(1 - cos * cos),
-      0,
-      0,
-    ];
-
-    const { userId, profileId, embeddingId, sameDomainEarlierId, crossDomainEarlierId } =
+    const { userId, profileId, embeddingId, seededId, unseededId } =
       await t.run(async (ctx) => {
         const userId = await ctx.db.insert("users", {
-          tokenIdentifier: "u-earlier-domain-gate-test",
-          email: "earlier-domain-gate@example.com",
+          tokenIdentifier: "u-earlier-override-test",
+          email: "earlier-override@example.com",
         });
-        const profileId = await ctx.db.insert("profiles", profileSeed(userId));
+        const profileId = await ctx.db.insert("profiles", {
+          ...profileSeed(userId),
+          // Only "past-role-seeded" qualifies for earlier. The other guide
+          // below has equally strong embedding signal but no seed entry.
+          seedingGuideSlugs: ["past-role-seeded"],
+        });
         await ctx.db.insert(
           "profile_enrichments",
           enrichmentSeed({ profileId, userId, careerStage: "manager" }),
@@ -542,18 +547,16 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
           generatedAt: Date.now(),
         });
 
-        // Same-domain earlier-stage guide: domainSim = 1.0 ≥ 0.72 → enters
-        // earlier (control case).
-        const sameDomainEarlierId = await ctx.db.insert(
+        const seededId = await ctx.db.insert(
           "career_guides",
           guideSeedWithStage(
-            "earlier-same-domain",
-            "Earlier same-domain",
+            "past-role-seeded",
+            "Past role (seeded)",
             "mid-career",
           ),
         );
         await ctx.db.insert("career_guide_embeddings", {
-          guideId: sameDomainEarlierId,
+          guideId: seededId,
           wholeVector: [1, 0, 0, 0],
           arcVector: [1, 0, 0, 0],
           currentStateVector: [1, 0, 0, 0],
@@ -563,35 +566,29 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
           generatedAt: Date.now(),
         });
 
-        // Cross-domain earlier-stage guide: wholeSim = 0.70 (clears 0.68),
-        // arcSim = 0.70 (clears ARC_SIM_FLOOR 0.5), domainSim = 0.70 (FAILS
-        // 0.72) → must fall through to transformational.
-        const crossDomainEarlierId = await ctx.db.insert(
+        // Same shape as the seeded one but slug is NOT in seedingGuideSlugs.
+        // Pre-tightening this would have entered 'earlier' via the embedding
+        // floors. Post-tightening it falls through to transformational.
+        const unseededId = await ctx.db.insert(
           "career_guides",
           guideSeedWithStage(
-            "earlier-cross-domain",
-            "Earlier cross-domain",
+            "lookalike-not-seeded",
+            "Lookalike (not seeded)",
             "mid-career",
           ),
         );
         await ctx.db.insert("career_guide_embeddings", {
-          guideId: crossDomainEarlierId,
-          wholeVector: vecAtCos(0.7),
-          arcVector: vecAtCos(0.7),
-          currentStateVector: vecAtCos(0.7),
-          domainVector: vecAtCos(0.7),
+          guideId: unseededId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
           dimensions: 4,
           model: "test",
           generatedAt: Date.now(),
         });
 
-        return {
-          userId,
-          profileId,
-          embeddingId,
-          sameDomainEarlierId,
-          crossDomainEarlierId,
-        };
+        return { userId, profileId, embeddingId, seededId, unseededId };
       });
 
     await t.action(internal.discover.generateSnapshot, {
@@ -613,8 +610,8 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
       snapshot!.lanes.map((l) => [l.kind, l.cards.map((c) => c.guideId)]),
     );
 
-    expect(lanes.earlier).toEqual([sameDomainEarlierId]);
-    expect(lanes.transformational).toEqual([crossDomainEarlierId]);
+    expect(lanes.earlier).toEqual([seededId]);
+    expect(lanes.transformational).toEqual([unseededId]);
   });
 });
 
