@@ -77,11 +77,12 @@ export function MobileCardSheet({
       <DrawerContent
         className={
           // Override vaul's default 80vh cap so the sheet has more breathing
-          // room — ~92vh leaves only the compass header peeking above. The
-          // `h-[92vh]` (rather than just max-h) gives the inner flex column
-          // an explicit height, which is required for `flex-1` +
-          // `overflow-y-auto` on the content area to actually scroll.
-          "bg-paper data-[vaul-drawer-direction=bottom]:!h-[92vh] data-[vaul-drawer-direction=bottom]:!max-h-[92vh]"
+          // room. Use `dvh` (dynamic viewport height) — `vh` always refers to
+          // the *largest* viewport on iOS Safari (URL bar collapsed), so a
+          // 92vh drawer overshoots the visible area when the URL bar is up
+          // and the bottom CTA gets pushed off-screen. `dvh` adjusts as the
+          // URL bar shows/hides, keeping the footer reachable.
+          "bg-paper data-[vaul-drawer-direction=bottom]:!h-[92dvh] data-[vaul-drawer-direction=bottom]:!max-h-[92dvh]"
         }
       >
         {/* Visually-hidden title/description satisfy vaul's a11y
@@ -222,8 +223,14 @@ export function MobileCardSheet({
               </section>
             </div>
 
-            {/* Footer CTA */}
-            <div className="border-t border-hairline px-5 py-3">
+            {/* Footer CTA. `pb` uses safe-area-inset so the button isn't
+                covered by the iOS home indicator. */}
+            <div
+              className="border-t border-hairline px-5 pt-3"
+              style={{
+                paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
+              }}
+            >
               <Link
                 href={`/career-guides/${card.slug}`}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-pill bg-ink px-5 py-3 text-[14px] font-medium text-paper transition-colors hover:bg-ink-deep"

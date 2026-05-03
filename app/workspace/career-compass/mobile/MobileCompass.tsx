@@ -383,14 +383,17 @@ function YouAvatar({
           ease: "easeInOut",
         }}
       />
-      {/* Initials. `dominant-baseline="central"` is the reliable
-          cross-browser attribute for vertically centering SVG text;
-          `alignmentBaseline` has spotty iOS Safari support. */}
+      {/* Initials. iOS Safari renders `dominant-baseline="central"`
+          inconsistently, so we use the bulletproof pattern instead:
+          anchor at the geometric centre and shift the baseline down by
+          0.35em, which is the standard offset for visually centring
+          capital letters within their bounding box. Works identically
+          across browsers and zoom levels. */}
       <text
         x={0}
         y={0}
+        dy="0.35em"
         textAnchor="middle"
-        dominantBaseline="central"
         fill="oklch(0.97 0.005 35)"
         style={{ fontSize: 0.07, fontWeight: 500 }}
         className="select-none"

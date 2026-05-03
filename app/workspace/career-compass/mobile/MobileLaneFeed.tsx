@@ -90,46 +90,61 @@ export function MobileLaneFeed({
           </p>
         </div>
       ) : (
-        TIER_ORDER.map((tier) => {
-          const tierCards = byTier.get(tier);
-          if (!tierCards || tierCards.length === 0) return null;
-          return (
-            <motion.section
-              key={tier}
-              className="mt-5 first:mt-1"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.35,
-                ease: [0.2, 0.65, 0.3, 1],
-              }}
-            >
-              <header className="mb-3 flex items-baseline gap-3 px-1">
-                <span className="font-serif text-[15px] italic leading-none text-ink">
-                  {TIER_LABEL[tier]}
-                </span>
-                <span
-                  aria-hidden
-                  className="h-px flex-1 translate-y-[-2px] bg-hairline"
-                />
-                <span className="text-[10px] uppercase tracking-[0.18em] text-mute">
-                  {tierCards.length}
-                </span>
-              </header>
-              <ul className="flex flex-col gap-2" role="list">
-                {tierCards.map((c) => (
-                  <li key={c.guideId as string}>
-                    <MobileGuideCard
-                      card={c}
-                      reaction={reactionByGuide.get(c.guideId as string)}
-                      onTap={() => onCardTap(c)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </motion.section>
-          );
-        })
+        <>
+          {TIER_ORDER.map((tier) => {
+            const tierCards = byTier.get(tier);
+            if (!tierCards || tierCards.length === 0) return null;
+            return (
+              <motion.section
+                key={tier}
+                className="mt-5 first:mt-1"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.35,
+                  ease: [0.2, 0.65, 0.3, 1],
+                }}
+              >
+                <header className="mb-3 flex items-baseline gap-3 px-1">
+                  <span className="font-serif text-[15px] italic leading-none text-ink">
+                    {TIER_LABEL[tier]}
+                  </span>
+                  <span
+                    aria-hidden
+                    className="h-px flex-1 translate-y-[-2px] bg-hairline"
+                  />
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-mute">
+                    {tierCards.length}
+                  </span>
+                </header>
+                <ul className="flex flex-col gap-2" role="list">
+                  {tierCards.map((c) => (
+                    <li key={c.guideId as string}>
+                      <MobileGuideCard
+                        card={c}
+                        reaction={reactionByGuide.get(c.guideId as string)}
+                        onTap={() => onCardTap(c)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </motion.section>
+            );
+          })}
+
+          {/* End-of-list marker — gives a sense of completion so the cream
+              space below doesn't feel like a blank stretch. */}
+          <div
+            aria-hidden
+            className="mt-10 mb-2 flex items-center justify-center gap-3 px-12 opacity-70"
+          >
+            <span className="h-px flex-1 bg-hairline" />
+            <span className="font-serif text-[11px] italic text-mute">
+              end of {cards.length === 1 ? "this option" : "this list"}
+            </span>
+            <span className="h-px flex-1 bg-hairline" />
+          </div>
+        </>
       )}
     </div>
   );
