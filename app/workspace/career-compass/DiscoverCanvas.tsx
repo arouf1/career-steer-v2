@@ -219,9 +219,9 @@ function DiscoverCanvasInner() {
     void manualRefresh({});
   }, [manualRefresh]);
 
-  if (snapshot === undefined) return <DiscoverGenerating />;
+  if (snapshot === undefined) return <DiscoverGenerating initials={initials} />;
   if (snapshot === null || snapshot.status === "generating")
-    return <DiscoverGenerating />;
+    return <DiscoverGenerating initials={initials} />;
   if (snapshot.status === "failed")
     return <DiscoverFailed onRetry={handleRefresh} />;
 

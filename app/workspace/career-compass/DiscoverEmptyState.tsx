@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
  * flashing in the four quadrants. When the snapshot lands, the parent
  * crossfades to the real canvas.
  */
-export function DiscoverGenerating() {
+export function DiscoverGenerating({ initials = "" }: { initials?: string }) {
+  const monogram = initials.slice(0, 2).toUpperCase();
   return (
     <div className="relative h-full w-full overflow-hidden bg-white">
       {/* Quadrant tints — matches the live canvas exactly so the loader's
@@ -75,16 +76,26 @@ export function DiscoverGenerating() {
         </svg>
       </div>
 
-      {/* Pulsing avatar at canvas centre */}
+      {/* Pulsing avatar at canvas centre — mirrors the mobile YouAvatar
+          treatment by surfacing the user's initials inside the dot. */}
       <motion.div
-        className="absolute left-1/2 top-1/2 size-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink"
+        className="absolute left-1/2 top-1/2 flex size-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-ink text-paper"
         animate={{ scale: [1, 1.06, 1], opacity: [0.92, 1, 0.92] }}
         transition={{
           duration: 1.8,
           repeat: Infinity,
           ease: "easeInOut",
         }}
-      />
+      >
+        {monogram && (
+          <span
+            className="select-none text-lg font-medium tracking-wide"
+            aria-hidden
+          >
+            {monogram}
+          </span>
+        )}
+      </motion.div>
 
       {/* Subtitle — editorial, italic, anchored bottom-centre */}
       <p className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap text-sm italic text-mute">
