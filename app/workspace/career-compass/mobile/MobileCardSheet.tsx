@@ -108,7 +108,14 @@ export function MobileCardSheet({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.35, ease: [0.2, 0.65, 0.3, 1] }}
-            className="fixed right-0 top-0 z-50 flex h-[100dvh] w-full flex-col border-l border-hairline bg-paper sm:max-w-lg"
+            // `inset-y-0` (top:0 + bottom:0) instead of `h-[100dvh]`. With
+            // explicit height, iOS Safari's dynamic toolbar can leave the
+            // panel taller than the visible viewport and the footer
+            // ends up below the screen. With both edges pinned via
+            // `inset-y`, the panel is exactly viewport-edge-to-viewport-
+            // edge regardless of URL bar state — no height calc, no
+            // overshoot.
+            className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-hairline bg-paper sm:max-w-lg"
             role="dialog"
             aria-label={`Preview of ${card.title}`}
             aria-modal="true"
