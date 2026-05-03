@@ -282,7 +282,15 @@ function QuadrantTint({
     return 0.3;
   });
   const fill = useTransform(intensity, (i) => laneTint(lane, i));
-  return <motion.path d={quadrantClipPath(lane)} style={{ fill }} />;
+  // pointer-events: none so the tint paths don't intercept taps —
+  // QuadrantHit (rendered later) owns the click capture for each
+  // quadrant.
+  return (
+    <motion.path
+      d={quadrantClipPath(lane)}
+      style={{ fill, pointerEvents: "none" }}
+    />
+  );
 }
 
 function LaneLabel({
@@ -308,6 +316,8 @@ function LaneLabel({
         opacity,
         fontSize: 0.075,
         fill: "oklch(0.45 0.015 35)",
+        // Don't intercept taps — QuadrantHit catches them.
+        pointerEvents: "none",
       }}
       className="select-none uppercase tracking-[0.18em]"
       initial={animateIn ? { opacity: 0 } : false}
@@ -337,7 +347,15 @@ function QuadrantHit({
       // SVG paths default to `pointer-events: visiblePainted`, which
       // means transparent fills don't capture clicks. `all` makes the
       // entire path's geometry a hit zone regardless of fill.
-      style={{ cursor: "pointer", pointerEvents: "all" }}
+      // `outline: none` removes the browser default focus ring; the
+      // active-quadrant darkening from QuadrantTint is the visual
+      // feedback for which slice is selected.
+      style={{
+        cursor: "pointer",
+        pointerEvents: "all",
+        outline: "none",
+        WebkitTapHighlightColor: "transparent",
+      }}
       onClick={onTap}
       tabIndex={0}
       role="button"
@@ -387,7 +405,7 @@ function CardDot({
       cy={pos.y}
       r={0.022}
       fill={baseColor}
-      style={{ opacity: detailOpacity }}
+      style={{ opacity: detailOpacity, pointerEvents: "none" }}
       initial={{ scale: 0, opacity: 0 }}
       animate={
         blooming
@@ -416,8 +434,10 @@ function YouAvatar({
   prefersReducedMotion: boolean;
   sonar: boolean;
 }) {
+  // Whole avatar group is decorative — non-interactive so QuadrantHit
+  // taps near origin still register.
   return (
-    <g>
+    <g style={{ pointerEvents: "none" }}>
       <motion.circle
         cx={0}
         cy={0}
