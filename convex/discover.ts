@@ -122,6 +122,114 @@ ${JSON.stringify(promptPairs, null, 2)}`,
 }
 
 /**
+ * Step 5b — earlier-lane judge.
+ *
+ * The lane bucketer admits two kinds of candidate to the `earlier` lane:
+ *  1. Literal past roles (override on `profile.seedingGuideSlugs`) — clean
+ *     signal, never adjudicated.
+ *  2. Embedding-similar lower-stage roles (cmp === "earlier" AND wholeSim
+ *     ≥ 0.68 AND domainSim ≥ 0.72) — fuzzy signal where the threshold can
+ *     admit cross-domain noise (Actuary, SEO Manager) alongside legitimate
+ *     same-domain earlier-stage roles (Data Scientist, AI Engineer). The
+ *     judge re-evaluates each candidate in this second bucket using user
+ *     context and returns "keep" or "demote".
+ *
+ * Demoted candidates are moved to `transformational` (their semantic home
+ * — cross-domain pivots). Override-admitted candidates skip the judge
+ * entirely. Conservative on uncertainty: defaults to "keep" on any LLM
+ * failure or missing/malformed output, so a flaky judge never silently
+ * empties the earlier lane.
+ *
+ * Production binding calls Gemini Flash (project's standard for trivial
+ * structured-extraction work — same reasoning as the canonicalizer);
+ * tests inject a deterministic implementation via
+ * `globalThis.__testJudgeLLM__` (clean up in a `finally` so the stub
+ * doesn't leak).
+ */
+async function callJudgeLLM(args: {
+  userHeadline: string | null;
+  userExperience: Array<{ title: string; company: string }>;
+  candidates: Array<{
+    guideId: Id<"career_guides">;
+    title: string;
+  }>;
+}): Promise<Map<string, "keep" | "demote">> {
+  const verdicts = new Map<string, "keep" | "demote">();
+  if (args.candidates.length === 0) return verdicts;
+
+  const injected = (globalThis as any).__testJudgeLLM__;
+  if (injected) return injected(args);
+
+  const JudgeSchema = z.object({
+    judgments: z.array(
+      z.object({
+        guideId: z.string(),
+        verdict: z.enum(["keep", "demote"]),
+      }),
+    ),
+  });
+
+  const headline = args.userHeadline ?? "(no headline)";
+  const experienceLines = args.userExperience
+    .slice(0, 6)
+    .map((e) => `- ${e.title} at ${e.company}`)
+    .join("\n");
+  const candidateLines = args.candidates
+    .map((c) => `- guideId=${c.guideId} title=${c.title}`)
+    .join("\n");
+
+  try {
+    const { experimental_output } = await generateText({
+      model: chatModel("google/gemini-3-flash-preview", { zdr: true }),
+      experimental_output: Output.object({ schema: JudgeSchema }),
+      prompt: `You are categorizing career-discovery cards for a single user.
+
+Each candidate below has been provisionally admitted to the "earlier chapters" lane (= roles in the user's professional domain that they could plausibly have held earlier in their career). Your job: for each candidate, return "keep" if it is genuinely a same-domain earlier-stage role for THIS user, or "demote" if it is a cross-domain pivot or unrelated noise that does not fit "earlier chapters of MY career."
+
+Be CONSERVATIVE — when in doubt, KEEP. Only demote clear cross-domain mismatches.
+
+Examples for a Head of Machine Learning:
+- "Data Scientist" → keep (same quantitative/ML domain, earlier stage)
+- "AI Engineer" → keep (same domain, earlier stage)
+- "Software Engineer" → keep (adjacent technical domain)
+- "Actuary" → demote (quantitative-adjacent but different professional domain)
+- "SEO Manager" → demote (cross-domain marketing)
+- "Massage Therapist" → demote (clearly unrelated)
+
+USER PROFILE:
+Headline: ${headline}
+Experience:
+${experienceLines || "(none)"}
+
+CANDIDATES:
+${candidateLines}
+
+Return EXACTLY one judgment per input candidate. Copy guideId verbatim.`,
+    });
+
+    for (const j of experimental_output.judgments) {
+      verdicts.set(j.guideId, j.verdict);
+    }
+  } catch (err) {
+    console.warn("discover.judge:llm-error", {
+      error: err instanceof Error ? err.message : String(err),
+      candidateCount: args.candidates.length,
+    });
+    // Conservative fallback: if the judge fails, keep everything.
+    // Better to have Actuary in earlier than to silently lose Data Scientist.
+  }
+
+  // Conservative fallback for any candidate the judge omitted.
+  for (const c of args.candidates) {
+    if (!verdicts.has(c.guideId as string)) {
+      verdicts.set(c.guideId as string, "keep");
+    }
+  }
+
+  return verdicts;
+}
+
+/**
  * Deterministic per-slot fallback reason used when the batched LLM call
  * throws. Pulls a representative skill from the guide's content when
  * available; otherwise drops to a generic phrasing. Keeping this pure +
@@ -565,11 +673,14 @@ async function runPipeline(
   // classifier, which can mis-route past roles when the stage embedding
   // overlaps with the user's current state or the domainSim/wholeSim floors
   // don't admit them.
-  const seededSlugs = await ctx.runQuery(
-    internal.discover._readProfileSeedingSlugs,
+  const profileLaning = await ctx.runQuery(
+    internal.discover._readProfileLaningContext,
     { profileId: args.profileId },
   );
-  const seededSlugSet = new Set<string>(seededSlugs);
+  const seededSlugSet = new Set<string>(profileLaning.seedingGuideSlugs);
+  const titleByGuide = new Map<string, string | undefined>(
+    guideStageRows.map((g) => [g._id as string, g.title]),
+  );
 
   const byLane: Record<LaneKindFour, ScoredCandidate[]> = {
     linear: [],
@@ -578,13 +689,18 @@ async function runPipeline(
     transformational: [],
   };
 
+  // Tracked separately so the judge below sees only embedding-admitted
+  // candidates — override-admitted (literal past roles) skip the judge.
+  const embeddingEarlierAdmissions: ScoredCandidate[] = [];
+
   for (const c of surviving) {
     const guideStage = stageByGuide.get(c.guideId as string);
     const guideSlug = slugByGuide.get(c.guideId as string);
 
     // Override branch: this guide represents a role the user has held.
     // "Earlier chapters" should mean exactly that, regardless of embedding
-    // scores. Skips the wholeSim/domainSim/cmp gates entirely.
+    // scores. Skips the wholeSim/domainSim/cmp gates entirely AND the LLM
+    // judge below — literal past roles are never adjudicated.
     if (guideSlug && seededSlugSet.has(guideSlug)) {
       byLane.earlier.push(c);
       continue;
@@ -600,9 +716,34 @@ async function runPipeline(
       c.wholeSim >= LANE_WHOLE_SIM_FLOOR.earlier &&
       c.domainSim >= LANE_DOMAIN_SIM_FLOOR.earlier
     ) {
-      byLane.earlier.push(c);
+      // Provisionally admitted to earlier via embedding scores. Judge
+      // adjudicates below — same-domain stays in earlier; cross-domain
+      // noise (Actuary, SEO Manager) gets demoted to transformational.
+      embeddingEarlierAdmissions.push(c);
     } else {
       byLane.transformational.push(c);
+    }
+  }
+
+  // Step 5b — judge each embedding-admitted earlier candidate. Conservative
+  // by design (defaults to "keep" on LLM failure or omitted output) so a
+  // flaky judge can never silently empty the earlier lane.
+  if (embeddingEarlierAdmissions.length > 0) {
+    const judgeVerdicts = await callJudgeLLM({
+      userHeadline: profileLaning.headline,
+      userExperience: profileLaning.experience,
+      candidates: embeddingEarlierAdmissions.map((c) => ({
+        guideId: c.guideId,
+        title: titleByGuide.get(c.guideId as string) ?? "(untitled)",
+      })),
+    });
+    for (const c of embeddingEarlierAdmissions) {
+      const verdict = judgeVerdicts.get(c.guideId as string) ?? "keep";
+      if (verdict === "keep") {
+        byLane.earlier.push(c);
+      } else {
+        byLane.transformational.push(c);
+      }
     }
   }
 
@@ -888,6 +1029,7 @@ export const _readGuideStages = internalQuery({
           _id: id,
           stage: g?.content?.typicalCareerStage,
           slug: g?.slug,
+          title: g?.title,
         };
       }),
     );
@@ -895,22 +1037,29 @@ export const _readGuideStages = internalQuery({
 });
 
 /**
- * Reads the user's `profile.seedingGuideSlugs` for the Step 5 lane bucketer's
- * experience override. These are the slugs of public career guides that were
- * seeded from the user's own work-history canonical titles via
- * `internal.profileGuideSeeding.seedGuidesFromProfile`. The bucketer treats
- * any candidate whose slug matches as a "literal past role" and forces it
- * into the `earlier` lane, regardless of embedding scores. Without this
- * override, an embedding-only classifier can mis-route literal past roles
- * into `transformational` when the stage embedding overlaps with the user's
- * current state, OR fail to admit them to `earlier` because of the
- * domainSim/wholeSim floors. Returns `[]` if no profile or no seedings yet.
+ * Reads the user's profile fields needed by the Step 5 lane bucketer:
+ *
+ *  - `seedingGuideSlugs`: slugs of public career guides seeded from the
+ *    user's own work-history canonical titles via
+ *    `internal.profileGuideSeeding.seedGuidesFromProfile`. The bucketer's
+ *    experience override admits any candidate whose slug matches into
+ *    `earlier` regardless of embedding scores.
+ *  - `headline` + `experience`: passed to the LLM judge that adjudicates
+ *    embedding-admitted earlier candidates (Step 5b). Without user context
+ *    the judge can't tell same-domain earlier-stage roles ("Data Scientist"
+ *    for a Head of ML — keep) from cross-domain noise ("Actuary" — demote).
+ *
+ * Returns conservative defaults when the profile is missing or unseeded.
  */
-export const _readProfileSeedingSlugs = internalQuery({
+export const _readProfileLaningContext = internalQuery({
   args: { profileId: v.id("profiles") },
   handler: async (ctx, args) => {
     const profile = await ctx.db.get(args.profileId);
-    return profile?.seedingGuideSlugs ?? [];
+    return {
+      seedingGuideSlugs: profile?.seedingGuideSlugs ?? [],
+      headline: profile?.headline ?? null,
+      experience: profile?.experience ?? [],
+    };
   },
 });
 

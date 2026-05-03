@@ -616,6 +616,147 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
     expect(lanes.earlier).toEqual([sameDomainEarlierId]);
     expect(lanes.transformational).toEqual([crossDomainEarlierId]);
   });
+
+  it("Step 5b judge demotes embedding-admitted earlier candidates flagged as cross-domain", async () => {
+    // Two embedding-admitted earlier candidates both clear the wholeSim/
+    // domainSim floors (cosine 1.0 against the user vector). The Step 5b
+    // judge re-evaluates them with user context and demotes any flagged
+    // as cross-domain noise. Override-admitted (literal past role) skips
+    // the judge entirely — verified by including a third candidate whose
+    // slug is in seedingGuideSlugs.
+    const t = convexTest({
+      schema,
+      modules: import.meta.glob("./**/*.ts"),
+    });
+
+    const { userId, profileId, embeddingId, sameDomainId, crossDomainId, seededId } =
+      await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("users", {
+          tokenIdentifier: "u-judge-demote-test",
+          email: "judge-demote@example.com",
+        });
+        const profileId = await ctx.db.insert("profiles", {
+          ...profileSeed(userId),
+          headline: "Head of Machine Learning",
+          experience: [
+            { title: "Head of Machine Learning", company: "Acme" },
+          ],
+          // The seeded slug bypasses the judge — its corresponding guide
+          // must always end up in earlier regardless of judge verdicts.
+          seedingGuideSlugs: ["past-role-seeded"],
+        });
+        await ctx.db.insert(
+          "profile_enrichments",
+          enrichmentSeed({ profileId, userId, careerStage: "manager" }),
+        );
+        const embeddingId = await ctx.db.insert("profile_embeddings", {
+          profileId,
+          userId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const sameDomainId = await ctx.db.insert(
+          "career_guides",
+          guideSeedWithStage("data-scientist", "Data Scientist", "mid-career"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: sameDomainId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const crossDomainId = await ctx.db.insert(
+          "career_guides",
+          guideSeedWithStage("actuary", "Actuary", "mid-career"),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: crossDomainId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        const seededId = await ctx.db.insert(
+          "career_guides",
+          guideSeedWithStage(
+            "past-role-seeded",
+            "Past role (seeded)",
+            "mid-career",
+          ),
+        );
+        await ctx.db.insert("career_guide_embeddings", {
+          guideId: seededId,
+          wholeVector: [1, 0, 0, 0],
+          arcVector: [1, 0, 0, 0],
+          currentStateVector: [1, 0, 0, 0],
+          domainVector: [1, 0, 0, 0],
+          dimensions: 4,
+          model: "test",
+          generatedAt: Date.now(),
+        });
+
+        return { userId, profileId, embeddingId, sameDomainId, crossDomainId, seededId };
+      });
+
+    // Stub: keep the same-domain Data Scientist, demote the cross-domain
+    // Actuary. The seeded guide is never passed to the judge so it doesn't
+    // appear in `args.candidates` — assert that with a guard inside the stub.
+    (globalThis as any).__testJudgeLLM__ = async (args: {
+      candidates: Array<{ guideId: string; title: string }>;
+    }) => {
+      const seenIds = args.candidates.map((c) => c.guideId);
+      // Override-admitted seeded candidate must not be passed to the judge.
+      expect(seenIds).not.toContain(seededId);
+      const verdicts = new Map<string, "keep" | "demote">();
+      for (const c of args.candidates) {
+        verdicts.set(c.guideId, c.title === "Actuary" ? "demote" : "keep");
+      }
+      return verdicts;
+    };
+
+    try {
+      await t.action(internal.discover.generateSnapshot, {
+        userId,
+        profileId,
+        expectedProfileEmbeddingId: embeddingId,
+        forceFreshReasons: true,
+      });
+    } finally {
+      delete (globalThis as any).__testJudgeLLM__;
+    }
+
+    const snapshot = await t.run(async (ctx) =>
+      ctx.db
+        .query("discover_canvases")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique(),
+    );
+    expect(snapshot).not.toBeNull();
+
+    const lanes = Object.fromEntries(
+      snapshot!.lanes.map((l) => [l.kind, l.cards.map((c) => c.guideId)]),
+    );
+
+    // Same-domain stays in earlier; seeded stays in earlier (override).
+    expect(new Set(lanes.earlier)).toEqual(new Set([sameDomainId, seededId]));
+    // Cross-domain demoted to transformational by the judge.
+    expect(lanes.transformational).toEqual([crossDomainId]);
+  });
 });
 
 describe("discover.generateSnapshot — Step 6c (aspirational with rerank)", () => {
