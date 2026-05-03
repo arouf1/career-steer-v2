@@ -1,9 +1,10 @@
 "use client";
 import { useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, Bookmark, Check, X } from "lucide-react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -39,6 +40,12 @@ export function CardPreviewSheet({
 }) {
   const save = useMutation(api.discover.saveGuide);
   const dismiss = useMutation(api.discover.dismissGuide);
+  // Lazy hero-image lookup. Pass "skip" when there's no card so the query
+  // doesn't subscribe — kept off the snapshot hot path on purpose.
+  const image = useQuery(
+    api.careerGuides.getCardImage,
+    card ? { guideId: card.guideId } : "skip",
+  );
 
   // Lock body scroll while the drawer is open.
   useEffect(() => {
@@ -106,6 +113,17 @@ export function CardPreviewSheet({
             </header>
 
             <div className="flex-1 overflow-y-auto px-6 py-5">
+              {image && (
+                <div className="relative mb-6 aspect-[16/10] overflow-hidden rounded-md border border-hairline bg-paper-raised">
+                  <Image
+                    src={image.url}
+                    alt={image.alt}
+                    fill
+                    sizes="(min-width: 640px) 32rem, 100vw"
+                    className="object-cover"
+                  />
+                </div>
+              )}
               <section>
                 <p className={eyebrowCls}>Overview</p>
                 <p className="mt-3 text-[14px] leading-relaxed text-ink-soft line-clamp-6">

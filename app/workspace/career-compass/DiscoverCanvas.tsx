@@ -18,10 +18,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   GuideCard,
-  LaneLabel,
   UserNode,
+  WatermarkLabel,
   type GuideCardData,
 } from "./CanvasNodes";
 import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
@@ -49,31 +50,36 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.15;
 
-const LANE_LABEL_TEXT = {
-  linear: "Next steps",
-  adjacent: "Sideways moves",
-  earlier: "Earlier chapters",
-  transformational: "A different chapter",
+const LANE_META = {
+  linear: {
+    title: "Linear Lanes",
+    description: "The natural next step from here",
+  },
+  adjacent: {
+    title: "Adjacent Avenues",
+    description: "Sideways moves into nearby fields",
+  },
+  earlier: {
+    title: "Foundational Footprints",
+    description: "Earlier-stage roles that share your foundation",
+  },
+  transformational: {
+    title: "Transformational Tracks",
+    description: "Bigger pivots that reshape your trajectory",
+  },
 } as const;
 
-// Lane labels live OUTSIDE the scaled virtual canvas — anchored to the
-// outer top/bottom edge of the wrapper and centred horizontally over each
-// column. The previous placement at the visual centre of each tint cell
-// (25%/75%) collided with the aspirational rim of each quadrant: cards
-// scatter outward from the user node and at typical aspect ratios the
-// outermost cards land almost exactly where 25%/75% sits. Pushing labels
-// to the wrapper edge keeps them in empty space and out of the card cluster.
-const LANE_LABEL_POS: Record<
-  LaneKey,
-  { left: string; top?: string; bottom?: string }
-> = {
-  linear: { left: "25%", top: "1.25rem" },
-  adjacent: { left: "75%", top: "1.25rem" },
-  earlier: { left: "25%", bottom: "1.25rem" },
-  transformational: { left: "75%", bottom: "1.25rem" },
-};
+// Quadrant tint backgrounds — barely-visible cream variants on the editorial
+// hue range. Each quadrant becomes a button (or div for empty lanes) and
+// the watermark label sits centered inside.
+const LANE_TINT_BG = {
+  linear: "bg-[oklch(0.975_0.011_70)]",
+  adjacent: "bg-[oklch(0.973_0.009_220)]",
+  earlier: "bg-[oklch(0.973_0.010_130)]",
+  transformational: "bg-[oklch(0.973_0.011_290)]",
+} as const;
 
-type LaneKey = keyof typeof LANE_LABEL_TEXT;
+type LaneKey = keyof typeof LANE_META;
 
 type PositionedCard = GuideCardData & {
   lane: LaneKey;
@@ -228,51 +234,47 @@ function DiscoverCanvasInner() {
       className="relative h-full w-full overflow-hidden bg-white"
     >
       {/*
-        Quadrant tints — barely-visible cream variants, one per canvas
-        region. Always fills the wrapper and never scales (background).
-        Chroma stays below 0.01 so they read as "tinted neutrals," not
-        colour blocks — the brand register is editorial cream, not Memphis
-        primary.
+        Quadrants — each tint cell is a button (or non-interactive div for
+        empty lanes) with the lane watermark sitting low-opacity in the
+        center. Cards in the inner-canvas div paint above and intercept
+        their own clicks; only clicks on the visible tint area between
+        cards trigger the quadrant's view-all action. Hover/focus on the
+        empty space brightens the watermark and reveals the description.
       */}
-      <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
-        {/* top-left = Next steps — barely-tinted warm cream */}
-        <div className="bg-[oklch(0.975_0.011_70)]" />
-        {/* top-right = Sideways moves — barely-tinted cool cream */}
-        <div className="bg-[oklch(0.973_0.009_220)]" />
-        {/* bottom-left = Earlier chapters — barely-tinted green-cream */}
-        <div className="bg-[oklch(0.973_0.010_130)]" />
-        {/* bottom-right = A different chapter — barely-tinted lavender-cream */}
-        <div className="bg-[oklch(0.973_0.011_290)]" />
+      <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
+        {(Object.keys(LANE_META) as Array<LaneKey>).map((lane) => {
+          const count =
+            snapshot.lanes.find((l) => l.kind === lane)?.cards.length ?? 0;
+          const interactive = count > 0;
+          if (!interactive) {
+            return (
+              <div
+                key={`quadrant:${lane}`}
+                className={cn("relative", LANE_TINT_BG[lane])}
+              >
+                <WatermarkLabel
+                  label={LANE_META[lane].title}
+                  interactive={false}
+                />
+              </div>
+            );
+          }
+          return (
+            <button
+              key={`quadrant:${lane}`}
+              type="button"
+              onClick={() => setFocusedLane(lane)}
+              aria-label={`View all ${count} ${count === 1 ? "guide" : "guides"} in ${LANE_META[lane].title}`}
+              className={cn(
+                "group relative cursor-pointer focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink",
+                LANE_TINT_BG[lane],
+              )}
+            >
+              <WatermarkLabel label={LANE_META[lane].title} interactive />
+            </button>
+          );
+        })}
       </div>
-
-      {/*
-        Lane labels — anchored to the wrapper's outer top/bottom edge and
-        centred horizontally over each column. Sits in the empty margin
-        around the card cluster, so the aspirational rim of each quadrant
-        no longer collides with its label.
-      */}
-      {(Object.keys(LANE_LABEL_TEXT) as Array<LaneKey>).map((lane) => {
-        const pos = LANE_LABEL_POS[lane];
-        const count =
-          snapshot.lanes.find((l) => l.kind === lane)?.cards.length ?? 0;
-        return (
-          <div
-            key={`label:${lane}`}
-            className="absolute z-20"
-            style={{
-              ...pos,
-              transform: "translateX(-50%)",
-            }}
-          >
-            <LaneLabel
-              kind={lane}
-              label={LANE_LABEL_TEXT[lane]}
-              count={count}
-              onFocus={() => setFocusedLane(lane)}
-            />
-          </div>
-        );
-      })}
 
       {/*
         Inner canvas — fixed virtual size, scaled to fit via transform.
@@ -280,7 +282,7 @@ function DiscoverCanvasInner() {
         this scaled region (above) so they don't drift with the zoom.
       */}
       <div
-        className="absolute left-1/2 top-1/2"
+        className="pointer-events-none absolute left-1/2 top-1/2"
         style={{
           width: CANVAS_VIRTUAL_WIDTH,
           height: CANVAS_VIRTUAL_HEIGHT,
@@ -288,7 +290,10 @@ function DiscoverCanvasInner() {
           transformOrigin: "center",
         }}
       >
-        {/* Origin (0, 0) container — sits at the visual centre of the canvas. */}
+        {/* Origin (0, 0) container — sits at the visual centre of the canvas.
+            The wrapper is pointer-events-none so clicks on empty space pass
+            through to the quadrant buttons below; individual interactive
+            children (UserNode wrapper, card wrappers) re-enable events. */}
         <div
           className="absolute"
           style={{
@@ -373,7 +378,7 @@ function DiscoverCanvasInner() {
 
           {/* User node at canvas centre. */}
           <div
-            className="absolute"
+            className="pointer-events-auto absolute"
             style={{ left: 0, top: 0, transform: "translate(-50%, -50%)" }}
           >
             <UserNode
@@ -394,8 +399,10 @@ function DiscoverCanvasInner() {
                 // Hover/focus elevation lives on the wrapper, not the
                 // button. The wrapper's `transform` creates its own
                 // stacking context, which would trap any z-index set on
-                // the inner button.
-                className="absolute hover:z-10 focus-within:z-10"
+                // the inner button. `pointer-events-auto` re-enables clicks
+                // (the inner-canvas wrapper sets `pointer-events-none` so
+                // empty-space clicks reach the quadrant buttons below).
+                className="pointer-events-auto absolute hover:z-10 focus-within:z-10"
                 style={{
                   left: c.x,
                   top: c.y,
@@ -414,12 +421,15 @@ function DiscoverCanvasInner() {
       </div>
 
       {/*
-        Floating control cluster — top-right corner of the canvas. Refresh
-        + settings cog (popover containing the density slider). The
-        previous control strip above the canvas was dropped so the canvas
-        fills the entire workspace area.
+        Floating control cluster — bottom-left corner of the canvas.
+        Refresh + settings stacked above the zoom controls (in / out /
+        reset), with a hairline divider separating the two groups. Sizes
+        stay differentiated (size-9 for primary actions, size-8 for zoom
+        chrome) and items-center keeps the column visually aligned.
+        Settings popover opens up-and-to-the-right (side="right",
+        align="end") so it doesn't clip against the canvas bottom.
       */}
-      <div className="absolute right-4 top-4 flex items-center gap-2">
+      <div className="absolute bottom-4 left-4 flex flex-col items-center gap-2">
         <button
           type="button"
           onClick={handleRefresh}
@@ -439,21 +449,14 @@ function DiscoverCanvasInner() {
             </button>
           </PopoverTrigger>
           <PopoverContent
+            side="right"
             align="end"
             className="w-64 rounded-md border border-hairline bg-paper p-4 text-ink shadow-md"
           >
             <DensitySlider onChange={setDensity} />
           </PopoverContent>
         </Popover>
-      </div>
-
-      {/*
-        Zoom controls — bottom-right corner. Stacked vertically: in / out /
-        reset. Each button is `size-8` (smaller than the top-right `size-9`)
-        since these are secondary chrome. Disabled state greys out at the
-        zoom limit.
-      */}
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+        <div aria-hidden="true" className="my-1 h-px w-5 bg-hairline" />
         <button
           type="button"
           onClick={zoomIn}
@@ -501,7 +504,8 @@ function DiscoverCanvasInner() {
           <FocusedLaneView
             key={focusedLane}
             lane={focusedLane}
-            label={LANE_LABEL_TEXT[focusedLane]}
+            label={LANE_META[focusedLane].title}
+            description={LANE_META[focusedLane].description}
             cards={cards.filter((c) => c.lane === focusedLane)}
             reactionByGuide={reactionByGuide}
             onBack={() => setFocusedLane(null)}

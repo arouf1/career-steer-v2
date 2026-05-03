@@ -128,39 +128,32 @@ export function UserNode({
   );
 }
 
-export function LaneLabel({
+// Centered, low-opacity quadrant label. Sits behind the cards (the inner
+// canvas paints above) and reads as museum-room signage rather than a UI
+// control. The parent quadrant button captures the click; this component is
+// purely decorative content (`pointer-events-none`). On hover/focus the
+// title brightens to hint at the lane's interactivity — the description and
+// guide count live in the FocusedLaneView (the "view all" listing), not on
+// the canvas itself, to keep the watermark calm.
+export function WatermarkLabel({
   label,
-  count,
-  onFocus,
+  interactive,
 }: {
-  kind: "linear" | "adjacent" | "earlier" | "transformational";
   label: string;
-  count: number;
-  onFocus?: () => void;
+  interactive: boolean;
 }) {
-  const content = (
-    <div className="flex flex-col items-center gap-1 whitespace-nowrap">
-      <span className="font-medium uppercase tracking-[0.2em] text-base text-ink/85">
+  return (
+    <div className="pointer-events-none flex h-full w-full items-center justify-center px-6 text-center">
+      <span
+        className={cn(
+          "font-medium uppercase tracking-[0.22em] text-2xl transition-colors duration-200 ease-out",
+          interactive
+            ? "text-ink/15 group-hover:text-ink/35 group-focus-visible:text-ink/35"
+            : "text-ink/10",
+        )}
+      >
         {label}
       </span>
-      <span className="text-[11px] text-mute">
-        {count} {count === 1 ? "guide" : "guides"}
-      </span>
     </div>
-  );
-
-  if (count === 0 || !onFocus) {
-    // No cards to focus into — render as static content.
-    return <div className="pointer-events-none">{content}</div>;
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onFocus}
-      className="rounded-md px-3 py-2 transition-colors hover:bg-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-    >
-      {content}
-    </button>
   );
 }

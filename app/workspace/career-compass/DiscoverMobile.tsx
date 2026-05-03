@@ -10,10 +10,10 @@ import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
 import { DiscoverGenerating, DiscoverFailed } from "./DiscoverEmptyState";
 
 const LANES = [
-  { kind: "linear", label: "Next steps" },
-  { kind: "adjacent", label: "Sideways" },
+  { kind: "linear", label: "Linear" },
+  { kind: "adjacent", label: "Adjacent" },
   { kind: "earlier", label: "Earlier" },
-  { kind: "transformational", label: "Different" },
+  { kind: "transformational", label: "Pivots" },
 ] as const;
 
 export function DiscoverMobile() {

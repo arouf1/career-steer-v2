@@ -233,6 +233,29 @@ export const getBySlug = query({
   },
 });
 
+// Lightweight image lookup for canvas card previews. Returns just the hero
+// illustration URL (and alt) for one guide so the discover sidebar can show
+// a thumbnail without paying the cost of hydrating the whole guide doc on
+// the snapshot hot path. Called lazily by `CardPreviewSheet` when a card is
+// opened.
+export const getCardImage = query({
+  args: { guideId: v.id("career_guides") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      url: v.string(),
+      alt: v.string(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide?.illustrationStorageId) return null;
+    const url = await ctx.storage.getUrl(guide.illustrationStorageId);
+    if (!url) return null;
+    return { url, alt: `Illustration for ${guide.title}` };
+  },
+});
+
 export const getValidation = query({
   args: { careerNormalized: v.string() },
   handler: async (ctx, args): Promise<Doc<"career_validations"> | null> => {

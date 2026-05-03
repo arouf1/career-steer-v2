@@ -32,6 +32,7 @@ export type FocusedCard = GuideCardData & {
 export function FocusedLaneView({
   lane,
   label,
+  description,
   cards,
   reactionByGuide,
   onBack,
@@ -39,6 +40,7 @@ export function FocusedLaneView({
 }: {
   lane: string;
   label: string;
+  description: string;
   cards: Array<FocusedCard>;
   reactionByGuide: Map<string, "saved">;
   onBack: () => void;
@@ -77,12 +79,13 @@ export function FocusedLaneView({
           className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
         >
           <ArrowLeft className="size-4" />
-          Back to canvas
+          Back to compass
         </button>
         <div className="flex flex-col items-end gap-0.5">
           <span className="font-medium uppercase tracking-[0.2em] text-base text-ink/85">
             {label}
           </span>
+          <span className="text-[11px] text-body">{description}</span>
           <span className="text-[11px] text-mute">
             {sorted.length} {sorted.length === 1 ? "guide" : "guides"}
           </span>
