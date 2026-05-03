@@ -11,6 +11,8 @@
 import type * as careerGuidePersonalizations from "../careerGuidePersonalizations.js";
 import type * as careerGuides from "../careerGuides.js";
 import type * as careerPaths from "../careerPaths.js";
+import type * as catalogEmail from "../catalogEmail.js";
+import type * as catalogExpansion from "../catalogExpansion.js";
 import type * as crons from "../crons.js";
 import type * as discover from "../discover.js";
 import type * as embeddings from "../embeddings.js";
@@ -48,6 +50,8 @@ declare const fullApi: ApiFromModules<{
   careerGuidePersonalizations: typeof careerGuidePersonalizations;
   careerGuides: typeof careerGuides;
   careerPaths: typeof careerPaths;
+  catalogEmail: typeof catalogEmail;
+  catalogExpansion: typeof catalogExpansion;
   crons: typeof crons;
   discover: typeof discover;
   embeddings: typeof embeddings;

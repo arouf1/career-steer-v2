@@ -73,6 +73,10 @@ const GENERATE_RATE = { max: 3, windowMs: 300_000 };
 // Looser than the IP-bucketed GENERATE_RATE because a profile-setup burst
 // is legitimate; abuse vector is bounded by Clerk identity, not IP.
 const SEED_RATE = { max: 25, windowMs: 24 * 60 * 60 * 1000 };
+// Hourly catalog-expansion cron fires 24× per day. Cap at 30/24h gives
+// headroom for manual re-triggers from the dashboard during smoke testing
+// without allowing a runaway loop.
+const CRON_CATALOG_RATE = { max: 30, windowMs: 24 * 60 * 60 * 1000 };
 const IMAGE_MODEL_ID = "google/gemini-3.1-flash-image-preview";
 
 // Failed-content auto-retry policy. Initial attempt + 2 auto-retries = 3 total
@@ -718,6 +722,173 @@ export const _requestGenerationForSeeding = internalMutation({
     }
 
     return { slug: existingByTitle?.slug ?? slug };
+  },
+});
+
+// Bounded sample of recent slug+title pairs used as anti-duplication context
+// in the catalog expansion brainstorm prompt. Capped at the most-recent N so
+// the prompt stays within token budget; the actual DB-backed dedup happens
+// in _lookupBySlugOrTitle and again inside _requestGenerationForCron.
+export const _loadRecentSlugSample = internalQuery({
+  args: { limit: v.number() },
+  handler: async (
+    ctx,
+    { limit },
+  ): Promise<Array<{ slug: string; title: string }>> => {
+    const guides = await ctx.db
+      .query("career_guides")
+      .withIndex("by_created")
+      .order("desc")
+      .take(limit);
+    return guides.map((g) => ({ slug: g.slug, title: g.title }));
+  },
+});
+
+// Cheap pre-Exa dedup check used by the autonomous catalog expansion cron.
+// The orchestrator wants to drop a candidate before paying for Exa
+// verification if a guide already exists. The OCC-protected final check
+// still runs inside _requestGenerationForCron to handle races.
+export const _lookupBySlugOrTitle = internalQuery({
+  args: { slug: v.string(), titleNormalized: v.string() },
+  handler: async (
+    ctx,
+    { slug, titleNormalized },
+  ): Promise<{
+    exists: boolean;
+    contentStatus?: Doc<"career_guides">["contentStatus"];
+    slug?: string;
+  }> => {
+    const bySlug = await ctx.db
+      .query("career_guides")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .first();
+    if (bySlug) {
+      return {
+        exists: true,
+        contentStatus: bySlug.contentStatus,
+        slug: bySlug.slug,
+      };
+    }
+    const byTitle = await ctx.db
+      .query("career_guides")
+      .withIndex("by_title_normalized", (q) =>
+        q.eq("titleNormalized", titleNormalized),
+      )
+      .first();
+    if (byTitle) {
+      return {
+        exists: true,
+        contentStatus: byTitle.contentStatus,
+        slug: byTitle.slug,
+      };
+    }
+    return { exists: false };
+  },
+});
+
+// Cron-flavored sibling of _requestGenerationForSeeding. Identical
+// slug-OCC dedup pattern but rate-limited under a single global key
+// ("cron:catalog") instead of per-userId, since the autonomous catalog
+// expansion has no user context.
+//
+// IMPORTANT: pipeline parity. The existing _requestGeneration only schedules
+// generateContent + generateIllustration + generateSlotIllustration[]; the
+// rest of the chain (podcast script + TTS, embeddings + Discover fan-out,
+// guide branches prewarm, deferred Exa enrichment fallback) is fanned out
+// downstream by guideId from generateContent's _updateContentGrounded /
+// _updateContentDeferred completion handlers. Mirroring just the three
+// top-level schedules below inherits the complete pipeline. If anything is
+// added to _requestGeneration's top-level schedule list, mirror it here.
+//
+// Returns `created: true` only when a brand-new row was inserted (or a
+// previously failed row was reset and reattempted). The caller uses this
+// to gate the email notification — re-using an existing complete guide
+// should not trigger an email.
+export const _requestGenerationForCron = internalMutation({
+  args: { title: v.string() },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    { slug: string; created: boolean } | { error: string }
+  > => {
+    const limit = await tryConsumeRateLimit(ctx, {
+      key: "cron:catalog",
+      ...CRON_CATALOG_RATE,
+    });
+    if (!limit.ok) {
+      return { error: "Cron catalog rate limit hit." };
+    }
+
+    const slug = slugify(args.title);
+    const titleNormalized = normalizeTitle(args.title);
+    if (!slug || !titleNormalized) {
+      return { error: "Invalid title." };
+    }
+
+    const existingBySlug = await ctx.db
+      .query("career_guides")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .first();
+    const existingByTitle =
+      existingBySlug ??
+      (await ctx.db
+        .query("career_guides")
+        .withIndex("by_title_normalized", (q) =>
+          q.eq("titleNormalized", titleNormalized),
+        )
+        .first());
+
+    const now = Date.now();
+
+    if (existingByTitle && existingByTitle.contentStatus !== "failed") {
+      return { slug: existingByTitle.slug, created: false };
+    }
+
+    const initialSlotIllustrations = buildInitialSlotIllustrations();
+
+    let guideId;
+    if (existingByTitle) {
+      guideId = existingByTitle._id;
+      await ctx.db.patch(guideId, {
+        contentStatus: "generating",
+        illustrationStatus: "generating",
+        illustrationStorageId: undefined,
+        slotIllustrations: initialSlotIllustrations,
+        content: undefined,
+        updatedAt: now,
+      });
+    } else {
+      guideId = await ctx.db.insert("career_guides", {
+        slug,
+        title: args.title,
+        titleNormalized,
+        contentStatus: "generating",
+        illustrationStatus: "generating",
+        slotIllustrations: initialSlotIllustrations,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await ctx.scheduler.runAfter(0, internal.careerGuides.generateContent, {
+      guideId,
+      title: args.title,
+    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.careerGuides.generateIllustration,
+      { guideId, title: args.title },
+    );
+    for (const slot of SECTION_SLOTS) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.careerGuides.generateSlotIllustration,
+        { guideId, title: args.title, slot },
+      );
+    }
+
+    return { slug: existingByTitle?.slug ?? slug, created: true };
   },
 });
 
