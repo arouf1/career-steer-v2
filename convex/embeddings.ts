@@ -202,10 +202,10 @@ export const generate = internalAction({
       const [wholeVector, arcVector, currentStateVector, domainVector] =
         await embedBatch(
           [
-            { text: texts.whole, taskHint: "retrieval document" },
-            { text: texts.arc, taskHint: "retrieval document" },
-            { text: texts.currentState, taskHint: "retrieval document" },
-            { text: texts.domain, taskHint: "retrieval document" },
+            { text: texts.whole, taskHint: "sentence similarity" },
+            { text: texts.arc, taskHint: "sentence similarity" },
+            { text: texts.currentState, taskHint: "sentence similarity" },
+            { text: texts.domain, taskHint: "sentence similarity" },
           ],
           { outputDimensionality: EMBED_DIM, model: EMBED_MODEL },
         );

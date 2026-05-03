@@ -29,12 +29,32 @@ export const chatModel = (modelId: string, opts?: { zdr?: boolean }) =>
     },
   });
 
+// Gemini Embedding 2 task instructions (vocabulary from
+// https://ai.google.dev/gemini-api/docs/embeddings#task-types-embeddings-2):
+//
+// Symmetric (same prefix on both sides — query and document use the same
+// format). Use these for similarity, clustering, classification — i.e. when
+// both vectors are "the same kind of thing" and you want cosine similarity
+// to rank them.
+//   - "sentence similarity"  → recommendation systems, duplicate detection.
+//                              Best fit for our profile↔guide matching:
+//                              both vectors are career narratives, we rank
+//                              guides by similarity to a profile.
+//   - "classification"       → bucketing into preset labels.
+//   - "clustering"           → grouping by similarity.
+//
+// Asymmetric (different prefixes on each side — query uses `task:`, document
+// uses `title: ... | text: ...`). For search/retrieval where one vector is a
+// short query and the other is a longer document.
+//   - "search result", "question answering", "fact checking", "code retrieval"
 export type EmbedTaskHint =
-  | "retrieval document"
-  | "retrieval query"
-  | "semantic similarity"
+  | "sentence similarity"
   | "classification"
-  | "clustering";
+  | "clustering"
+  | "search result"
+  | "question answering"
+  | "fact checking"
+  | "code retrieval";
 
 const EMBED_DEFAULT_DIMENSIONS = 1536;
 const EMBED_DEFAULT_MODEL = "google/gemini-embedding-2-preview";
@@ -50,9 +70,13 @@ export type EmbedOptions = {
   signal?: AbortSignal;
 };
 
+// Format per the Gemini Embedding 2 docs:
+//   `task: {hint} | query: {content}`
+// The pipe-delimited format (not the legacy newline format) is what the
+// model is trained to recognise as a task instruction.
 const buildEmbeddingInput = (input: EmbedInput): string =>
   input.taskHint
-    ? `task: ${input.taskHint}\n\n${input.text}`
+    ? `task: ${input.taskHint} | query: ${input.text}`
     : input.text;
 
 export const embed = async (
