@@ -76,16 +76,12 @@ export function MobileCardSheet({
     >
       <DrawerContent
         className="bg-paper"
-        // Cap the drawer at 92dvh — short cards render at content height,
-        // long cards cap at 92dvh and the *whole* drawer scrolls. We
-        // intentionally do NOT split the drawer into a flex-1 scrollable
-        // body + anchored footer — that pattern was brittle across
-        // browsers (sometimes the footer got pushed below the visible
-        // area when content grew, sometimes it didn't, depending on how
-        // the flex cascade resolved against vaul's inline styles).
-        // Single scroll container is reliable everywhere: every CTA in
-        // the sheet is reachable, in order, by scrolling.
-        style={{ maxHeight: "92dvh" }}
+        // Definite height (not max-height) so flex-1 inside has something
+        // to flex against. With max-height alone, the drawer was content-
+        // sized — the inner overflow-y-auto had no parent-height bound,
+        // never engaged, and content past 92dvh just extended below
+        // vaul's clip with the CTA falling out of view.
+        style={{ height: "92dvh", maxHeight: "92dvh" }}
       >
         {card && (
           <>
@@ -95,10 +91,11 @@ export function MobileCardSheet({
             </DrawerDescription>
 
             <div
-              className="overflow-y-auto overscroll-contain px-5 pb-4 pt-2"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-2"
               style={{
-                // Add safe-area-inset to the scroll container's bottom so
-                // the final CTA clears the iOS home indicator.
+                // Safe-area-inset on the scroll container's bottom so the
+                // final CTA clears the iOS home indicator at the end of
+                // the scroll content.
                 paddingBottom:
                   "max(env(safe-area-inset-bottom), 16px)",
               }}
