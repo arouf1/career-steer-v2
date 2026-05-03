@@ -2,11 +2,16 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, Bookmark, Check, X } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import type { CompassCard } from "../lib/mobileCompassTypes";
 
 const SLOT_LABEL: Record<CompassCard["slotKind"], string> = {
@@ -32,18 +37,20 @@ type Props = {
 };
 
 /**
- * Mobile-side card detail panel. Mirrors the OutreachDraftDrawer +
- * desktop CardPreviewSheet pattern (motion.aside + backdrop) instead of
- * vaul's bottom drawer. We tried vaul; the elastic bounce and drag-to-
- * dismiss heuristics fought with the inner overflow on long content,
- * leaving the "Read full guide" CTA intermittently unreachable. The
- * motion.aside approach has none of those issues — explicit h-screen
- * gives flex-1 a definite parent height for overflow-y-auto to engage,
- * and there's no drag handler trying to interpret downward scrolls as
- * dismiss gestures.
+ * Mobile-side card detail sheet — vaul bottom drawer.
  *
- * Slides in from the right (consistent with desktop and the LinkedIn
- * Drafts panel). On mobile this is full-screen because of `w-full`.
+ * `dismissible={false}` disables vaul's drag-to-dismiss gesture, which
+ * was the root cause of the elastic-bounce-back behaviour on long
+ * content (vaul interpreted downward scrolls inside the body as
+ * dismiss attempts). Without that gesture, the inner overflow-y-auto
+ * runs cleanly. User closes via backdrop tap or the X button.
+ *
+ * Layout follows the iOS-sheet pattern (see memory entry
+ * `feedback_ios_sheet_pattern.md`):
+ *   - DrawerContent has explicit pixel height via inline style
+ *   - Body content scrolls with reserved bottom padding for the CTA
+ *   - CTA is absolutely positioned at `bottom-0` with safe-area-inset
+ *     padding so it always clears whatever Safari chrome is overlaying
  */
 export function MobileCardSheet({
   card,
@@ -60,104 +67,35 @@ export function MobileCardSheet({
     card ? { guideId: card.guideId } : "skip",
   );
 
-  // Overview starts collapsed (3 lines) and expands on tap. Reset whenever
-  // the sheet opens with a new card so we don't leak the previous card's
-  // expanded state.
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   useEffect(() => {
     if (!open) setOverviewExpanded(false);
   }, [open, card?.guideId]);
 
-  // Sheet sizing uses `inset-y-0` (no explicit height) so it spans the
-  // full layout viewport — which on iOS Safari is constant regardless
-  // of where the URL bar is. The Read full guide CTA is anchored via
-  // absolute positioning at `bottom-0` and pads itself with
-  // `env(safe-area-inset-bottom)`, which Safari adjusts dynamically to
-  // clear whatever chrome is currently overlaying (the bottom URL bar
-  // when expanded, just the home indicator when minimized). The
-  // scrollable body has matching padding-bottom so its content never
-  // hides behind the absolutely-positioned CTA.
-
-  // Lock body scroll while the sheet is open. On iOS Safari, the simple
-  // `body { overflow: hidden }` approach doesn't actually freeze the
-  // browser — Safari still transitions its URL bar in response to inner
-  // scrolls, which re-anchors `position: fixed` elements (the sheet)
-  // to a different visual viewport mid-session and cuts off the bottom.
-  // The robust iOS pattern is to pin the body via `position: fixed` at
-  // a negative top offset equal to the current scroll position. Safari
-  // reads that as "the page isn't scrolling," so it stops transitioning
-  // its URL bar entirely. On unlock, restore the styles and scroll back
-  // to where the user was.
-  useEffect(() => {
-    if (!open) return;
-    const scrollY = window.scrollY;
-    const prev = {
-      position: document.body.style.position,
-      top: document.body.style.top,
-      width: document.body.style.width,
-      overflow: document.body.style.overflow,
-    };
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.position = prev.position;
-      document.body.style.top = prev.top;
-      document.body.style.width = prev.width;
-      document.body.style.overflow = prev.overflow;
-      window.scrollTo(0, scrollY);
-    };
-  }, [open]);
-
-  // Close on Escape.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
-
   return (
-    <AnimatePresence>
-      {open && card && (
-        <>
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-ink/30 backdrop-blur-[2px]"
-            onClick={() => onOpenChange(false)}
-            aria-hidden
-          />
-          <motion.aside
-            key="aside"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ duration: 0.35, ease: [0.2, 0.65, 0.3, 1] }}
-            // `inset-y-0` spans the full layout viewport on iOS — constant
-            // regardless of URL bar state — and the absolutely-positioned
-            // CTA at `bottom-0` with safe-area-inset padding clears
-            // whatever chrome Safari is currently overlaying.
-            className="fixed inset-y-0 right-0 z-50 w-full overflow-hidden border-l border-hairline bg-paper sm:max-w-lg"
-            role="dialog"
-            aria-label={`Preview of ${card.title}`}
-            aria-modal="true"
-          >
-            {/* Scrollable body. `paddingBottom` reserves room for the
-                absolutely-positioned CTA below — content scrolls *under*
+    <Drawer open={open} onOpenChange={onOpenChange} dismissible={false}>
+      <DrawerContent
+        className="bg-paper"
+        // Inline pixel height. vaul's default `h-auto max-h-[80vh]`
+        // doesn't give the inner overflow-y-auto a definite parent
+        // height to engage against. `92dvh` leaves a small strip of
+        // page peeking above the drawer so the user remembers the
+        // page is still there.
+        style={{ height: "92dvh", maxHeight: "92dvh" }}
+      >
+        {card && (
+          <>
+            <DrawerTitle className="sr-only">{card.title}</DrawerTitle>
+            <DrawerDescription className="sr-only">
+              {SLOT_LABEL[card.slotKind]} · {card.whyMatchReason}
+            </DrawerDescription>
+
+            {/* Scrollable body. paddingBottom reserves room for the
+                absolute-positioned CTA below — content scrolls under
                 the CTA's space without ever hiding behind it. */}
             <div
-              className="h-full overflow-y-auto overscroll-contain px-5 pt-4"
+              className="h-full overflow-y-auto overscroll-contain px-5 pt-2"
               style={{
-                // CTA box height (~58px button + 16px top + 12px bottom +
-                // border) plus safe-area inset for the home indicator or
-                // bottom URL bar overlay.
                 paddingBottom:
                   "calc(env(safe-area-inset-bottom, 0px) + 96px)",
               }}
@@ -281,10 +219,7 @@ export function MobileCardSheet({
               </section>
             </div>
 
-            {/* CTA pinned to the layout viewport's bottom edge.
-                `env(safe-area-inset-bottom)` adjusts dynamically as
-                Safari's bottom URL bar expands/minimizes, so the button
-                always clears whatever chrome is currently overlaying. */}
+            {/* CTA pinned to the drawer's bottom edge. */}
             <div
               className="absolute inset-x-0 bottom-0 z-10 border-t border-hairline bg-paper px-5 pt-3"
               style={{
@@ -303,9 +238,9 @@ export function MobileCardSheet({
                 />
               </Link>
             </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+          </>
+        )}
+      </DrawerContent>
+    </Drawer>
   );
 }
