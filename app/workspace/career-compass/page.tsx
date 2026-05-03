@@ -2,7 +2,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { DiscoverCanvas } from "./DiscoverCanvas";
-import { DiscoverMobile } from "./DiscoverMobile";
+import { MobileShell } from "./mobile/MobileShell";
 
 export const metadata = {
   title: "Career Compass",
@@ -23,7 +23,7 @@ export default async function CareerCompassPage() {
         <DiscoverCanvas />
       </div>
       <div className="md:hidden h-full">
-        <DiscoverMobile />
+        <MobileShell />
       </div>
     </div>
   );
