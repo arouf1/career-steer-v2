@@ -155,9 +155,17 @@ export function MobileCardSheet({
             aria-modal="true"
           >
             <div
-              className="h-full overflow-y-auto overscroll-contain px-5 py-4"
+              className="h-full overflow-y-auto overscroll-contain px-5 pt-4"
               style={{
-                paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+                // Generous bottom buffer: safe-area inset alone (the iOS
+                // home indicator height, ~34px on Pro Max) doesn't give
+                // enough daylight below the CTA when content totals
+                // close to the visible viewport — the CTA ends up
+                // half-occluded by the indicator area without enough
+                // overflow to actually engage scroll. +40px on top of
+                // the safe-area inset always leaves a clear gap.
+                paddingBottom:
+                  "calc(env(safe-area-inset-bottom, 0px) + 40px)",
               }}
             >
               {/* Header */}
