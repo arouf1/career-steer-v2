@@ -141,6 +141,20 @@ const contentValidator = v.object({
   riskFactors: v.array(v.string()),
   whyConsider: v.string(),
   meta: v.optional(metaValidator),
+  // Drives the discover-canvas 4-lane bucketing. Optional in the validator
+  // because legacy guides may lack it until backfilled (see
+  // _backfillCareerStageOne); fresh guides include it natively from the
+  // ContentResponseSchema output.
+  typicalCareerStage: v.optional(
+    v.union(
+      v.literal("early-career"),
+      v.literal("mid-career"),
+      v.literal("senior-IC"),
+      v.literal("manager"),
+      v.literal("director"),
+      v.literal("exec"),
+    ),
+  ),
   regional: v.object({
     us: regionalBlockValidator,
     uk: regionalBlockValidator,
@@ -1652,6 +1666,7 @@ export const generateContent = internalAction({
               riskFactors: output.riskFactors,
               whyConsider: output.whyConsider,
               meta: output.meta,
+              typicalCareerStage: output.typicalCareerStage,
               regional: {
                 us: {
                   ...output.regional.us,
@@ -1696,6 +1711,7 @@ export const generateContent = internalAction({
           riskFactors: output.riskFactors,
           whyConsider: output.whyConsider,
           meta: output.meta,
+          typicalCareerStage: output.typicalCareerStage,
           regional: {
             us: {
               ...output.regional.us,
