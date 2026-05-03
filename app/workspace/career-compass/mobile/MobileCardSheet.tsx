@@ -78,13 +78,35 @@ export function MobileCardSheet({
   // scrollable body has matching padding-bottom so its content never
   // hides behind the absolutely-positioned CTA.
 
-  // Lock body scroll while the sheet is open.
+  // Lock body scroll while the sheet is open. On iOS Safari, the simple
+  // `body { overflow: hidden }` approach doesn't actually freeze the
+  // browser — Safari still transitions its URL bar in response to inner
+  // scrolls, which re-anchors `position: fixed` elements (the sheet)
+  // to a different visual viewport mid-session and cuts off the bottom.
+  // The robust iOS pattern is to pin the body via `position: fixed` at
+  // a negative top offset equal to the current scroll position. Safari
+  // reads that as "the page isn't scrolling," so it stops transitioning
+  // its URL bar entirely. On unlock, restore the styles and scroll back
+  // to where the user was.
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.position = prev.position;
+      document.body.style.top = prev.top;
+      document.body.style.width = prev.width;
+      document.body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
     };
   }, [open]);
 
