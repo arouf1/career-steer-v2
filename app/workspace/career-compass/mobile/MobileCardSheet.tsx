@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight, Bookmark, Check, X } from "lucide-react";
@@ -59,6 +60,14 @@ export function MobileCardSheet({
     card ? { guideId: card.guideId } : "skip",
   );
 
+  // Overview starts collapsed (3 lines) and expands on tap. Reset whenever
+  // the sheet opens with a new card so we don't leak the previous card's
+  // expanded state.
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
+  useEffect(() => {
+    if (!open) setOverviewExpanded(false);
+  }, [open, card?.guideId]);
+
   return (
     <Drawer
       open={open}
@@ -87,8 +96,11 @@ export function MobileCardSheet({
         )}
 
         {card && (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-2">
+          // `flex-1` (not `h-full`) so this container takes the height
+          // *remaining after vaul's drag handle* — using h-full would
+          // overflow by ~24px and clip content at the bottom.
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-2 pt-2">
               {/* Header */}
               <div className="flex items-start justify-between gap-3 pb-4">
                 <div className="min-w-0">
@@ -123,12 +135,28 @@ export function MobileCardSheet({
                 </div>
               )}
 
-              {/* Overview */}
+              {/* Overview — starts collapsed at three lines, expands on
+                  tap. Keeps the sheet glanceable; readers who want the
+                  full passage can opt in. */}
               <section>
                 <p className={eyebrowCls}>Overview</p>
-                <p className="mt-2 text-[14px] leading-relaxed text-ink-soft line-clamp-6">
+                <p
+                  className={
+                    "mt-2 text-[14px] leading-relaxed text-ink-soft" +
+                    (overviewExpanded ? "" : " line-clamp-3")
+                  }
+                >
                   {card.overview}
                 </p>
+                {card.overview.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setOverviewExpanded((v) => !v)}
+                    className="mt-1.5 text-[12px] font-medium italic text-ink underline-offset-2 hover:underline"
+                  >
+                    {overviewExpanded ? "Read less" : "Read more"}
+                  </button>
+                )}
               </section>
 
               {/* Typical skills */}

@@ -27,6 +27,7 @@
     "cmdk": "^1.1.1",
     "convex": "1.36.1",
     "date-fns": "^4.1.0",
+    "embla-carousel-auto-height": "8.6.0",
     "embla-carousel-react": "^8.6.0",
     "exa-js": "2.12.1",
     "input-otp": "^1.4.2",

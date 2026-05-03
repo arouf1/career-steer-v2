@@ -49,9 +49,20 @@ export function usePullToRefresh({
   const [refreshing, setRefreshing] = useState(false);
   // Track gesture state in a ref so handlers see the latest value without
   // re-binding on every render.
-  const gesture = useRef<{ startY: number | null; capturing: boolean }>({
+  // `axisLocked` is set on the first move that crosses the deadband and
+  // remains until touchend — once we've decided "this is a horizontal swipe"
+  // we do nothing for the rest of the gesture, so a slightly-diagonal swipe
+  // never accidentally fires pull-to-refresh.
+  const gesture = useRef<{
+    startY: number | null;
+    startX: number | null;
+    capturing: boolean;
+    axisLocked: "vertical" | "horizontal" | null;
+  }>({
     startY: null,
+    startX: null,
     capturing: false,
+    axisLocked: null,
   });
 
   useEffect(() => {
@@ -62,18 +73,56 @@ export function usePullToRefresh({
       if (refreshing) return;
       // Only arm the gesture when the container is at the top of its scroll.
       if (el.scrollTop > 0) {
-        gesture.current = { startY: null, capturing: false };
+        gesture.current = {
+          startY: null,
+          startX: null,
+          capturing: false,
+          axisLocked: null,
+        };
         return;
       }
-      gesture.current = { startY: e.touches[0].clientY, capturing: false };
+      gesture.current = {
+        startY: e.touches[0].clientY,
+        startX: e.touches[0].clientX,
+        capturing: false,
+        axisLocked: null,
+      };
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (gesture.current.startY === null) return;
+      if (gesture.current.startY === null || gesture.current.startX === null) {
+        return;
+      }
       const dy = e.touches[0].clientY - gesture.current.startY;
+      const dx = e.touches[0].clientX - gesture.current.startX;
+      // If we've already decided the axis on a prior move, honour it for
+      // the rest of the gesture.
+      if (gesture.current.axisLocked === "horizontal") return;
+
+      // First-time axis decision: wait for the gesture to leave a small
+      // deadband, then commit to whichever axis dominates. Horizontal lock
+      // means the lane pager owns the gesture; vertical lock means
+      // pull-to-refresh owns it. This is the same axis-lock pattern Embla
+      // uses on its side, so the two never fight.
+      if (gesture.current.axisLocked === null) {
+        const moved = Math.max(Math.abs(dx), Math.abs(dy));
+        if (moved < 8) return; // deadband — too small to commit yet
+        if (Math.abs(dx) > Math.abs(dy)) {
+          gesture.current.axisLocked = "horizontal";
+          return;
+        }
+        gesture.current.axisLocked = "vertical";
+      }
+
+      // Vertical-locked gesture from here on.
       if (dy <= 0) {
         // Upward — release the gesture so vertical scroll resumes.
-        gesture.current = { startY: null, capturing: false };
+        gesture.current = {
+          startY: null,
+          startX: null,
+          capturing: false,
+          axisLocked: null,
+        };
         setPullDistance(0);
         return;
       }
@@ -89,7 +138,12 @@ export function usePullToRefresh({
 
     const onTouchEnd = () => {
       const captured = gesture.current.capturing;
-      gesture.current = { startY: null, capturing: false };
+      gesture.current = {
+        startY: null,
+        startX: null,
+        capturing: false,
+        axisLocked: null,
+      };
       if (!captured) {
         setPullDistance(0);
         return;

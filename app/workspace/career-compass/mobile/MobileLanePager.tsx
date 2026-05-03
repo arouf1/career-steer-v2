@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { MotionValue } from "motion/react";
+import AutoHeight from "embla-carousel-auto-height";
 
 import {
   Carousel,
@@ -98,6 +99,12 @@ export function MobileLanePager({
     api.scrollTo(activeIndex);
   }, [activeIndex]);
 
+  // AutoHeight resizes the carousel viewport to match the active slide's
+  // height — so a lane with 1 card doesn't inherit the height of a lane
+  // with 14. Memoise so we don't reinstantiate the plugin on every render
+  // (which would tear down and rebuild Embla, killing the active gesture).
+  const plugins = useMemo(() => [AutoHeight()], []);
+
   return (
     <Carousel
       setApi={handleSetApi}
@@ -109,16 +116,23 @@ export function MobileLanePager({
         // Slightly faster snap so lane changes feel kinetic without overshoot.
         duration: 22,
       }}
-      className="h-full w-full"
+      plugins={plugins}
+      className="w-full"
       aria-roledescription="carousel"
       aria-label="Career lanes"
     >
-      <CarouselContent className="ml-0 h-full">
+      {/* Smooth height transition when AutoHeight switches between slides
+          with different content lengths. */}
+      <CarouselContent
+        className="ml-0 transition-[height] duration-200 ease-out"
+      >
         {pages.map((page, i) => (
           <CarouselItem
             key={i}
             // Override shadcn's default pl-4 — we want each page edge-to-edge.
-            className="h-full pl-0"
+            // No `h-full`: the page sizes to its content, AutoHeight picks
+            // up that height and applies it to the carousel viewport.
+            className="pl-0"
             aria-label={`Lane ${i + 1} of ${pages.length}`}
           >
             {page}
