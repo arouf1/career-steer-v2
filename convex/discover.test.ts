@@ -713,18 +713,27 @@ describe("discover.generateSnapshot — Step 4 (dismissals) + Step 5 (lanes)", (
         return { userId, profileId, embeddingId, sameDomainId, crossDomainId, seededId };
       });
 
-    // Stub: keep the same-domain Data Scientist, demote the cross-domain
-    // Actuary. The seeded guide is never passed to the judge so it doesn't
-    // appear in `args.candidates` — assert that with a guard inside the stub.
+    // Stub: keep the same-domain Data Scientist as a high-confidence fit,
+    // demote the cross-domain Actuary. The seeded guide is never passed to
+    // the judge so it doesn't appear in `args.candidates` — assert that
+    // with a guard inside the stub. Returns the post-confidence-extension
+    // shape: `{ verdict, confidence }` per candidate.
     (globalThis as any).__testJudgeLLM__ = async (args: {
       candidates: Array<{ guideId: string; title: string }>;
     }) => {
       const seenIds = args.candidates.map((c) => c.guideId);
       // Override-admitted seeded candidate must not be passed to the judge.
       expect(seenIds).not.toContain(seededId);
-      const verdicts = new Map<string, "keep" | "demote">();
+      const verdicts = new Map<
+        string,
+        { verdict: "keep" | "demote"; confidence: "high" | "medium" | "low" }
+      >();
       for (const c of args.candidates) {
-        verdicts.set(c.guideId, c.title === "Actuary" ? "demote" : "keep");
+        if (c.title === "Actuary") {
+          verdicts.set(c.guideId, { verdict: "demote", confidence: "low" });
+        } else {
+          verdicts.set(c.guideId, { verdict: "keep", confidence: "high" });
+        }
       }
       return verdicts;
     };

@@ -122,23 +122,83 @@ ${JSON.stringify(promptPairs, null, 2)}`,
 }
 
 /**
- * Step 5b — earlier-lane judge.
+ * Per-lane judge prompt rubric. Each non-transformational lane defines what
+ * "belongs" in that lane in qualitative terms, so the LLM can demote
+ * candidates that pass embedding + stage gates but are clearly wrong for
+ * THIS user. Transformational is the catch-all bucket and is never
+ * adjudicated — demoted candidates from the other three lanes land here.
  *
- * The lane bucketer admits two kinds of candidate to the `earlier` lane:
- *  1. Literal past roles (override on `profile.seedingGuideSlugs`) — clean
- *     signal, never adjudicated.
- *  2. Embedding-similar lower-stage roles (cmp === "earlier" AND wholeSim
- *     ≥ 0.68 AND domainSim ≥ 0.72) — fuzzy signal where the threshold can
- *     admit cross-domain noise (Actuary, SEO Manager) alongside legitimate
- *     same-domain earlier-stage roles (Data Scientist, AI Engineer). The
- *     judge re-evaluates each candidate in this second bucket using user
- *     context and returns "keep" or "demote".
+ * Rubric design rules (apply equally to all three lanes):
+ *   - Demote-only. The judge cannot promote a candidate from one lane to
+ *     another; it can only keep or push to transformational.
+ *   - Conservative on uncertainty. Default to "keep" — an extra noisy card
+ *     in the right lane is less costly than an empty lane.
+ *   - Cross-domain test, not difficulty test. The judge is checking domain
+ *     coherence ("does this make sense for THIS user's professional path"),
+ *     not whether the role is "good enough" or "hard enough."
+ */
+type JudgeLane = "earlier" | "linear" | "adjacent";
+
+const JUDGE_RUBRICS: Record<
+  JudgeLane,
+  { laneLabel: string; description: string; examples: string }
+> = {
+  earlier: {
+    laneLabel: "earlier chapters",
+    description:
+      'roles in the user\'s professional domain that they could plausibly have held earlier in their career. Return "keep" if it is genuinely a same-domain earlier-stage role for THIS user, or "demote" if it is a cross-domain pivot or unrelated noise that does not fit "earlier chapters of MY career."',
+    examples: `Examples for a Head of Machine Learning:
+- "Data Scientist" → keep (same quantitative/ML domain, earlier stage)
+- "AI Engineer" → keep (same domain, earlier stage)
+- "Software Engineer" → keep (adjacent technical domain)
+- "Actuary" → demote (quantitative-adjacent but different professional domain)
+- "SEO Manager" → demote (cross-domain marketing)
+- "Massage Therapist" → demote (clearly unrelated)`,
+  },
+  linear: {
+    laneLabel: "next steps",
+    description:
+      'roles that are a credible promotion / forward step at one level up from where the user sits today, in the user\'s professional domain. Return "keep" if the role is genuinely a next-step in THIS user\'s career trajectory, or "demote" if it is a forward-but-cross-domain leap that is not a natural progression for them.',
+    examples: `Examples for a Head of Machine Learning:
+- "VP of Engineering" → keep (forward step in same technical leadership domain)
+- "Director of Data Science" → keep (next-level data/ML leadership)
+- "Chief Technology Officer" → keep (executive variant of engineering leadership)
+- "VP of Marketing" → demote (forward step but unrelated function)
+- "General Counsel" → demote (cross-domain executive role)
+- "Head of Sales" → demote (forward in seniority but different function)`,
+  },
+  adjacent: {
+    laneLabel: "sideways moves",
+    description:
+      'roles at the same career level as the user today, in a related or overlapping professional domain. The signature move here is a track switch (manager ↔ senior-IC) or a function pivot at the same seniority. Return "keep" if the role is genuinely a viable sideways move for THIS user, or "demote" if it is a same-stage role in a clearly unrelated function.',
+    examples: `Examples for a Head of Machine Learning (manager track):
+- "Principal Machine Learning Engineer" → keep (IC-track equivalent at same level)
+- "Head of Data Science" → keep (peer leadership in adjacent function)
+- "Staff Software Engineer" → keep (senior-IC in adjacent technical domain)
+- "Head of MLOps" → keep (same level, adjacent ML specialty)
+- "Restaurant General Manager" → demote (same seniority but unrelated industry)
+- "Head of Sales" → demote (peer leadership but unrelated function)
+- "Senior Marketing Manager" → demote (adjacent seniority but unrelated function)`,
+  },
+};
+
+/**
+ * Lane judge — provisional candidates admitted to a non-transformational
+ * lane via embeddings + stage gates are re-evaluated by Gemini Flash to
+ * catch cross-domain mismatches that pass the math but fail the smell test.
+ *
+ * Flow:
+ *  - earlier:   admitted by `cmp === "earlier" && wholeSim ≥ 0.68 && domainSim ≥ 0.72`
+ *  - linear:    admitted by `cmp === "forward" && wholeSim ≥ 0.72`
+ *  - adjacent:  admitted by `cmp === "sideways" && wholeSim ≥ 0.72`
+ *
+ * Override-admitted candidates (literal past roles via seedingGuideSlugs)
+ * skip the judge entirely — clean signal, no fuzz to clean up.
  *
  * Demoted candidates are moved to `transformational` (their semantic home
- * — cross-domain pivots). Override-admitted candidates skip the judge
- * entirely. Conservative on uncertainty: defaults to "keep" on any LLM
- * failure or missing/malformed output, so a flaky judge never silently
- * empties the earlier lane.
+ * — cross-domain or otherwise off-track for the user). Conservative on
+ * uncertainty: defaults to "keep" on any LLM failure or missing output,
+ * so a flaky judge never silently empties a lane.
  *
  * Production binding calls Gemini Flash (project's standard for trivial
  * structured-extraction work — same reasoning as the canonicalizer);
@@ -146,15 +206,33 @@ ${JSON.stringify(promptPairs, null, 2)}`,
  * `globalThis.__testJudgeLLM__` (clean up in a `finally` so the stub
  * doesn't leak).
  */
+/**
+ * Judge verdict shape. `verdict` is the binary lane gate; `confidence`
+ * influences within-lane positioning when verdict === "keep":
+ *   - high     → no penalty; candidate competes on cosine scores alone.
+ *   - medium   → judgePenalty = 1; candidate sorts behind every
+ *                high-confidence candidate, so it lands in bridge /
+ *                aspirational / extra rather than strong unless it is the
+ *                only one in the lane.
+ *   - low      → treated identically to verdict="demote"; the judge is
+ *                saying "this barely makes sense for this user," so move
+ *                it out of the lane entirely.
+ */
+type JudgeVerdict = {
+  verdict: "keep" | "demote";
+  confidence: "high" | "medium" | "low";
+};
+
 async function callJudgeLLM(args: {
+  lane: JudgeLane;
   userHeadline: string | null;
   userExperience: Array<{ title: string; company: string }>;
   candidates: Array<{
     guideId: Id<"career_guides">;
     title: string;
   }>;
-}): Promise<Map<string, "keep" | "demote">> {
-  const verdicts = new Map<string, "keep" | "demote">();
+}): Promise<Map<string, JudgeVerdict>> {
+  const verdicts = new Map<string, JudgeVerdict>();
   if (args.candidates.length === 0) return verdicts;
 
   const injected = (globalThis as any).__testJudgeLLM__;
@@ -165,10 +243,12 @@ async function callJudgeLLM(args: {
       z.object({
         guideId: z.string(),
         verdict: z.enum(["keep", "demote"]),
+        confidence: z.enum(["high", "medium", "low"]),
       }),
     ),
   });
 
+  const rubric = JUDGE_RUBRICS[args.lane];
   const headline = args.userHeadline ?? "(no headline)";
   const experienceLines = args.userExperience
     .slice(0, 6)
@@ -184,17 +264,20 @@ async function callJudgeLLM(args: {
       experimental_output: Output.object({ schema: JudgeSchema }),
       prompt: `You are categorizing career-discovery cards for a single user.
 
-Each candidate below has been provisionally admitted to the "earlier chapters" lane (= roles in the user's professional domain that they could plausibly have held earlier in their career). Your job: for each candidate, return "keep" if it is genuinely a same-domain earlier-stage role for THIS user, or "demote" if it is a cross-domain pivot or unrelated noise that does not fit "earlier chapters of MY career."
+Each candidate below has been provisionally admitted to the "${rubric.laneLabel}" lane (= ${rubric.description})
 
-Be CONSERVATIVE — when in doubt, KEEP. Only demote clear cross-domain mismatches.
+For each candidate, return BOTH a verdict and a confidence level:
 
-Examples for a Head of Machine Learning:
-- "Data Scientist" → keep (same quantitative/ML domain, earlier stage)
-- "AI Engineer" → keep (same domain, earlier stage)
-- "Software Engineer" → keep (adjacent technical domain)
-- "Actuary" → demote (quantitative-adjacent but different professional domain)
-- "SEO Manager" → demote (cross-domain marketing)
-- "Massage Therapist" → demote (clearly unrelated)
+VERDICT — "keep" if the candidate fits this lane for THIS user; "demote" if it is a clear cross-domain or off-track mismatch. Be CONSERVATIVE — when in doubt, KEEP. Only demote clear mismatches.
+
+CONFIDENCE — how strongly the candidate fits the lane for this user:
+- "high"   = textbook fit. Reads as a natural, expected card in this lane for this user's path.
+- "medium" = reasonable but a stretch. Same general direction but feels slightly off — a niche specialty, an unusual industry crossover, or a role where the user would need significant pivot effort.
+- "low"    = barely makes sense even though the embeddings agree. Treat the same as "demote" — return verdict="demote" alongside confidence="low".
+
+If you return verdict="demote", you must return confidence="low" (don't hedge a demotion as medium). If you return verdict="keep", confidence is "high" or "medium".
+
+${rubric.examples}
 
 USER PROFILE:
 Headline: ${headline}
@@ -208,21 +291,29 @@ Return EXACTLY one judgment per input candidate. Copy guideId verbatim.`,
     });
 
     for (const j of experimental_output.judgments) {
-      verdicts.set(j.guideId, j.verdict);
+      verdicts.set(j.guideId, {
+        verdict: j.verdict,
+        confidence: j.confidence,
+      });
     }
   } catch (err) {
     console.warn("discover.judge:llm-error", {
+      lane: args.lane,
       error: err instanceof Error ? err.message : String(err),
       candidateCount: args.candidates.length,
     });
-    // Conservative fallback: if the judge fails, keep everything.
-    // Better to have Actuary in earlier than to silently lose Data Scientist.
+    // Conservative fallback: if the judge fails, keep everything as
+    // high-confidence. Better to have a noisy card in the right lane than
+    // to silently empty it or wrongly penalize positioning.
   }
 
   // Conservative fallback for any candidate the judge omitted.
   for (const c of args.candidates) {
     if (!verdicts.has(c.guideId as string)) {
-      verdicts.set(c.guideId as string, "keep");
+      verdicts.set(c.guideId as string, {
+        verdict: "keep",
+        confidence: "high",
+      });
     }
   }
 
@@ -381,6 +472,17 @@ type ScoredCandidate = {
   currentStateSim: number;
   domainSim: number;
   wholeSim: number;
+  /**
+   * Distance penalty applied by the lane judge. 0 = no penalty (high
+   * confidence or never adjudicated); 1 = "medium-confidence" demotion
+   * — the judge kept the candidate in this lane but flagged it as a
+   * stretch. Picked up as a primary sort key by `pickStrong` / `pickBridge`
+   * / aspirational rerank pool, so penalized candidates fall behind every
+   * non-penalized candidate regardless of cosine score. Effect: a
+   * "stretch" sideways gets bridge / aspirational / extra rather than
+   * strong, unless it is the only candidate in the lane.
+   */
+  judgePenalty?: number;
 };
 
 /** Slot kinds populated across Steps 6a–6c + Step 7 (extras). */
@@ -404,12 +506,24 @@ type LaneStub = {
 };
 
 /**
+ * Sort key composer used by the slot pickers. Primary key: `judgePenalty`
+ * ascending (no-penalty before medium-confidence demoted) so a stretch
+ * candidate flagged by the LLM judge can never out-rank a clean candidate
+ * regardless of how well it scores on arcSim/domainSim. Secondary key:
+ * the metric the picker cares about (arcSim for strong, domainSim then
+ * arcSim for bridge).
+ */
+const penaltyOf = (c: ScoredCandidate): number => c.judgePenalty ?? 0;
+
+/**
  * Step 6a — strong-fit picks: top-N by arcSim. These are the cards that
  * most resemble the user's narrative arc; they anchor the lane.
  */
 function pickStrong(pool: ScoredCandidate[]): ScoredCandidate[] {
   return [...pool]
-    .sort((a, b) => b.arcSim - a.arcSim)
+    .sort(
+      (a, b) => penaltyOf(a) - penaltyOf(b) || b.arcSim - a.arcSim,
+    )
     .slice(0, LANE_BUDGET.STRONG);
 }
 
@@ -424,7 +538,12 @@ function pickBridge(
 ): ScoredCandidate[] {
   return [...pool]
     .filter((c) => !excluded.has(c.guideId as string))
-    .sort((a, b) => b.domainSim - a.domainSim || b.arcSim - a.arcSim)
+    .sort(
+      (a, b) =>
+        penaltyOf(a) - penaltyOf(b) ||
+        b.domainSim - a.domainSim ||
+        b.arcSim - a.arcSim,
+    )
     .slice(0, LANE_BUDGET.BRIDGE);
 }
 
@@ -446,9 +565,14 @@ async function pickAspirational(
   excluded: Set<string>,
   arcSourceText: string,
 ): Promise<ScoredCandidate | undefined> {
+  // Penalty-aware ordering: medium-confidence judge candidates land behind
+  // every clean candidate before the rerank pool is sliced, so they only
+  // make the rerank shortlist when there are not enough clean candidates.
   const remaining = pool
     .filter((c) => !excluded.has(c.guideId as string))
-    .sort((a, b) => b.arcSim - a.arcSim)
+    .sort(
+      (a, b) => penaltyOf(a) - penaltyOf(b) || b.arcSim - a.arcSim,
+    )
     .slice(0, ASPIRATIONAL_RERANK_TOP_N);
   if (remaining.length === 0) return undefined;
 
@@ -689,9 +813,13 @@ async function runPipeline(
     transformational: [],
   };
 
-  // Tracked separately so the judge below sees only embedding-admitted
+  // Tracked separately so the judges below see only embedding-admitted
   // candidates — override-admitted (literal past roles) skip the judge.
-  const embeddingEarlierAdmissions: ScoredCandidate[] = [];
+  const embeddingAdmissions: Record<JudgeLane, ScoredCandidate[]> = {
+    earlier: [],
+    linear: [],
+    adjacent: [],
+  };
 
   for (const c of surviving) {
     const guideStage = stageByGuide.get(c.guideId as string);
@@ -708,50 +836,91 @@ async function runPipeline(
 
     const cmp = compareStages(userStage, guideStage);
     if (cmp === "forward" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.linear) {
-      byLane.linear.push(c);
+      // Provisionally admitted to linear via stage + wholeSim gate. Judge
+      // demotes forward-but-cross-domain candidates (e.g. VP of Marketing
+      // for a Head of ML) to transformational.
+      embeddingAdmissions.linear.push(c);
     } else if (cmp === "sideways" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.adjacent) {
-      byLane.adjacent.push(c);
+      // Provisionally admitted to adjacent via stage + wholeSim gate. Judge
+      // demotes same-stage-but-cross-function candidates (e.g. Restaurant
+      // GM for a Head of ML) to transformational.
+      embeddingAdmissions.adjacent.push(c);
     } else if (
       cmp === "earlier" &&
       c.wholeSim >= LANE_WHOLE_SIM_FLOOR.earlier &&
       c.domainSim >= LANE_DOMAIN_SIM_FLOOR.earlier
     ) {
       // Provisionally admitted to earlier via embedding scores. Judge
-      // adjudicates below — same-domain stays in earlier; cross-domain
-      // noise (Actuary, SEO Manager) gets demoted to transformational.
-      embeddingEarlierAdmissions.push(c);
+      // demotes cross-domain noise (Actuary, SEO Manager) to transformational.
+      embeddingAdmissions.earlier.push(c);
     } else {
       byLane.transformational.push(c);
     }
   }
 
-  // Step 5b — judge each embedding-admitted earlier candidate. Conservative
-  // by design (defaults to "keep" on LLM failure or omitted output) so a
-  // flaky judge can never silently empty the earlier lane.
-  if (embeddingEarlierAdmissions.length > 0) {
-    const judgeVerdicts = await callJudgeLLM({
-      userHeadline: profileLaning.headline,
-      userExperience: profileLaning.experience,
-      candidates: embeddingEarlierAdmissions.map((c) => ({
-        guideId: c.guideId,
-        title: titleByGuide.get(c.guideId as string) ?? "(untitled)",
-      })),
-    });
-    for (const c of embeddingEarlierAdmissions) {
-      const verdict = judgeVerdicts.get(c.guideId as string) ?? "keep";
-      if (verdict === "keep") {
-        byLane.earlier.push(c);
-      } else {
+  // Step 5b — adjudicate every non-transformational lane in parallel.
+  // Each judge returns both a verdict and a confidence level:
+  //   - verdict="demote" OR confidence="low" → transformational (clear miss)
+  //   - verdict="keep" + confidence="high"   → lane, no penalty
+  //   - verdict="keep" + confidence="medium" → lane, judgePenalty=1 (sorts
+  //                                            behind every high-confidence
+  //                                            candidate, lands in bridge /
+  //                                            aspirational / extra rather
+  //                                            than strong unless alone).
+  // Conservative by design: each judge defaults to keep + high on LLM
+  // failure or missing output, so a flaky judge never silently empties a
+  // lane or wrongly penalizes positioning. Three Flash-tier calls run in
+  // parallel — adds ~1-2s to canvas regen.
+  const lanesToAdjudicate: JudgeLane[] = ["earlier", "linear", "adjacent"];
+  const verdictsByLane = new Map<JudgeLane, Map<string, JudgeVerdict>>();
+  await Promise.all(
+    lanesToAdjudicate.map(async (lane) => {
+      const candidates = embeddingAdmissions[lane];
+      if (candidates.length === 0) {
+        verdictsByLane.set(lane, new Map());
+        return;
+      }
+      const verdicts = await callJudgeLLM({
+        lane,
+        userHeadline: profileLaning.headline,
+        userExperience: profileLaning.experience,
+        candidates: candidates.map((c) => ({
+          guideId: c.guideId,
+          title: titleByGuide.get(c.guideId as string) ?? "(untitled)",
+        })),
+      });
+      verdictsByLane.set(lane, verdicts);
+    }),
+  );
+  for (const lane of lanesToAdjudicate) {
+    const verdicts = verdictsByLane.get(lane) ?? new Map();
+    for (const c of embeddingAdmissions[lane]) {
+      const judgment = verdicts.get(c.guideId as string) ?? {
+        verdict: "keep" as const,
+        confidence: "high" as const,
+      };
+      const isDemoted =
+        judgment.verdict === "demote" || judgment.confidence === "low";
+      if (isDemoted) {
         byLane.transformational.push(c);
+      } else if (judgment.confidence === "medium") {
+        byLane[lane].push({ ...c, judgePenalty: 1 });
+      } else {
+        byLane[lane].push(c);
       }
     }
   }
 
-  // Sort each lane's pool by wholeSim desc so downstream slot pickers
-  // (`pickStrong` / `pickBridge` / `pickAspirational`) receive the most
-  // relevant candidates first within their lane.
+  // Sort each lane's pool: judgePenalty asc first (clean candidates ahead
+  // of medium-confidence ones), then wholeSim desc within each tier. The
+  // slot pickers each apply their own metric-specific sort with the same
+  // penalty-first rule, so this initial sort is mostly cosmetic for the
+  // empty-lane override below — but keeping it consistent avoids surprises
+  // for any downstream code that walks `byLane[k]` linearly.
   for (const k of ["linear", "adjacent", "earlier", "transformational"] as const) {
-    byLane[k].sort((a, b) => b.wholeSim - a.wholeSim);
+    byLane[k].sort(
+      (a, b) => penaltyOf(a) - penaltyOf(b) || b.wholeSim - a.wholeSim,
+    );
   }
 
   // Saved-guide override: if a lane ends up empty pull a saved guide from
