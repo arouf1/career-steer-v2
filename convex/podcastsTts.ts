@@ -62,9 +62,14 @@ export const synthesize = internalAction({
       return null;
     }
 
-    const { transcript, guestName, guestRole, guestVoice } = guide.podcast;
+    const { transcript, guestName, guestRole, guestVoice, personaTraits } =
+      guide.podcast;
 
-    const stylePrompt = buildSpeakerPrompt({ guestName, guestRole });
+    const stylePrompt = buildSpeakerPrompt({
+      guestName,
+      guestRole,
+      personaTraits,
+    });
     const dialogueText = transcript
       .map((t) =>
         `${t.speaker === "host" ? HOST.name : guestName}: ${t.text}`,

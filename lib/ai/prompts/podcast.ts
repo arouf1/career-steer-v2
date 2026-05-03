@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PersonaTraits } from "./podcastPersona";
 
 // Per project memory: Gemini structured output rejects bound/array-length
 // constraints — keep this schema simple and enforce ranges in the prompt.
@@ -35,8 +36,9 @@ export function buildPodcastScriptPrompt(args: {
   title: string;
   content: ContentBundle;
   forbiddenGuestNames: string[];
+  personaTraits?: PersonaTraits;
 }): string {
-  const { title, content, forbiddenGuestNames } = args;
+  const { title, content, forbiddenGuestNames, personaTraits } = args;
   // Cap the injected list. Each name is ~15 chars, so 200 names ≈ 3 KB —
   // well under any prompt budget. Most-recent-first wouldn't matter since
   // the goal is "don't reuse any of these," but we slice from the start to
@@ -49,6 +51,23 @@ Used guest names (do NOT reuse any of these full names, case-insensitively):
 ${recent.join(", ")}
 
 Also vary the FIRST name — do not reuse a first name from that list unless absolutely unavoidable. Every episode should feature a distinct-feeling person.`
+    : "";
+  const personaBlock = personaTraits
+    ? `
+
+How this guest sounds (derived from the role's actual demands, not a stereotype of the field):
+- Archetype: ${personaTraits.archetypeLabel}
+- Working in: ${personaTraits.functionalAreaInferred}
+- Speaking energy: ${personaTraits.speakingStyle.energy}
+- Vocabulary register: ${personaTraits.speakingStyle.vocabulary}
+- Sentence length tendency: ${personaTraits.speakingStyle.sentenceLength}
+- Humor frequency: ${personaTraits.speakingStyle.humorFrequency}
+- Anecdote style (how they reach for examples): ${personaTraits.speakingStyle.anecdoteStyle}
+- Personality prior (1.0 low — 5.0 high): extraversion ${personaTraits.traitPrior.extraversion.toFixed(1)}, conscientiousness ${personaTraits.traitPrior.conscientiousness.toFixed(1)}, openness ${personaTraits.traitPrior.openness.toFixed(1)}, warmth ${personaTraits.traitPrior.warmth.toFixed(1)}, formality ${personaTraits.traitPrior.formality.toFixed(1)}
+
+Let these descriptors shape the guest's word choice, sentence rhythm, and how often they riff or lean in. Do NOT have the guest announce their personality or vocabulary register — it should be felt in HOW they speak, not stated. The host stays as written above; only the guest is shaped by this prior.
+
+Anti-stereotype guardrails: this prior is a tendency, not a costume. Even a "measured" guest occasionally laughs out loud when something genuinely lands; even an "animated" guest gets quietly serious about the hard parts of the work. Don't reduce them to one note.`
     : "";
   return `
 You are writing the script for a short conversational podcast episode about the career of "${title}". The episode is part of Career Cast — a friendly, no-fluff series that helps people understand what different careers are actually like.
@@ -88,7 +107,7 @@ ALLOWED pacing:
 FORBIDDEN tags (these get read aloud as words, which sounds broken):
 - Do NOT use [scared], [curious], [bored], [excited], [happy], [sad], [angry], or any other emotional-adjective tag.
 - Do NOT use [whispering], [shouting], [robotic], [sarcasm], or [extremely fast].
-- Do NOT add stage directions in parentheses like (laughing), (softly), or (smiling). Only the bracketed tags listed above.
+- Do NOT add stage directions in parentheses like (laughing), (softly), or (smiling). Only the bracketed tags listed above.${personaBlock}
 
 Casting:
 - Decide whether the guest is more plausibly a man or a woman, weighted by the realistic gender mix of people who actually do this job today. Lean into the demographic majority unless the role is genuinely balanced.
@@ -162,6 +181,14 @@ Output strictly as structured JSON with a single field "episodeTitle".
 export function buildSpeakerPrompt(args: {
   guestName: string;
   guestRole: string;
+  personaTraits?: PersonaTraits;
 }): string {
-  return `Voice this as a candid, warm podcast conversation between two people who actually like each other: ${HOST_NAME}, the host of Career Cast, and her guest, ${args.guestName} (${args.guestRole}). Easy rhythm, genuine reactions, comfortable pauses where they belong. ${HOST_NAME} sounds welcoming, curious, dry-humoured. ${args.guestName} sounds grounded and unhurried, with the easy authority of someone who has done the job for years and isn't trying to impress anyone. Where the script contains [laughs], react with a real amused laugh fitting the moment, never forced. Where it contains [sigh] or [uhm], deliver a small natural beat. Where it contains [short pause], [medium pause], or [long pause], hold the silence. Read everything else as continuous, conversational speech — never broadcast voice, never stiff.`;
+  // When personaTraits is present, the guest line uses the per-guest
+  // toneDirection produced by Stage A as a self-contained directive sentence.
+  // Falls back to the legacy generic phrasing when traits are missing
+  // (Stage A failed, or pre-feature legacy rows).
+  const guestLine = args.personaTraits?.toneDirection
+    ? `For ${args.guestName}: ${args.personaTraits.toneDirection.trim().replace(/\.+$/, "")}.`
+    : `${args.guestName} sounds grounded and unhurried, with the easy authority of someone who has done the job for years and isn't trying to impress anyone.`;
+  return `Voice this as a candid, warm podcast conversation between two people who actually like each other: ${HOST_NAME}, the host of Career Cast, and her guest, ${args.guestName} (${args.guestRole}). Easy rhythm, genuine reactions, comfortable pauses where they belong. ${HOST_NAME} sounds welcoming, curious, dry-humoured. ${guestLine} Where the script contains [laughs], react with a real amused laugh fitting the moment, never forced. Where it contains [sigh] or [uhm], deliver a small natural beat. Where it contains [short pause], [medium pause], or [long pause], hold the silence. Read everything else as continuous, conversational speech — never broadcast voice, never stiff.`;
 }

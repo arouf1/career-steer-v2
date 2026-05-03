@@ -15,6 +15,11 @@ import {
   buildEpisodeTitleBackfillPrompt,
   buildPodcastScriptPrompt,
 } from "../lib/ai/prompts/podcast";
+import {
+  PersonaTraitsSchema,
+  buildPersonaTraitsPrompt,
+  type PersonaTraits,
+} from "../lib/ai/prompts/podcastPersona";
 import { HOST, pickGuestVoice } from "../lib/podcast/voices";
 
 // Gemini 3.1 Pro Preview was returning 200 OK with zero usage and an empty
@@ -23,6 +28,10 @@ import { HOST, pickGuestVoice } from "../lib/podcast/voices";
 // scripts — it's fully released and stable for our prompt sizes.
 const SCRIPT_MODEL_ID = "google/gemini-2.5-pro";
 const SCRIPT_TIMEOUT_MS = 180_000;
+// Stage A (persona traits) is a small structured call (~800 in / ~300 out
+// tokens) — usually 1-2s. Cap at 60s so a single hung request can't gate
+// the more expensive script call below.
+const PERSONA_TIMEOUT_MS = 60_000;
 const SCRIPT_RETRIES = 2; // total tries = SCRIPT_RETRIES + 1
 // Caps script-regen cycles per guide. The cron sweeper (_retryFailedPodcasts)
 // uses the same constant to decide eligibility, so each failed guide gets up
@@ -44,6 +53,51 @@ const transcriptValidator = v.array(
     text: v.string(),
   }),
 );
+
+// Mirror of career_guides.podcast.personaTraits in convex/schema.ts. Reused
+// by _savePodcastScript args and any future mutations that touch the field.
+const personaTraitsValidator = v.object({
+  archetypeLabel: v.string(),
+  functionalAreaInferred: v.string(),
+  traitPrior: v.object({
+    extraversion: v.number(),
+    conscientiousness: v.number(),
+    openness: v.number(),
+    warmth: v.number(),
+    formality: v.number(),
+  }),
+  speakingStyle: v.object({
+    energy: v.union(
+      v.literal("measured"),
+      v.literal("animated"),
+      v.literal("reserved"),
+      v.literal("expressive"),
+    ),
+    vocabulary: v.union(
+      v.literal("precise-technical"),
+      v.literal("accessible-plain"),
+      v.literal("industry-jargon"),
+      v.literal("casual-conversational"),
+    ),
+    sentenceLength: v.union(
+      v.literal("short"),
+      v.literal("medium"),
+      v.literal("flowing"),
+    ),
+    humorFrequency: v.union(
+      v.literal("rare"),
+      v.literal("occasional"),
+      v.literal("frequent"),
+    ),
+    anecdoteStyle: v.union(
+      v.literal("data-grounded"),
+      v.literal("human-stories"),
+      v.literal("process-oriented"),
+      v.literal("metaphor-heavy"),
+    ),
+  }),
+  toneDirection: v.string(),
+});
 
 // ── Mutations ───────────────────────────────────────────────────────────────
 
@@ -83,6 +137,7 @@ export const _beginPodcast = internalMutation({
         guestRole: prev?.guestRole,
         guestGender: prev?.guestGender,
         transcript: prev?.transcript,
+        personaTraits: prev?.personaTraits,
       },
       updatedAt: Date.now(),
     });
@@ -99,6 +154,7 @@ export const _savePodcastScript = internalMutation({
     guestGender: v.union(v.literal("female"), v.literal("male")),
     guestVoice: v.string(),
     transcript: transcriptValidator,
+    personaTraits: v.optional(personaTraitsValidator),
   },
   handler: async (ctx, args) => {
     const guide = await ctx.db.get(args.guideId);
@@ -132,6 +188,11 @@ export const _savePodcastScript = internalMutation({
         guestGender: args.guestGender,
         episodeTitle: args.episodeTitle,
         transcript: args.transcript,
+        // If Stage A succeeded this attempt, args.personaTraits is set and
+        // overwrites whatever (if anything) was carried from a prior run.
+        // If Stage A failed, fall through to whatever the prior run saved
+        // so we still have *some* persona signal at TTS time.
+        personaTraits: args.personaTraits ?? prev?.personaTraits,
         attempts: prev?.attempts ?? 1,
         audioStorageId: prev?.audioStorageId,
         durationSeconds: prev?.durationSeconds,
@@ -189,6 +250,7 @@ export const _failPodcast = internalMutation({
         guestRole: prev?.guestRole,
         guestGender: prev?.guestGender,
         transcript: prev?.transcript,
+        personaTraits: prev?.personaTraits,
         error: args.error.slice(0, 500),
       },
       updatedAt: Date.now(),
@@ -237,6 +299,7 @@ export const triggerPodcastBySlug = mutation({
         guestRole: undefined,
         guestGender: undefined,
         transcript: undefined,
+        personaTraits: undefined,
         error: undefined,
       },
       updatedAt: Date.now(),
@@ -284,6 +347,39 @@ export const generateScript = internalAction({
     const normName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
     const forbiddenNorm = new Set([...forbidden].map(normName));
 
+    // Stage A — career-aware persona prior. Runs once before the retry loop
+    // so script retries are anchored to the same persona instead of
+    // rerolling it. Soft-fails: on error, traits stay undefined and both
+    // prompts fall through to their generic legacy paths. Isolated
+    // AbortController so a Stage A timeout cannot poison the script loop.
+    let personaTraits: PersonaTraits | undefined;
+    {
+      const personaController = new AbortController();
+      const personaTimeout = setTimeout(
+        () => personaController.abort(),
+        PERSONA_TIMEOUT_MS,
+      );
+      try {
+        const { output } = await generateText({
+          model: chatModel(SCRIPT_MODEL_ID, { zdr: true }),
+          output: Output.object({ schema: PersonaTraitsSchema }),
+          prompt: buildPersonaTraitsPrompt({
+            title: guide.title,
+            content: guide.content,
+          }),
+          abortSignal: personaController.signal,
+        });
+        personaTraits = output;
+      } catch (err) {
+        console.warn("generatePersonaTraits:failed", {
+          guideId: args.guideId,
+          msg: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        clearTimeout(personaTimeout);
+      }
+    }
+
     let lastErr: unknown;
     let success = false;
     for (let attempt = 0; attempt <= SCRIPT_RETRIES; attempt++) {
@@ -292,6 +388,7 @@ export const generateScript = internalAction({
           title: guide.title,
           content: guide.content,
           forbiddenGuestNames: [...forbidden],
+          personaTraits,
         });
         const { output } = await generateText({
           model: chatModel(SCRIPT_MODEL_ID, { zdr: true }),
@@ -311,7 +408,10 @@ export const generateScript = internalAction({
           throw new Error(`guestName_collision:${output.guestName}`);
         }
 
-        const guestVoice = pickGuestVoice(output.guestGender);
+        const guestVoice = pickGuestVoice(
+          output.guestGender,
+          personaTraits?.speakingStyle.energy,
+        );
 
         await ctx.runMutation(internal.podcasts._savePodcastScript, {
           guideId: args.guideId,
@@ -321,6 +421,7 @@ export const generateScript = internalAction({
           guestGender: output.guestGender,
           guestVoice,
           transcript: output.dialogue,
+          personaTraits,
         });
 
         await ctx.scheduler.runAfter(0, internal.podcastsTts.synthesize, {

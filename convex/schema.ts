@@ -503,6 +503,56 @@ export default defineSchema({
             }),
           ),
         ),
+        // Career-aware persona traits derived from the guide's content before
+        // the script is written. Drives the script prompt's "how this guest
+        // sounds" block, the TTS speaker prompt's per-guest tone direction,
+        // and the voice picker's weighted bias. Optional so legacy rows
+        // (pre-this-field) and Stage A failures both remain valid; the
+        // downstream prompts fall through to their generic defaults.
+        personaTraits: v.optional(
+          v.object({
+            archetypeLabel: v.string(),
+            functionalAreaInferred: v.string(),
+            traitPrior: v.object({
+              extraversion: v.number(),
+              conscientiousness: v.number(),
+              openness: v.number(),
+              warmth: v.number(),
+              formality: v.number(),
+            }),
+            speakingStyle: v.object({
+              energy: v.union(
+                v.literal("measured"),
+                v.literal("animated"),
+                v.literal("reserved"),
+                v.literal("expressive"),
+              ),
+              vocabulary: v.union(
+                v.literal("precise-technical"),
+                v.literal("accessible-plain"),
+                v.literal("industry-jargon"),
+                v.literal("casual-conversational"),
+              ),
+              sentenceLength: v.union(
+                v.literal("short"),
+                v.literal("medium"),
+                v.literal("flowing"),
+              ),
+              humorFrequency: v.union(
+                v.literal("rare"),
+                v.literal("occasional"),
+                v.literal("frequent"),
+              ),
+              anecdoteStyle: v.union(
+                v.literal("data-grounded"),
+                v.literal("human-stories"),
+                v.literal("process-oriented"),
+                v.literal("metaphor-heavy"),
+              ),
+            }),
+            toneDirection: v.string(),
+          }),
+        ),
         error: v.optional(v.string()),
         attempts: v.number(),
         generatedAt: v.optional(v.number()),
