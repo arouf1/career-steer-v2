@@ -2,8 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   positionCard,
   QUADRANT_CENTER,
-  QUADRANT_HALF_WIDTH,
-  QUADRANT_HALF_HEIGHT,
   INNER_PADDING,
 } from "./positionCard";
 
@@ -52,7 +50,13 @@ describe("positionCard — quadrant layout", () => {
     expect(p.y).toBeGreaterThan(0);
   });
 
-  it("respects INNER_PADDING — no card sits closer than INNER_PADDING to either axis", () => {
+  it("respects INNER_PADDING — no card sits closer than INNER_PADDING to the user node", () => {
+    // Polar layout: distance from origin is anchored to the slot's ring
+    // radius (strong=360 ≫ INNER_PADDING=160). The relevant safety check
+    // is the radial distance from origin, not per-axis distance — under
+    // the polar layout a card near the angular edge of its quadrant
+    // legitimately has a small |x| or |y| while still being far from the
+    // user node radially.
     for (const lane of [
       "linear",
       "adjacent",
@@ -66,15 +70,20 @@ describe("positionCard — quadrant layout", () => {
           arcScore: 1,
           guideId: `g${i}`,
         });
-        // Some scatter latitude — the floor is INNER_PADDING but scatter can
-        // pull a single axis a touch lower; assert against a generous fraction.
-        expect(Math.abs(p.x)).toBeGreaterThanOrEqual(INNER_PADDING * 0.6);
-        expect(Math.abs(p.y)).toBeGreaterThanOrEqual(INNER_PADDING * 0.6);
+        const radius = Math.sqrt(p.x ** 2 + p.y ** 2);
+        expect(radius).toBeGreaterThanOrEqual(INNER_PADDING);
       }
     }
   });
 
-  it("respects outer bounds — no card sits past QUADRANT_HALF_WIDTH/HEIGHT", () => {
+  it("respects outer bounds — extras ring stays within the canvas's logical extent", () => {
+    // Polar layout: extras anchor at r=840, which is outside the rectangular
+    // QUADRANT_HALF_WIDTH × QUADRANT_HALF_HEIGHT but inside the canvas's
+    // logical viewport (the rings at r=840 and beyond are rendered too).
+    // Assert against the radial bound instead — radius shouldn't drift more
+    // than RADIAL_JITTER past the extras ring radius.
+    const EXTRA_RING = 840;
+    const RADIAL_JITTER_BUDGET = 30; // generous: accounts for jitter + arc-pull bias
     for (const lane of [
       "linear",
       "adjacent",
@@ -88,8 +97,8 @@ describe("positionCard — quadrant layout", () => {
           arcScore: 0,
           guideId: `g${i}`,
         });
-        expect(Math.abs(p.x)).toBeLessThanOrEqual(QUADRANT_HALF_WIDTH * 1.05);
-        expect(Math.abs(p.y)).toBeLessThanOrEqual(QUADRANT_HALF_HEIGHT * 1.05);
+        const radius = Math.sqrt(p.x ** 2 + p.y ** 2);
+        expect(radius).toBeLessThanOrEqual(EXTRA_RING + RADIAL_JITTER_BUDGET);
       }
     }
   });
