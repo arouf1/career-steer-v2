@@ -68,6 +68,32 @@ export function MobileCardSheet({
     if (!open) setOverviewExpanded(false);
   }, [open, card?.guideId]);
 
+  // Actively measure the visible viewport height. CSS height units
+  // (`vh`/`dvh`/`svh` and even `inset-y-0` via fixed positioning) all
+  // rely on the browser's layout-time viewport resolution, which iOS
+  // Safari does inconsistently across sheet mounts in the same session
+  // — exactly the symptom of "the same card sometimes shows the footer
+  // and sometimes doesn't." `window.visualViewport.height` is the
+  // value iOS *actually* uses for paint regardless of toolbar state,
+  // so applying it as an inline pixel height is deterministic.
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      if (h > 0) setViewportHeight(h);
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
+
   // Lock body scroll while the sheet is open.
   useEffect(() => {
     if (!open) return;
@@ -108,14 +134,18 @@ export function MobileCardSheet({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.35, ease: [0.2, 0.65, 0.3, 1] }}
-            // `inset-y-0` (top:0 + bottom:0) instead of `h-[100dvh]`. With
-            // explicit height, iOS Safari's dynamic toolbar can leave the
-            // panel taller than the visible viewport and the footer
-            // ends up below the screen. With both edges pinned via
-            // `inset-y`, the panel is exactly viewport-edge-to-viewport-
-            // edge regardless of URL bar state — no height calc, no
-            // overshoot.
+            // Inline pixel height from `window.visualViewport` is the
+            // authoritative way to size to the visible area on iOS
+            // Safari. CSS-only approaches (`h-[100dvh]`, `inset-y-0`)
+            // were giving inconsistent results between sheet mounts in
+            // the same session. `inset-y-0` stays as a fallback for
+            // browsers without visualViewport support.
             className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-hairline bg-paper sm:max-w-lg"
+            style={
+              viewportHeight
+                ? { height: `${viewportHeight}px` }
+                : undefined
+            }
             role="dialog"
             aria-label={`Preview of ${card.title}`}
             aria-modal="true"
