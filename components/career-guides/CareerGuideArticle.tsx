@@ -588,6 +588,7 @@ export function CareerGuideArticle({
               salary={r.salary}
               salaryCitations={cite(`regional.${r.key}.salary`)}
               personalizationPending={personalizationPending}
+              showInlineCvCta={showInlineCvCta}
             />
           </div>
         </aside>
@@ -1110,6 +1111,7 @@ function Sidebar({
   salary,
   salaryCitations,
   personalizationPending,
+  showInlineCvCta,
 }: {
   slug: string;
   regionKey: RegionKey;
@@ -1118,6 +1120,7 @@ function Sidebar({
   salary: Salary;
   salaryCitations?: CitationSource[];
   personalizationPending?: boolean;
+  showInlineCvCta: boolean;
 }) {
   const bands: Array<[string, string]> = [
     ["Entry", formatSalaryBand(salary.entry, currencySymbol)],
@@ -1189,27 +1192,29 @@ function Sidebar({
         )}
       </div>
 
-      <Link
-        href="/workspace/profile"
-        className="group flex items-start gap-4 rounded-card bg-ink p-6 text-paper transition-colors hover:bg-ink-deep"
-      >
-        <div className="flex flex-col gap-2">
-          <p className="type-label text-paper/70">Your turn</p>
-          <p className="type-title text-paper">
-            See where your CV could take you
-          </p>
-          <p className="type-caption mt-1 text-paper/80">
-            Upload your CV and we will map paths that match your real experience.
-          </p>
-          <span className="type-label mt-3 inline-flex items-center gap-2 text-paper">
-            Build my path
-            <ArrowRight
-              className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-              aria-hidden="true"
-            />
-          </span>
-        </div>
-      </Link>
+      {showInlineCvCta && (
+        <Link
+          href="/workspace/profile"
+          className="group flex items-start gap-4 rounded-card bg-ink p-6 text-paper transition-colors hover:bg-ink-deep"
+        >
+          <div className="flex flex-col gap-2">
+            <p className="type-label text-paper/70">Your turn</p>
+            <p className="type-title text-paper">
+              See where your CV could take you
+            </p>
+            <p className="type-caption mt-1 text-paper/80">
+              Upload your CV and we will map paths that match your real experience.
+            </p>
+            <span className="type-label mt-3 inline-flex items-center gap-2 text-paper">
+              Build my path
+              <ArrowRight
+                className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </span>
+          </div>
+        </Link>
+      )}
     </div>
   );
 }
