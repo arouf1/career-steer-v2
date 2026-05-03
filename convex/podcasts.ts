@@ -7,6 +7,7 @@ import {
   mutation,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { chatModel } from "../lib/ai/providers";
 import {
   EpisodeTitleSchema,
@@ -23,7 +24,19 @@ import { HOST, pickGuestVoice } from "../lib/podcast/voices";
 const SCRIPT_MODEL_ID = "google/gemini-2.5-pro";
 const SCRIPT_TIMEOUT_MS = 180_000;
 const SCRIPT_RETRIES = 2; // total tries = SCRIPT_RETRIES + 1
-const MAX_ATTEMPTS = 2;
+// Caps script-regen cycles per guide. The cron sweeper (_retryFailedPodcasts)
+// uses the same constant to decide eligibility, so each failed guide gets up
+// to MAX_ATTEMPTS - 1 cron-driven retry cycles beyond the original trigger.
+// Synthesize-only retries (when transcript is already saved) don't bump
+// attempts and so don't count against this cap.
+const MAX_ATTEMPTS = 5;
+// Stuck-job cutoff: a podcast in `scripting` or `synthesizing` longer than
+// this is treated as crashed mid-action. Comfortably above SCRIPT_TIMEOUT_MS
+// (3 min) + TTS_TIMEOUT_MS (6 min).
+const PODCAST_RETRY_STUCK_CUTOFF_MS = 15 * 60 * 1000;
+// Stagger between retries the cron schedules in one tick — avoids hammering
+// Gemini TTS / OpenRouter when many guides need recovery at once.
+const PODCAST_RETRY_STAGGER_MS = 5_000;
 
 const transcriptValidator = v.array(
   v.object({
@@ -566,5 +579,128 @@ export const backfillEpisodeTitle = internalAction({
       episodeTitle,
     });
     return { ok: true as const, episodeTitle };
+  },
+});
+
+// ── Cron sweeper: recover failed and stuck podcasts ────────────────────────
+//
+// Mirrors `careerGuides._retryFailedGuides` and `discover.sweepFailedSnapshots`.
+// Picks up `career_guides.podcast` rows that are either `failed` or stuck mid-
+// pipeline (`scripting`/`synthesizing` and not updated for >15 min, indicating
+// a crashed action where `_failPodcast` never ran), and reschedules them as
+// long as `attempts < MAX_ATTEMPTS`. Routed via `convex/crons.ts`.
+
+export const _listFailedAndStuckPodcasts = internalQuery({
+  args: { stuckCutoffMs: v.number() },
+  returns: v.array(
+    v.object({
+      guideId: v.id("career_guides"),
+      slug: v.string(),
+      title: v.string(),
+      status: v.union(
+        v.literal("failed"),
+        v.literal("scripting"),
+        v.literal("synthesizing"),
+      ),
+      attempts: v.number(),
+      hasFullScript: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const cutoff = Date.now() - args.stuckCutoffMs;
+    // Full-table scan: career_guides is a curated catalog (~18 rows today)
+    // and `podcast.status` is a nested field with no Convex index option.
+    // Promote `podcast.status` to a top-level field + add `by_podcast_status`
+    // if the catalog ever exceeds ~5k rows.
+    const all = await ctx.db.query("career_guides").collect();
+    const out: Array<{
+      guideId: Id<"career_guides">;
+      slug: string;
+      title: string;
+      status: "failed" | "scripting" | "synthesizing";
+      attempts: number;
+      hasFullScript: boolean;
+    }> = [];
+    for (const g of all) {
+      const p = g.podcast;
+      if (!p) continue;
+      if (p.attempts >= MAX_ATTEMPTS) continue;
+      const isFailed = p.status === "failed";
+      const isStuck =
+        (p.status === "scripting" || p.status === "synthesizing") &&
+        g.updatedAt < cutoff;
+      if (!isFailed && !isStuck) continue;
+      const hasFullScript = !!(
+        p.transcript?.length &&
+        p.guestVoice &&
+        p.guestName &&
+        p.guestRole &&
+        p.guestGender &&
+        p.episodeTitle
+      );
+      out.push({
+        guideId: g._id,
+        slug: g.slug,
+        title: g.title,
+        status: p.status as "failed" | "scripting" | "synthesizing",
+        attempts: p.attempts,
+        hasFullScript,
+      });
+    }
+    return out;
+  },
+});
+
+export const _retryFailedPodcasts = internalAction({
+  args: {},
+  returns: v.object({
+    scanned: v.number(),
+    scheduledScript: v.number(),
+    scheduledSynthesize: v.number(),
+  }),
+  handler: async (
+    ctx,
+  ): Promise<{
+    scanned: number;
+    scheduledScript: number;
+    scheduledSynthesize: number;
+  }> => {
+    const candidates = await ctx.runQuery(
+      internal.podcasts._listFailedAndStuckPodcasts,
+      { stuckCutoffMs: PODCAST_RETRY_STUCK_CUTOFF_MS },
+    );
+    let scheduledScript = 0;
+    let scheduledSynthesize = 0;
+    for (const c of candidates) {
+      const delay =
+        (scheduledScript + scheduledSynthesize) * PODCAST_RETRY_STAGGER_MS;
+      // Smart entry-point routing. When the script + guest cast are already
+      // saved (the common case for transient TTS failures, e.g. "fetch failed"
+      // from the Gemini upload), re-run synthesize directly. This skips a
+      // wasted script regeneration and does not bump `attempts`, so transient
+      // TTS blips don't burn through the retry cap.
+      if (c.hasFullScript) {
+        await ctx.scheduler.runAfter(delay, internal.podcastsTts.synthesize, {
+          guideId: c.guideId,
+        });
+        scheduledSynthesize++;
+      } else {
+        await ctx.scheduler.runAfter(delay, internal.podcasts.generateScript, {
+          guideId: c.guideId,
+        });
+        scheduledScript++;
+      }
+      console.log("podcast-retry:scheduled", {
+        slug: c.slug,
+        status: c.status,
+        attempts: c.attempts,
+        entry: c.hasFullScript ? "synthesize" : "generateScript",
+      });
+    }
+    return {
+      scanned: candidates.length,
+      scheduledScript,
+      scheduledSynthesize,
+    };
   },
 });

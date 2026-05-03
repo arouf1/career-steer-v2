@@ -20,4 +20,15 @@ crons.daily(
   internal.discover.sweepFailedSnapshots,
 );
 
+// Recovers career-guide podcasts that finished in `status: "failed"` or are
+// stuck mid-pipeline (`scripting`/`synthesizing` for >15 min). Hourly cadence
+// catches transient TTS / OpenRouter blips quickly; the action's smart
+// routing skips the script regen when a transcript is already saved, so most
+// recoveries cost only a TTS retry. Bounded by MAX_ATTEMPTS in podcasts.ts.
+crons.interval(
+  "retry failed podcasts",
+  { hours: 1 },
+  internal.podcasts._retryFailedPodcasts,
+);
+
 export default crons;
