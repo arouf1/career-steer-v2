@@ -11,7 +11,7 @@ import { COMPASS_LANE_ORDER } from "../lib/mobileCompassGeometry";
 import type { CompassCard, CompassLane } from "../lib/mobileCompassTypes";
 import { MobileCompass } from "./MobileCompass";
 import { MobileLanePager } from "./MobileLanePager";
-import { MobileLaneFeed } from "./MobileLaneFeed";
+import { MobileLaneFeed, type LaneFeedHandle } from "./MobileLaneFeed";
 import { MobileCardSheet } from "./MobileCardSheet";
 
 export function MobileShell() {
@@ -48,6 +48,12 @@ function MobileShellInner() {
     kind: "save" | "dismiss";
     ts: number;
   } | null>(null);
+
+  // Refs to each lane's scroll handle so we can sync scrollY when the user
+  // switches lanes. Otherwise, swiping from a deep-scrolled dense lane to
+  // a sparse lane would leave the compass shrunk against scrollTop=0 on
+  // the new lane — feels disconnected.
+  const laneRefs = useRef<Array<LaneFeedHandle | null>>([null, null, null, null]);
 
   // Reactions → guideId map.
   const reactionByGuide = useMemo(() => {
@@ -165,9 +171,17 @@ function MobileShellInner() {
     void manualRefresh({});
   }, [manualRefresh]);
 
-  const handleUserSettle = useCallback(() => {
-    triggerHaptic(prefersReducedMotion);
-  }, [prefersReducedMotion]);
+  const handleUserSettle = useCallback(
+    (idx: number) => {
+      triggerHaptic(prefersReducedMotion);
+      // Sync the compass's scrollY motion value to the new active lane's
+      // current scroll position so the compass shrink matches what the
+      // user is seeing on the new page.
+      const top = laneRefs.current[idx]?.getScrollTop() ?? 0;
+      scrollY.set(top);
+    },
+    [prefersReducedMotion, scrollY],
+  );
 
   const handleIndexChange = useCallback((idx: number) => {
     setActiveIndex(idx);
@@ -175,84 +189,82 @@ function MobileShellInner() {
 
   return (
     <div className="relative flex h-full flex-col bg-paper">
-      <div
-        onScroll={(e) => scrollY.set(e.currentTarget.scrollTop)}
-        className="flex-1 overflow-y-auto overscroll-contain"
-      >
-        {/* Compass header — sticky to the top of the scroll container so
-            it stays visible as the lane feed scrolls beneath. The shrink-
-            on-scroll motion is driven by the shell's scrollTop. */}
-        <header className="sticky top-0 z-10 border-b border-hairline bg-paper px-4 pb-2 pt-2">
-          <MobileCompass
-            state={compassState}
-            cards={compassCards}
-            activeLane={activeLane}
-            laneCounts={laneCounts}
-            dragProgress={dragProgress}
-            scrollY={scrollY}
-            initials={initials}
-            lastFlash={lastFlash}
-            prefersReducedMotion={prefersReducedMotion}
-          />
+      {/* Compass header. Each lane below has its own scroll, so this is a
+          regular flex item (not sticky); the compass shrinks via the
+          active lane's scrollTop reported up through `onScrollY`. */}
+      <header className="relative border-b border-hairline bg-paper px-4 pb-2 pt-2">
+        <MobileCompass
+          state={compassState}
+          cards={compassCards}
+          activeLane={activeLane}
+          laneCounts={laneCounts}
+          dragProgress={dragProgress}
+          scrollY={scrollY}
+          initials={initials}
+          lastFlash={lastFlash}
+          prefersReducedMotion={prefersReducedMotion}
+        />
 
-          {/* Refresh affordance — small, top-right, only visible while the
-              snapshot is ready (no point offering refresh during loading
-              or failure since the failure path has its own retry CTA). */}
-          {compassState === "ready" && (
-            <button
-              type="button"
-              onClick={handleRefresh}
-              aria-label="Refresh career landscape"
-              className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full text-mute transition-colors hover:bg-paper-raised hover:text-ink active:bg-paper-raised"
-            >
-              <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
-            </button>
-          )}
+        {compassState === "ready" && (
+          <button
+            type="button"
+            onClick={handleRefresh}
+            aria-label="Refresh career landscape"
+            className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full text-mute transition-colors hover:bg-paper-raised hover:text-ink active:bg-paper-raised"
+          >
+            <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
+          </button>
+        )}
 
-          {compassState === "failed" && (
-            <div className="mt-4 flex flex-col items-center gap-2 px-4">
-              <p className="text-center font-serif text-base italic leading-relaxed text-mute">
-                We couldn&apos;t read your landscape. Try again.
-              </p>
-              <Button
-                type="button"
-                onClick={() => void manualRefresh({})}
-                className="rounded-pill bg-ink text-paper hover:bg-ink-deep"
-              >
-                Try again
-              </Button>
-            </div>
-          )}
-
-          {compassState === "loading" && (
-            <p className="mt-3 text-center text-[12px] italic text-mute">
-              Reading your landscape…
+        {compassState === "failed" && (
+          <div className="mt-4 flex flex-col items-center gap-2 px-4">
+            <p className="text-center font-serif text-base italic leading-relaxed text-mute">
+              We couldn&apos;t read your landscape. Try again.
             </p>
-          )}
-        </header>
+            <Button
+              type="button"
+              onClick={() => void manualRefresh({})}
+              className="rounded-pill bg-ink text-paper hover:bg-ink-deep"
+            >
+              Try again
+            </Button>
+          </div>
+        )}
 
-        {/* Lane pager — Embla with AutoHeight, so the carousel viewport
-            sizes to the active lane's content. Sparse lanes don't inherit
-            the height of dense lanes. */}
+        {compassState === "loading" && (
+          <p className="mt-3 text-center text-[12px] italic text-mute">
+            Reading your landscape…
+          </p>
+        )}
+      </header>
+
+      {/* Pager fills the remaining vertical space. Each lane inside owns
+          its own vertical scroll — switching lanes resets the visible
+          scroll to that lane's stored position. */}
+      <main className="flex-1 overflow-hidden">
         {compassState === "ready" && (
           <MobileLanePager
             activeIndex={activeIndex}
             onIndexChange={handleIndexChange}
             dragProgress={dragProgress}
             onUserSettle={handleUserSettle}
-            pages={COMPASS_LANE_ORDER.map((lane) => (
+            pages={COMPASS_LANE_ORDER.map((lane, i) => (
               <MobileLaneFeed
                 key={lane}
+                ref={(el) => {
+                  laneRefs.current[i] = el;
+                }}
                 lane={lane}
                 cards={cardsByLane[lane]}
                 reactionByGuide={reactionByGuide}
                 onCardTap={setPreviewCard}
+                isActive={i === activeIndex}
+                onScrollY={(top) => scrollY.set(top)}
               />
             ))}
           />
         )}
-
-      </div>
+      </main>
 
       <MobileCardSheet
         card={previewCard}

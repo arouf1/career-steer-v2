@@ -77,12 +77,18 @@ export function MobileCardSheet({
       <DrawerContent
         className={
           // Override vaul's default 80vh cap so the sheet has more breathing
-          // room. Use `dvh` (dynamic viewport height) — `vh` always refers to
-          // the *largest* viewport on iOS Safari (URL bar collapsed), so a
-          // 92vh drawer overshoots the visible area when the URL bar is up
-          // and the bottom CTA gets pushed off-screen. `dvh` adjusts as the
-          // URL bar shows/hides, keeping the footer reachable.
-          "bg-paper data-[vaul-drawer-direction=bottom]:!h-[92dvh] data-[vaul-drawer-direction=bottom]:!max-h-[92dvh]"
+          // room. Use `dvh` (dynamic viewport height) — `vh` always refers
+          // to the *largest* viewport on iOS Safari (URL bar collapsed), so
+          // a 92vh drawer overshoots the visible area when the URL bar is
+          // up and the bottom CTA gets pushed off-screen. `dvh` adjusts as
+          // the URL bar shows/hides, keeping the footer reachable.
+          //
+          // Tailwind v4 syntax for `!important` is the SUFFIX form
+          // (`h-[92dvh]!`) — the v3 prefix `!h-[92dvh]` silently doesn't
+          // apply !important under v4. Without it, vaul's
+          // `max-h-[80vh]` baked into shadcn's wrapper ties twMerge on
+          // the same property and the override didn't always win.
+          "bg-paper data-[vaul-drawer-direction=bottom]:h-[92dvh]! data-[vaul-drawer-direction=bottom]:max-h-[92dvh]!"
         }
       >
         {/* Visually-hidden title/description satisfy vaul's a11y
