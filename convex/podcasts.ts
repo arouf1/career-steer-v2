@@ -21,6 +21,7 @@ import {
   type PersonaTraits,
 } from "../lib/ai/prompts/podcastPersona";
 import { HOST, pickGuestVoice } from "../lib/podcast/voices";
+import { VOICE_CATALOG } from "../lib/podcast/voiceCatalog";
 
 // Gemini 3.1 Pro Preview was returning 200 OK with zero usage and an empty
 // body for some podcast prompts (OpenRouter routing dropped the upstream
@@ -677,6 +678,196 @@ export const backfillEpisodeTitle = internalAction({
       episodeTitle,
     });
     return { ok: true as const, episodeTitle };
+  },
+});
+
+// ── Catalog retag re-pick ──────────────────────────────────────────────────
+//
+// On 2026-05-04 the voice catalog was re-grounded on gemini-tts.com after a
+// shipped podcast surfaced an audible gender mismatch (Algenib was tagged
+// female, actually male). Six voices flipped pool: Algenib, Achernar, Achird,
+// Autonoe, Gacrux, Pulcherrima.
+//
+// Only podcasts where the voice's *current* catalog gender disagrees with the
+// stored guestGender are misvoiced — i.e. cases like (guestVoice=Algenib,
+// guestGender=female) where Algenib is now male. Cases like (guestVoice=
+// Algenib, guestGender=male) were always correctly rendered (Algenib was
+// always male in audio; only the catalog tag was wrong) and must NOT be
+// touched: the user may have already listened to that audio and we don't
+// want to swap voices unnecessarily.
+//
+// repickMisvoicedPodcasts finds true mismatches by joining each podcast's
+// stored guestVoice against the *current* VOICE_CATALOG, repicks from the
+// now-correct pool, and reschedules synthesize. Transcript, persona, name,
+// role, and episode title are preserved. Old audio blobs are orphaned in
+// storage; cost is negligible and manual cleanup is fine if it ever matters.
+
+export const _listMisvoicedPodcasts = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      guideId: v.id("career_guides"),
+      slug: v.string(),
+      title: v.string(),
+      currentVoice: v.string(),
+      currentVoiceGender: v.union(v.literal("female"), v.literal("male")),
+      guestGender: v.union(v.literal("female"), v.literal("male")),
+    }),
+  ),
+  handler: async (ctx) => {
+    const voiceGender = new Map<string, "female" | "male">(
+      VOICE_CATALOG.map((v) => [v.id, v.gender]),
+    );
+    const all = await ctx.db.query("career_guides").collect();
+    const out: Array<{
+      guideId: Id<"career_guides">;
+      slug: string;
+      title: string;
+      currentVoice: string;
+      currentVoiceGender: "female" | "male";
+      guestGender: "female" | "male";
+    }> = [];
+    for (const g of all) {
+      const p = g.podcast;
+      if (!p || p.status !== "complete") continue;
+      if (!p.guestVoice || !p.guestGender) continue;
+      const actualGender = voiceGender.get(p.guestVoice);
+      if (!actualGender) continue; // unknown voice id; skip silently
+      if (actualGender === p.guestGender) continue; // already correct
+      out.push({
+        guideId: g._id,
+        slug: g.slug,
+        title: g.title,
+        currentVoice: p.guestVoice,
+        currentVoiceGender: actualGender,
+        guestGender: p.guestGender,
+      });
+    }
+    return out;
+  },
+});
+
+export const _repickAndResynth = internalMutation({
+  args: { guideId: v.id("career_guides") },
+  returns: v.union(
+    v.object({
+      ok: v.literal(true),
+      previousVoice: v.string(),
+      newVoice: v.string(),
+    }),
+    v.object({ ok: v.literal(false), reason: v.string() }),
+  ),
+  handler: async (ctx, args) => {
+    const guide = await ctx.db.get(args.guideId);
+    if (!guide?.podcast) {
+      return { ok: false as const, reason: "no_podcast" };
+    }
+    const p = guide.podcast;
+    if (
+      !p.guestGender ||
+      !p.transcript?.length ||
+      !p.guestName ||
+      !p.guestRole
+    ) {
+      return { ok: false as const, reason: "incomplete_script" };
+    }
+    const previousVoice = p.guestVoice ?? "";
+    const newVoice = pickGuestVoice(p.guestGender, p.personaTraits);
+    await ctx.db.patch(args.guideId, {
+      podcast: {
+        ...p,
+        status: "synthesizing",
+        guestVoice: newVoice,
+        // Drop stale audio so the UI shows a regenerating state and
+        // synthesize writes fresh. hasJingle is recomputed by synthesize.
+        audioStorageId: undefined,
+        durationSeconds: undefined,
+        hasJingle: undefined,
+        error: undefined,
+      },
+      updatedAt: Date.now(),
+    });
+    return { ok: true as const, previousVoice, newVoice };
+  },
+});
+
+// One-shot ops helper. Run once after a voiceCatalog gender retag to fix
+// every existing complete podcast whose guestVoice flipped pool. Preserves
+// the transcript, persona, name, role, and episode title — only repicks
+// the voice and reschedules TTS. Returns a per-guide outcome list.
+export const repickMisvoicedPodcasts = internalAction({
+  args: {},
+  returns: v.object({
+    scanned: v.number(),
+    repicked: v.number(),
+    skipped: v.number(),
+    results: v.array(
+      v.object({
+        slug: v.string(),
+        previousVoice: v.string(),
+        newVoice: v.string(),
+        guestGender: v.union(v.literal("female"), v.literal("male")),
+      }),
+    ),
+  }),
+  handler: async (
+    ctx,
+  ): Promise<{
+    scanned: number;
+    repicked: number;
+    skipped: number;
+    results: Array<{
+      slug: string;
+      previousVoice: string;
+      newVoice: string;
+      guestGender: "female" | "male";
+    }>;
+  }> => {
+    const targets: Array<{
+      guideId: Id<"career_guides">;
+      slug: string;
+      title: string;
+      currentVoice: string;
+      currentVoiceGender: "female" | "male";
+      guestGender: "female" | "male";
+    }> = await ctx.runQuery(internal.podcasts._listMisvoicedPodcasts, {});
+    const results: Array<{
+      slug: string;
+      previousVoice: string;
+      newVoice: string;
+      guestGender: "female" | "male";
+    }> = [];
+    let repicked = 0;
+    let skipped = 0;
+    for (const t of targets) {
+      const r: { ok: true; previousVoice: string; newVoice: string }
+        | { ok: false; reason: string } = await ctx.runMutation(
+        internal.podcasts._repickAndResynth,
+        { guideId: t.guideId },
+      );
+      if (!r.ok) {
+        skipped++;
+        console.warn("repickMisvoicedPodcasts:skip", {
+          slug: t.slug,
+          reason: r.reason,
+        });
+        continue;
+      }
+      // Stagger TTS calls to avoid hammering Gemini when many guides flip.
+      await ctx.scheduler.runAfter(
+        repicked * PODCAST_RETRY_STAGGER_MS,
+        internal.podcastsTts.synthesize,
+        { guideId: t.guideId },
+      );
+      results.push({
+        slug: t.slug,
+        previousVoice: r.previousVoice,
+        newVoice: r.newVoice,
+        guestGender: t.guestGender,
+      });
+      repicked++;
+    }
+    return { scanned: targets.length, repicked, skipped, results };
   },
 });
 

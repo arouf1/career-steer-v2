@@ -2,14 +2,20 @@
 // truth for voice gender, pitch, and style — the host declaration and the
 // guest-voice picker (lib/podcast/voices.ts) both read from here.
 //
-// Where the descriptions came from:
-//   Google's AI Studio docs label each voice with a single-word style hint
-//   ("Bright", "Mature", etc.) and don't disclose perceived gender. A
-//   community catalog circa 2025 had Gemini Pro itself listen to a sample
-//   of every prebuilt voice and produce the descriptions reproduced here
-//   verbatim in `description`. That keeps the source auditable: if a tag
-//   ever feels off in shipped audio, the original listening note is right
-//   there next to the structured tags so the retag is grounded.
+// Where the genders and descriptions came from:
+//   Google does not publish per-voice gender in its public docs or API; the
+//   AI Studio dropdown shows it only in the UI. The community-maintained
+//   index at https://gemini-tts.com/voices is the de-facto reference: each
+//   voice card carries a ♀/♂ marker plus a primary descriptor and pitch
+//   bucket. The `gender`, `pitch`, and `description` fields here mirror
+//   those cards; `style` is our internal mapping into the four picker
+//   buckets (warm / bright / measured / authoritative).
+//
+//   An earlier version of this catalog used a third-party source that had
+//   Gemini Pro listen to samples and infer gender. That produced six wrong
+//   tags (Algenib, Achernar, Achird, Autonoe, Gacrux, Pulcherrima) which
+//   surfaced as audible gender mismatches in shipped podcasts. Catalog was
+//   re-grounded on gemini-tts.com on 2026-05-04.
 //
 // What the picker actually uses:
 //   `gender` filters the pool to match the LLM-decided guest gender;
@@ -19,10 +25,11 @@
 //   voices).
 //
 // Re-tagging guidance:
-//   If a shipped episode lands on a voice that feels miscast, retag the
-//   `style` here — the picker re-derives buckets at module load. Don't add
-//   a voice that isn't actually exposed by Gemini TTS; there is no
-//   fallback if the API rejects the name.
+//   If a shipped episode lands on a voice that feels miscast, cross-check
+//   gemini-tts.com first (gender + descriptor), then retag here — the
+//   picker re-derives buckets at module load. Don't add a voice that isn't
+//   actually exposed by Gemini TTS; there is no fallback if the API
+//   rejects the name.
 
 export type VoiceGender = "female" | "male";
 
@@ -54,44 +61,58 @@ export const HOST_VOICE_ID = "Aoede";
 export const VOICE_CATALOG: readonly VoiceProfile[] = [
   {
     id: "Achernar",
-    gender: "male",
-    pitch: "mid",
+    gender: "female",
+    pitch: "mid-high",
     style: "warm",
     secondaryStyles: ["bright"],
     description:
-      "Clear, mid-range male voice with a friendly and engaging tone. Conveys enthusiasm and approachability without being overly energetic.",
+      "Soft and warm female voice with a higher pitch. Friendly and approachable, with a gentle, welcoming quality.",
     bestUses: [
-      "Explainer videos",
-      "friendly corporate narration",
+      "Friendly corporate narration",
       "podcast intros",
+      "explainer videos",
     ],
   },
   {
     id: "Achird",
-    gender: "female",
-    pitch: "mid-high",
-    style: "bright",
-    secondaryStyles: ["warm"],
+    gender: "male",
+    pitch: "mid-low",
+    style: "warm",
+    secondaryStyles: ["bright"],
     description:
-      "Youthful, mid-to-high pitched female voice, clear with a slightly breathy, inquisitive quality. Sounds friendly and approachable, good for contemporary content.",
+      "Friendly and kind male voice with a lower-middle pitch. Approachable and easy-going, with a clear conversational delivery.",
     bestUses: [
-      "E-learning modules for younger audiences",
-      "friendly app tutorials",
-      "young adult character voice",
+      "Explainer videos",
+      "friendly product demos",
+      "informal corporate narration",
     ],
   },
   {
     id: "Algenib",
-    gender: "female",
-    pitch: "mid",
-    style: "warm",
-    secondaryStyles: ["authoritative"],
+    gender: "male",
+    pitch: "low",
+    style: "authoritative",
+    secondaryStyles: ["warm"],
     description:
-      "Warm, confident female voice with a mid-range pitch and good clarity. Projects a sense of friendly authority and experience.",
+      "Gravelly and textured male voice with a lower pitch. Carries a lived-in, experienced quality — gravitas with warmth and rasp.",
     bestUses: [
-      "Corporate presentations",
-      "documentary narration",
-      "mature but friendly character roles",
+      "Documentary narration",
+      "audiobook narration (memoir, character)",
+      "podcast hosting with gravitas",
+    ],
+  },
+  {
+    id: "Algieba",
+    gender: "male",
+    pitch: "low",
+    style: "warm",
+    secondaryStyles: ["measured"],
+    description:
+      "Smooth and flowing male voice with a lower pitch. Steady, unhurried delivery — calm warmth without the rasp of Algenib.",
+    bestUses: [
+      "Audiobook narration",
+      "long-form podcast hosting",
+      "calm corporate storytelling",
     ],
   },
   {
@@ -116,16 +137,16 @@ export const VOICE_CATALOG: readonly VoiceProfile[] = [
   },
   {
     id: "Autonoe",
-    gender: "male",
-    pitch: "low",
-    style: "authoritative",
-    secondaryStyles: ["measured"],
+    gender: "female",
+    pitch: "mid",
+    style: "bright",
+    secondaryStyles: ["warm"],
     description:
-      "Mature, deeper male voice with a resonant and thoughtful quality. Conveys wisdom and experience, with a calm and measured pace.",
+      "Bright and cheerful female voice with a clear mid-range pitch. Energetic and engaging, with a positive, upbeat delivery.",
     bestUses: [
-      "Documentary narration",
-      "audiobook narration (serious non-fiction)",
-      "authoritative roles",
+      "Upbeat commercials",
+      "tutorials",
+      "friendly customer-facing content",
     ],
   },
   {
@@ -206,16 +227,16 @@ export const VOICE_CATALOG: readonly VoiceProfile[] = [
   },
   {
     id: "Gacrux",
-    gender: "male",
-    pitch: "mid-low",
-    style: "authoritative",
-    secondaryStyles: ["warm"],
+    gender: "female",
+    pitch: "mid",
+    style: "measured",
+    secondaryStyles: ["authoritative"],
     description:
-      "Smooth, confident male voice with a mid-to-low pitch and a clear, authoritative yet approachable tone. Projects experience and knowledge effectively.",
+      "Mature and steady female voice with a clear mid-range pitch. Composed and thoughtful, projecting experience and quiet authority.",
     bestUses: [
       "Documentary narration",
-      "corporate presentations",
-      "audiobook (non-fiction)",
+      "corporate training",
+      "serious editorial content",
     ],
   },
   {
@@ -296,16 +317,16 @@ export const VOICE_CATALOG: readonly VoiceProfile[] = [
   },
   {
     id: "Pulcherrima",
-    gender: "female",
-    pitch: "mid-high",
+    gender: "male",
+    pitch: "mid",
     style: "bright",
-    secondaryStyles: ["warm"],
+    secondaryStyles: ["authoritative"],
     description:
-      "Bright, energetic female voice with a mid-to-high pitch, sounding youthful and enthusiastic. Clear and engaging delivery, very upbeat.",
+      "Forward and enterprising male voice with a clear mid-range pitch. Confident and direct, with an enthusiastic, decisive delivery.",
     bestUses: [
-      "Upbeat commercials",
-      "tutorials",
-      "character voice for animation or young adult content",
+      "Promotional content",
+      "presentations",
+      "leadership-style narration",
     ],
   },
   {
