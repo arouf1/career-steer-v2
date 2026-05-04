@@ -31,6 +31,11 @@ export default defineSchema({
     headline: v.optional(v.union(v.string(), v.null())),
     summary: v.optional(v.union(v.string(), v.null())),
     location: v.optional(v.union(v.string(), v.null())),
+    // Set when the user confirms their location in the post-intake step.
+    // Undefined means the user hasn't completed step 2 yet — the profile
+    // page renders LocationStep (gate) instead of the full ProfileView.
+    // Required for trustworthy regional personalization downstream.
+    locationConfirmedAt: v.optional(v.number()),
     experience: v.array(v.object({
       title: v.string(),
       company: v.string(),

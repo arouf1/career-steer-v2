@@ -376,6 +376,44 @@ export const update = mutation({
   },
 });
 
+// Step 2 of profile setup: the user confirms their location after
+// CV/LinkedIn intake. Required because LLM extraction is unreliable —
+// confirmation is what makes regional personalization trustworthy.
+// Sets `locationConfirmedAt` so the ProfileShell gate can let the user
+// through to the full ProfileView.
+export const confirmLocation = mutation({
+  args: { location: v.string() },
+  handler: async (ctx, args) => {
+    const profile = await userOwnedProfile(ctx);
+    const trimmed = args.location.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Location cannot be empty");
+    }
+
+    await ctx.db.patch(profile._id, {
+      location: trimmed,
+      locationConfirmedAt: Date.now(),
+    });
+
+    const enrichment = await ctx.db
+      .query("profile_enrichments")
+      .withIndex("by_profileId", (q) => q.eq("profileId", profile._id))
+      .unique();
+    if (enrichment) {
+      await ctx.db.patch(enrichment._id, { status: "stale" });
+    }
+
+    await ctx.scheduler.runAfter(
+      RE_ENRICH_DEBOUNCE_MS,
+      internal.enrichments.run,
+      {
+        profileId: profile._id,
+        userId: profile.userId,
+      },
+    );
+  },
+});
+
 export const markReviewed = mutation({
   args: {},
   handler: async (ctx) => {

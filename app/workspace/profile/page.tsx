@@ -15,6 +15,7 @@ import { ProfileView } from "@/components/profile/ProfileView";
 import { ProfileEditForm } from "@/components/profile/ProfileEditForm";
 import { ReviewCallout } from "@/components/profile/ReviewCallout";
 import { GuidesForYou } from "@/components/profile/GuidesForYou";
+import { LocationStep } from "@/components/profile/LocationStep";
 
 export default function ProfilePage() {
   return (
@@ -57,6 +58,15 @@ function ProfileShell() {
 
   if (profile === null) {
     return <UploadCard />;
+  }
+
+  // Step 2 of profile setup: the user must confirm their location
+  // before the rest of the profile UI unlocks. Pre-filled with whatever
+  // the LLM extracted from the CV/LinkedIn — the user just confirms or
+  // edits. Once confirmed, locationConfirmedAt is set and we never come
+  // back through this gate for this profile.
+  if (profile.locationConfirmedAt === undefined) {
+    return <LocationStep initialLocation={profile.location ?? null} />;
   }
 
   if (editing) {
