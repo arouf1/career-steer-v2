@@ -408,10 +408,7 @@ export const generateScript = internalAction({
           throw new Error(`guestName_collision:${output.guestName}`);
         }
 
-        const guestVoice = pickGuestVoice(
-          output.guestGender,
-          personaTraits?.speakingStyle.energy,
-        );
+        const guestVoice = pickGuestVoice(output.guestGender, personaTraits);
 
         await ctx.runMutation(internal.podcasts._savePodcastScript, {
           guideId: args.guideId,
