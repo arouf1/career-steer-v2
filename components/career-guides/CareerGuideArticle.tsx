@@ -248,6 +248,15 @@ export function CareerGuideArticle({
     shortLabel: string;
     longLabel: string;
   }> = [];
+  // When the personalized region is itself US/UK, skip the matching
+  // hardcoded fallback so we don't render the same country twice. The
+  // backend is supposed to leave `regional` null for US/UK profiles
+  // (see convex/careerGuidePersonalizations.ts), but this guard also
+  // catches legacy/dev rows generated before that contract was enforced.
+  const personalizedCC = personalizedRegional?.countryCode?.toUpperCase();
+  const personalizedIsUS = personalizedCC === "US" || personalizedCC === "USA";
+  const personalizedIsUK = personalizedCC === "UK" || personalizedCC === "GB";
+
   if (personalizedRegional) {
     availableRegions.push({
       key: "user",
@@ -257,10 +266,20 @@ export function CareerGuideArticle({
       longLabel: personalizedRegional.countryName,
     });
   }
-  availableRegions.push(
-    { key: "us", shortLabel: "US", longLabel: "United States" },
-    { key: "uk", shortLabel: "UK", longLabel: "United Kingdom" },
-  );
+  if (!personalizedIsUS) {
+    availableRegions.push({
+      key: "us",
+      shortLabel: "US",
+      longLabel: "United States",
+    });
+  }
+  if (!personalizedIsUK) {
+    availableRegions.push({
+      key: "uk",
+      shortLabel: "UK",
+      longLabel: "United Kingdom",
+    });
+  }
 
   // Citations: public US/UK fields come from `guide.citations`; the
   // personalized "user" region carries Exa-fetched citations on the

@@ -39,11 +39,15 @@ const LLM_TIMEOUT_MS = 60_000;
 // want a stuck call to swallow the whole personalization budget.
 const REGIONAL_EXA_TIMEOUT_MS = 25_000;
 
-// Heuristic check on profile.location to decide whether to fan out Exa for
-// region-specific salary / outlook / learning-path data. We skip US/UK
-// because the public guide content already covers them. Any other location
-// (Toronto, Berlin, Sydney, Singapore, Mumbai, anywhere) gets Exa-grounded.
-const looksLikeUsOrUk = (location: string): boolean => {
+// Returns true when we should NOT generate a per-user regional block:
+// either the user is in US/UK (already covered by the public guide
+// content) or location is missing entirely (no signal to ground on, so
+// any "personalized" region we'd emit would be a guess that can collide
+// with the hardcoded US/UK pills in the sidebar).
+const skipRegionalPersonalization = (
+  location: string | undefined | null,
+): boolean => {
+  if (!location || location.trim() === "") return true;
   const lower = location.toLowerCase();
   if (
     lower.includes("united states") ||
@@ -553,10 +557,10 @@ export const generate = internalAction({
     let regionalSources: RegionalExaSnippet[] = [];
     let regionalCitations: Citation[] = [];
     try {
-      if (profile.location && !looksLikeUsOrUk(profile.location)) {
+      if (!skipRegionalPersonalization(profile.location)) {
         const exa = await fetchRegionalExaSnippets(
           guide.title,
-          profile.location,
+          profile.location!,
           exaController.signal,
         );
         regionalSources = exa.snippets;
@@ -625,18 +629,23 @@ export const generate = internalAction({
         abortSignal: controller.signal,
       });
 
-      // Attach the Exa-fetched citations to the regional block when the
-      // model produced one. If regional is null we drop the citations on
-      // the floor — they'd have nowhere to render.
-      const contentWithCitations = output.regional
-        ? {
-            ...output,
-            regional: {
-              ...output.regional,
-              citations: regionalCitations,
-            },
-          }
-        : output;
+      // Enforce the schema contract at write time: when the user is in
+      // US/UK or has no location set, the regional block must be null —
+      // otherwise the sidebar renders a duplicate "UK" pill (the hardcoded
+      // fallback plus a personalized "user" pill the LLM happily emitted
+      // without grounding). Strip the model's regional output server-side
+      // so the contract is truthful regardless of prompt drift.
+      const stripRegional = skipRegionalPersonalization(profile.location);
+      const contentWithCitations =
+        !stripRegional && output.regional
+          ? {
+              ...output,
+              regional: {
+                ...output.regional,
+                citations: regionalCitations,
+              },
+            }
+          : { ...output, regional: null };
 
       await ctx.runMutation(
         internal.careerGuidePersonalizations._writeResult,
