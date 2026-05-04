@@ -986,4 +986,62 @@ export default defineSchema({
     confidence: v.number(),
     createdAt: v.number(),
   }).index("by_prefiltered_key", ["prefilteredKey"]),
+
+  // Realtime AI voice "deep dive" calls anchored to a career guide. Each row
+  // is one user-driven call session; the live transport is browser↔Gemini Live
+  // (WebSocket), so we only persist the transcript + metadata, never raw audio.
+  // After end-of-call, internal.voiceCalls.processCallAnalysis fills aiSummary
+  // and the three embeddings asynchronously.
+  voice_calls: defineTable({
+    userId: v.id("users"),
+    guideId: v.id("career_guides"),
+    // Client-generated UUID — opaque correlator for the live session, distinct
+    // from Convex's _id so the client can reference the row before the round
+    // trip resolves.
+    sessionId: v.string(),
+    title: v.string(),
+    voiceProvider: v.literal("gemini"),
+    // Gemini Live prebuilt voice name (e.g. "Aoede"). Stored so post-hoc
+    // playback / debugging can reproduce timbre.
+    voiceId: v.string(),
+    // Resolved Live model ID at session-start time (Live family iterates fast;
+    // capturing it lets us reason about behaviour drift across model
+    // generations).
+    model: v.string(),
+    authMode: v.union(v.literal("ephemeral"), v.literal("apiKey")),
+    status: v.union(
+      v.literal("active"),
+      v.literal("completed"),
+      v.literal("interrupted"),
+      v.literal("error"),
+    ),
+    messages: v.array(
+      v.object({
+        id: v.string(),
+        role: v.union(v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+        timestamp: v.number(),
+        transcriptConfidence: v.optional(v.number()),
+      }),
+    ),
+    totalDurationSeconds: v.number(),
+    // Structured post-call summary (shape lives in lib/ai/prompts/voiceAdviser
+    // — DeepDiveSummarySchema). v.any() because it's read-only data and the
+    // schema is owned by the prompt module rather than Convex.
+    aiSummary: v.optional(v.any()),
+    // Three semantic vectors over the call: full conversation, structured
+    // summary, and joined key topics. 1536-dim Gemini embeddings via OpenRouter
+    // — same model + dim as career_guide_embeddings so future Discover
+    // integrations can reason across both.
+    conversationEmbedding: v.optional(v.array(v.float64())),
+    summaryEmbedding: v.optional(v.array(v.float64())),
+    keyTopicsEmbedding: v.optional(v.array(v.float64())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_guide", ["guideId"])
+    .index("by_session", ["sessionId"])
+    .index("by_status", ["status"]),
 });

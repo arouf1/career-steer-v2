@@ -23,6 +23,7 @@ import type * as http from "../http.js";
 import type * as lib_dedup from "../lib/dedup.js";
 import type * as lib_discoverScoring from "../lib/discoverScoring.js";
 import type * as lib_discoverThresholds from "../lib/discoverThresholds.js";
+import type * as lib_env from "../lib/env.js";
 import type * as lib_imagePrompts from "../lib/imagePrompts.js";
 import type * as lib_imageReference from "../lib/imageReference.js";
 import type * as lib_normalize from "../lib/normalize.js";
@@ -39,6 +40,9 @@ import type * as profiles from "../profiles.js";
 import type * as titleCanonicalization from "../titleCanonicalization.js";
 import type * as users from "../users.js";
 import type * as usersAccount from "../usersAccount.js";
+import type * as voiceCallContext from "../voiceCallContext.js";
+import type * as voiceCalls from "../voiceCalls.js";
+import type * as voiceCallsNode from "../voiceCallsNode.js";
 
 import type {
   ApiFromModules,
@@ -62,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "lib/dedup": typeof lib_dedup;
   "lib/discoverScoring": typeof lib_discoverScoring;
   "lib/discoverThresholds": typeof lib_discoverThresholds;
+  "lib/env": typeof lib_env;
   "lib/imagePrompts": typeof lib_imagePrompts;
   "lib/imageReference": typeof lib_imageReference;
   "lib/normalize": typeof lib_normalize;
@@ -78,6 +83,9 @@ declare const fullApi: ApiFromModules<{
   titleCanonicalization: typeof titleCanonicalization;
   users: typeof users;
   usersAccount: typeof usersAccount;
+  voiceCallContext: typeof voiceCallContext;
+  voiceCalls: typeof voiceCalls;
+  voiceCallsNode: typeof voiceCallsNode;
 }>;
 
 /**
