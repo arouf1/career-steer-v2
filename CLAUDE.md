@@ -125,6 +125,7 @@ Before editing files in these areas, read the corresponding rule file:
 - Editing `proxy.ts` / auth flows → read `.claude/rules/auth-security.md` (Next 16 renamed `middleware.ts` → `proxy.ts`)
 - Editing AI features (`app/api/chat`, `lib/ai/**`) → read `.claude/rules/ai-sdk-patterns.md`
 - Editing `app/**` or `components/**` (visible UI) → read `.claude/rules/ui-quality.md`
+- Editing `vercel.json` / `vercel.ts` / `convex/crons.ts` / `convex/lib/env.ts` / `.github/workflows/**`, **or considering whether to enable a Convex preview backend for a branch** → read `.claude/rules/deployment-previews.md` (V1 burned paid-API credits via abandoned preview crons — opt-in policy + allow-list guard)
 
 ## Cross-feature impact: Career Compass (a.k.a. Discover internally)
 
@@ -146,6 +147,7 @@ If unsure whether a change has discover impact, treat it as having impact and pl
 - **`npx convex dev` without `--once` in scripts** — leaves daemons running.
 - **Pinning package versions from memory** — always `npm view <pkg> version` first.
 - **Premature wrap-ups** — see Operating Principle 1.
+- **Setting `CONVEX_DEPLOY_KEY` on Vercel Preview scope without a `--git-branch=` filter** — auto-spawns a fresh Convex preview backend per push, each running its own crons against paid APIs. See `.claude/rules/deployment-previews.md`.
 
 <!-- convex-ai-start -->
 This project uses [Convex](https://convex.dev) as its backend.
