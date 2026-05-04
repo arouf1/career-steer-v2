@@ -34,6 +34,7 @@ import {
   QUADRANT_HALF_HEIGHT,
   QUADRANT_HALF_WIDTH,
 } from "./lib/positionCard";
+import { CompassVoiceDock } from "@/components/career-compass/voice/CompassVoiceDock";
 
 // Logical canvas size in virtual pixels. Everything is positioned relative
 // to the centre (0, 0). The actual rendered size is computed by the resize
@@ -492,6 +493,18 @@ function DiscoverCanvasInner() {
           Closer to you means closer fit · Direction means kind of move
         </p>
       </div>
+
+      {/*
+        Voice assistant dock. Idle state is a small pill bottom-right
+        (paired-but-opposite from the zoom controls cluster bottom-left);
+        active state expands inline into a 480px dock with a frequency
+        waveform + status line + mute / end controls. Caption-free by
+        design — the canvas should remain the focal point. Snapshot is
+        guaranteed status="ready" at this point in the render tree, so we
+        always pass canvasReady={true}.
+      */}
+      <CompassVoiceDock canvasReady />
+
 
       {/*
         Focus mode — full-canvas overlay for one lane. Mounts when a lane

@@ -13,6 +13,7 @@ import { MobileCompass } from "./MobileCompass";
 import { MobileLanePager } from "./MobileLanePager";
 import { MobileLaneFeed, type LaneFeedHandle } from "./MobileLaneFeed";
 import { MobileCardSheet } from "./MobileCardSheet";
+import { CompassVoiceDock } from "@/components/career-compass/voice/CompassVoiceDock";
 
 export function MobileShell() {
   return (
@@ -300,6 +301,14 @@ function MobileShellInner() {
           setLastFlash({ guideId, kind: "dismiss", ts: Date.now() })
         }
       />
+
+      {/* Voice dock — sticky at the bottom on mobile. Only mounts once the
+          canvas is ready so the disabled state isn't briefly visible during
+          generation; the desktop variant uses a different prop because the
+          canvas is gated upstream there. */}
+      {compassState === "ready" && (
+        <CompassVoiceDock canvasReady variant="sticky" />
+      )}
     </div>
   );
 }

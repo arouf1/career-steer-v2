@@ -54,6 +54,14 @@ export interface PCMCaptureHandle {
   stop: () => void;
   audioContext: AudioContext;
   stream: MediaStream;
+  /**
+   * The MediaStreamAudioSourceNode wired up inside this capture. Exposed so
+   * downstream consumers (e.g. a waveform visualiser) can attach an
+   * AnalyserNode to the *same* mic source rather than spinning up a duplicate
+   * MediaStreamSource — using two source nodes for the same MediaStream
+   * works but doubles the realtime audio graph cost for no benefit.
+   */
+  sourceNode: MediaStreamAudioSourceNode;
 }
 
 /**
@@ -114,7 +122,7 @@ export async function startPCMCapture(
     audioContext.close().catch(() => {});
   };
 
-  return { stop, audioContext, stream };
+  return { stop, audioContext, stream, sourceNode: source };
 }
 
 // ── Playback (24 kHz PCM stream from Gemini) ──────────────────────────────
