@@ -61,6 +61,7 @@ export const _createSession = internalMutation({
     const now = Date.now();
     return await ctx.db.insert("voice_calls", {
       userId: args.userId,
+      surface: "guide",
       guideId: args.guideId,
       sessionId: args.sessionId,
       title: args.title,
@@ -193,7 +194,11 @@ export const getActiveSessionForUser = query({
     v.object({
       callId: v.id("voice_calls"),
       sessionId: v.string(),
-      guideId: v.id("career_guides"),
+      // Resolved discriminator: "guide" for legacy rows that pre-date the
+      // discriminator landing, "compass" for ambient calls.
+      surface: v.union(v.literal("guide"), v.literal("compass")),
+      guideId: v.optional(v.id("career_guides")),
+      canvasSnapshotId: v.optional(v.id("discover_canvases")),
       title: v.string(),
       createdAt: v.number(),
     }),
@@ -217,7 +222,9 @@ export const getActiveSessionForUser = query({
     return {
       callId: latest._id,
       sessionId: latest.sessionId,
+      surface: latest.surface ?? "guide",
       guideId: latest.guideId,
+      canvasSnapshotId: latest.canvasSnapshotId,
       title: latest.title,
       createdAt: latest.createdAt,
     };
@@ -233,7 +240,11 @@ export const _getCallById = internalQuery({
     v.object({
       _id: v.id("voice_calls"),
       userId: v.id("users"),
-      guideId: v.id("career_guides"),
+      // surface defaults to "guide" for legacy rows so the analysis pipeline
+      // can branch on it without an extra null-check.
+      surface: v.union(v.literal("guide"), v.literal("compass")),
+      guideId: v.optional(v.id("career_guides")),
+      canvasSnapshotId: v.optional(v.id("discover_canvases")),
       title: v.string(),
       status: v.union(
         v.literal("active"),
@@ -251,7 +262,9 @@ export const _getCallById = internalQuery({
     return {
       _id: row._id,
       userId: row.userId,
+      surface: row.surface ?? "guide",
       guideId: row.guideId,
+      canvasSnapshotId: row.canvasSnapshotId,
       title: row.title,
       status: row.status,
       messages: row.messages,

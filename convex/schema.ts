@@ -992,14 +992,33 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_prefiltered_key", ["prefilteredKey"]),
 
-  // Realtime AI voice "deep dive" calls anchored to a career guide. Each row
-  // is one user-driven call session; the live transport is browser↔Gemini Live
-  // (WebSocket), so we only persist the transcript + metadata, never raw audio.
-  // After end-of-call, internal.voiceCalls.processCallAnalysis fills aiSummary
+  // Realtime AI voice "deep dive" calls. Each row is one user-driven call
+  // session; the live transport is browser↔Gemini Live (WebSocket), so we
+  // only persist the transcript + metadata, never raw audio. After
+  // end-of-call, internal.voiceCallsNode.processCallAnalysis fills aiSummary
   // and the three embeddings asynchronously.
+  //
+  // Two surfaces share this table: per-guide deep-dive (modal on the article
+  // page) and per-canvas compass voice (ambient dock on /workspace/career-
+  // compass). `surface` discriminates; `guideId` and `canvasSnapshotId` are
+  // mutually exclusive — exactly one is set per row.
   voice_calls: defineTable({
     userId: v.id("users"),
-    guideId: v.id("career_guides"),
+    // Discriminator. Optional only because legacy rows (created before the
+    // compass surface shipped) lack it; readers should treat undefined as
+    // "guide". A future narrow PR can flip this to required after a backfill.
+    surface: v.optional(
+      v.union(v.literal("guide"), v.literal("compass")),
+    ),
+    // Set when surface === "guide". Optional so compass calls can omit it
+    // while keeping the by_guide index narrow (compass rows simply don't
+    // index here).
+    guideId: v.optional(v.id("career_guides")),
+    // Set when surface === "compass". Stamps the exact `discover_canvases`
+    // row the user was looking at when the call started, so the post-call
+    // summary can reference "the canvas you saw on May 4". The canvas itself
+    // may be regenerated later — this preserves the conversational anchor.
+    canvasSnapshotId: v.optional(v.id("discover_canvases")),
     // Client-generated UUID — opaque correlator for the live session, distinct
     // from Convex's _id so the client can reference the row before the round
     // trip resolves.
