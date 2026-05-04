@@ -44,9 +44,16 @@ Training-data knowledge of the AI SDK is **stale**. v6 changed return shapes, de
 - **Privacy.** Resume content / chat history are sensitive. The default ZDR routing handles this; never log raw resume text or chat history to Convex tables or external dashboards.
 - **Versions.** `npm view ai version`, `npm view @openrouter/ai-sdk-provider version`, `npm view exa-js version` before installing. The AI SDK ships frequently.
 
-## TTS is the one explicit exception
+## Gemini-direct is the narrow exception (TTS + realtime voice)
 
-Podcast audio for career guides is generated via Google's Gemini 3.1 Flash TTS through the `@google/genai` SDK directly, using `GEMINI_API_KEY`. OpenRouter does not expose a TTS surface, so a fourth modality cannot be funnelled through the same provider. Helper code lives in `convex/podcastsTts.ts` (Node runtime, `"use node"` directive) and `lib/podcast/`. Do **not** extend this exception to chat, embeddings, or rerank — those stay on OpenRouter so the rule remains "OpenRouter for everything except TTS, which is Gemini direct."
+Two modalities use the `@google/genai` SDK directly, with `GEMINI_API_KEY` as the credential. OpenRouter doesn't expose either surface, so they can't be funnelled through the unified provider — they share the same narrow lane:
+
+1. **Podcast TTS.** Gemini 3.1 Flash multi-speaker TTS for career-guide podcast audio. Helper code in `convex/podcastsTts.ts` (Node runtime, `"use node"` directive) and `lib/podcast/`.
+2. **Realtime "deep dive" voice call.** Gemini Live (`gemini-3.1-flash-live-preview` or its successor — verify the current Live model ID at the start of any voice work, the Live family iterates fast). Browser ↔ Google WebSocket transport with PCM in/out. Server side mints the ephemeral token via `client.authTokens.create()` (with API-key fallback per V1 commit 0689253). Helper code: `convex/voiceCallsNode.ts` (Node), `convex/voiceCalls.ts` (V8 — mutations / queries), `convex/voiceCallContext.ts` (pure helpers), `lib/ai/prompts/voiceAdviser.ts` (prompt + post-call summary schema), `lib/client/geminiAudio.ts` + `public/audio-worklet-processor.js` (browser PCM helpers).
+
+Do **not** extend this exception to chat, embeddings, or rerank — those stay on OpenRouter so the rule remains "OpenRouter for everything except TTS and realtime voice, which are Gemini-direct."
+
+Post-call analysis for voice (the structured summary + embeddings) **does** stay on OpenRouter — that's a normal `generateText` + `Output.object()` job, just like enrichment or podcast scripting. The Gemini-direct exception is only for the realtime modality itself, never for after-the-fact text generation.
 
 ## When in doubt
 
