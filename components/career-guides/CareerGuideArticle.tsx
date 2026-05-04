@@ -33,6 +33,7 @@ import { PersonalizationFitCard } from "./PersonalizationFitCard";
 import { PersonalizationSkillsCard } from "./PersonalizationSkillsCard";
 import { PeopleInFieldSection } from "./PeopleInFieldSection";
 import { LoopingFeather } from "./LoopingFeather";
+import { DeepDiveCallTile } from "./DeepDiveCallTile";
 
 export type Region = "us" | "uk";
 
@@ -314,6 +315,15 @@ export function CareerGuideArticle({
             publishedAt={guide.createdAt}
             updatedAt={guide.updatedAt}
             lead={c.whyConsider}
+            deepDiveCta={
+              <DeepDiveCallTile
+                guideId={guide._id}
+                guideTitle={guide.title}
+                guideSlug={guide.slug}
+                region={defaultRegion}
+                variant="byline-inline"
+              />
+            }
           />
 
           {showInlineCvCta && (
@@ -579,7 +589,20 @@ export function CareerGuideArticle({
 
         {/* Sidebar */}
         <aside className="lg:col-span-3">
-          <div className="lg:sticky lg:top-12">
+          <div className="flex flex-col gap-6 lg:sticky lg:top-12">
+            {/* Discrete deep-dive CTA. Anchors at the top of the right column
+                on desktop (visually aligns with the article's publish date in
+                the article column); flows to the bottom of the page on
+                mobile when the aside reflows below the article. The
+                byline-inline variant in <Byline> covers above-the-fold
+                discoverability on mobile. */}
+            <DeepDiveCallTile
+              guideId={guide._id}
+              guideTitle={guide.title}
+              guideSlug={guide.slug}
+              region={defaultRegion}
+              variant="aside"
+            />
             <Sidebar
               slug={guide.slug}
               regionKey={r.key}
@@ -604,11 +627,18 @@ function Byline({
   publishedAt,
   updatedAt,
   lead,
+  deepDiveCta,
 }: {
   title: string;
   publishedAt: number;
   updatedAt: number;
   lead?: string;
+  /**
+   * Optional discrete CTA (e.g. the deep-dive call tile) rendered inline
+   * beside the publish date. Mobile-targeted by design — the same feature
+   * surfaces in the right aside on desktop.
+   */
+  deepDiveCta?: React.ReactNode;
 }) {
   const formatDate = (ms: number) =>
     new Date(ms).toLocaleDateString("en-GB", {
@@ -651,6 +681,14 @@ function Byline({
                 {updatedFormatted}
               </time>
             </span>
+          </>
+        )}
+        {deepDiveCta && (
+          <>
+            <span aria-hidden className="text-mute/40 lg:hidden">
+              ·
+            </span>
+            {deepDiveCta}
           </>
         )}
       </div>
