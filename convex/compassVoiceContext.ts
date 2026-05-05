@@ -14,11 +14,18 @@ import type { VoiceAdviserPromptContext } from "../lib/ai/prompts/voiceAdviser";
 export { buildProfileSnapshotForVoice } from "./voiceCallContext";
 
 const MAX_CITATIONS_FOR_PROMPT = 12;
-// Compass cards budget for the prompt. The visible canvas may carry up to 80
-// cards per snapshot, but only the curated 6/lane × 4 lanes = 24 are worth
-// surfacing to the model; "extra" cards are filler from the density slider
-// and would burn tokens without changing answers.
-const PROMPT_CARDS_PER_LANE_LIMIT = 6;
+
+export type DensityLevel = "focused" | "explore" | "wide";
+
+// Per-lane visibility cap as a function of density. Mirrors DiscoverCanvas's
+// `perLaneCap = Math.floor(density / 3)` so the model sees exactly what the
+// user sees: focused = curated only (6/lane), explore = +6 extras (12/lane),
+// wide = +14 extras (20/lane).
+const DENSITY_TO_PER_LANE_CAP: Record<DensityLevel, number> = {
+  focused: 6,
+  explore: 12,
+  wide: 20,
+};
 
 type LaneKind = "linear" | "adjacent" | "earlier" | "transformational";
 type SlotKind = "strong" | "bridge" | "aspirational" | "extra";
@@ -45,6 +52,10 @@ const SLOT_LABEL: Record<SlotKind, string> = {
 };
 
 type CanvasCardForPrompt = {
+  // guideId is rendered into the prompt as a hidden [id:...] marker so the
+  // model can pass it back as a tool argument (saveCard, openCard, etc.).
+  // Branded `Id<"career_guides">` serialises as a plain string over the wire.
+  guideId: Id<"career_guides">;
   title: string;
   slug: string;
   slotKind: SlotKind;
@@ -83,24 +94,30 @@ type RawReaction = Doc<"discover_reactions">;
 type RawGuide = Doc<"career_guides">;
 
 /**
- * Project a hydrated canvas snapshot down to the curated cards we want to
- * inject into the system prompt. Skip "extra" cards — they're filler from
- * the density slider and don't influence the conversation, only the visual
- * canvas. Sort each lane by `wholeScore` desc so the model's first instinct
- * is to mention the strongest fits.
+ * Project a hydrated canvas snapshot down to the cards currently visible on
+ * the user's canvas at the given density. Mirrors DiscoverCanvas's filter:
+ * curated cards always pass; "extra" filler cards pass when their lane
+ * position is below the density-driven per-lane cap. Sort each lane by
+ * `wholeScore` desc so the model's first instinct is to mention the
+ * strongest fits.
  */
 export function buildCanvasSnapshotForVoice(args: {
   canvas: RawCanvas;
   guidesById: Map<Id<"career_guides">, RawGuide>;
   savedGuideIds: Set<Id<"career_guides">>;
+  density: DensityLevel;
 }): CanvasContextForVoice {
+  const perLaneCap = DENSITY_TO_PER_LANE_CAP[args.density];
   const lanes = args.canvas.lanes.map((lane) => {
-    const curated = lane.cards.filter((c) => c.slotKind !== "extra");
-    const enriched = curated
+    const visible = lane.cards.filter(
+      (c, i) => c.slotKind !== "extra" || i < perLaneCap,
+    );
+    const enriched = visible
       .map((c): CanvasCardForPrompt | null => {
         const g = args.guidesById.get(c.guideId);
         if (!g) return null;
         return {
+          guideId: c.guideId,
           title: g.title,
           slug: g.slug,
           slotKind: c.slotKind,
@@ -121,7 +138,7 @@ export function buildCanvasSnapshotForVoice(args: {
       kind: lane.kind,
       label: LANE_LABEL[lane.kind],
       description: LANE_DESCRIPTION[lane.kind],
-      cards: enriched.slice(0, PROMPT_CARDS_PER_LANE_LIMIT),
+      cards: enriched.slice(0, perLaneCap),
     };
   });
 

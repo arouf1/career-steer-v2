@@ -15,10 +15,17 @@
 import {
   internalMutation,
   internalQuery,
+  query,
   type QueryCtx,
 } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
+import {
+  buildCanvasSnapshotForVoice,
+  buildSavedGuideSet,
+  type DensityLevel,
+} from "./compassVoiceContext";
+import { formatCanvasBlock } from "../lib/ai/prompts/compassAdviser";
 
 // ── Internal: row creator (called from the Node action after token mint) ──
 
@@ -82,6 +89,7 @@ export const _gatherCompassContext = internalQuery({
       canvas: v.any(),
       guides: v.any(),
       reactions: v.any(),
+      dismissedGuides: v.any(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -114,6 +122,7 @@ export const _gatherCompassContext = internalQuery({
         canvas: null,
         guides: [],
         reactions: [],
+        dismissedGuides: [],
       };
     }
 
@@ -140,7 +149,32 @@ export const _gatherCompassContext = internalQuery({
       .withIndex("by_user_and_reaction", (q) => q.eq("userId", user._id))
       .collect();
 
-    return { user, profile, enrichment, canvas, guides, reactions };
+    // Dismissed guides — off-canvas, so their docs weren't loaded above.
+    // Fetch the most recent 10 so the voice prompt can address them by id
+    // for the undismissCard recovery path. Bounded so prompt size stays
+    // sane even for users who dismiss aggressively.
+    const recentDismissed = reactions
+      .filter((r) => r.reaction === "dismissed")
+      .sort((a, b) => b.reactedAt - a.reactedAt)
+      .slice(0, 10);
+    const dismissedGuides: Array<{
+      guideId: Id<"career_guides">;
+      title: string;
+    }> = [];
+    for (const r of recentDismissed) {
+      const g = await ctx.db.get(r.guideId);
+      if (g) dismissedGuides.push({ guideId: r.guideId, title: g.title });
+    }
+
+    return {
+      user,
+      profile,
+      enrichment,
+      canvas,
+      guides,
+      reactions,
+      dismissedGuides,
+    };
   },
 });
 
@@ -155,3 +189,79 @@ async function resolveUser(
     )
     .unique();
 }
+
+// ── Public query: live canvas-state text for in-call voice updates ────────
+
+/**
+ * Reactive snapshot of "what's on the user's canvas right now," formatted
+ * with the same shape the system prompt uses (lanes + cards + [id:…] +
+ * [SAVED] flags). The voice hook subscribes during a live call and pushes
+ * any change into the running session via `clientContent` so the model
+ * stays in sync with what the user is actually looking at — including
+ * extras the density slider exposes and reactions toggled in the UI.
+ *
+ * Density is a query argument (rather than read from somewhere on the
+ * server) because density is purely client-side state. Different density →
+ * different visible-card set → different formatted text.
+ */
+export const getLiveCanvasContext = query({
+  args: {
+    densityLevel: v.union(
+      v.literal("focused"),
+      v.literal("explore"),
+      v.literal("wide"),
+    ),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      text: v.string(),
+      densityLevel: v.string(),
+      savedCount: v.number(),
+      generatedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await resolveUser(ctx, identity.tokenIdentifier);
+    if (!user) return null;
+
+    const canvas = await ctx.db
+      .query("discover_canvases")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (!canvas || canvas.status !== "ready") return null;
+
+    const guideIds = new Set<Id<"career_guides">>();
+    for (const lane of canvas.lanes) {
+      for (const card of lane.cards) guideIds.add(card.guideId);
+    }
+    const guidesById = new Map<Id<"career_guides">, Doc<"career_guides">>();
+    for (const guideId of guideIds) {
+      const g = await ctx.db.get(guideId);
+      if (g) guidesById.set(guideId, g);
+    }
+
+    const reactions = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_reaction", (q) => q.eq("userId", user._id))
+      .collect();
+    const savedGuideIds = buildSavedGuideSet(reactions);
+
+    const canvasCtx = buildCanvasSnapshotForVoice({
+      canvas,
+      guidesById,
+      savedGuideIds,
+      density: args.densityLevel as DensityLevel,
+    });
+
+    return {
+      text: formatCanvasBlock(canvasCtx),
+      densityLevel: args.densityLevel,
+      savedCount: canvasCtx.savedCount,
+      generatedAt: canvasCtx.generatedAt,
+    };
+  },
+});

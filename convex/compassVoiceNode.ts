@@ -26,7 +26,10 @@ import {
   buildSavedGuideSet,
   aggregateCompassCitations,
 } from "./compassVoiceContext";
-import { compassAdviserPrompt } from "../lib/ai/prompts/compassAdviser";
+import {
+  compassAdviserPrompt,
+  compassAdviserTools,
+} from "../lib/ai/prompts/compassAdviser";
 
 // Same Gemini Live model + voice defaults as the per-guide path. If we ever
 // rotate one, doing the swap in both files at once keeps the surfaces in
@@ -38,9 +41,39 @@ const TOKEN_USES = 1;
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 const NEW_SESSION_TTL_MS = 2 * 60 * 1000;
 
+const DENSITY_VALIDATOR = v.union(
+  v.literal("focused"),
+  v.literal("explore"),
+  v.literal("wide"),
+);
+
+const SURFACE_VALIDATOR = v.union(
+  v.literal("desktop"),
+  v.literal("mobile"),
+);
+
+const LANE_VALIDATOR = v.union(
+  v.literal("linear"),
+  v.literal("adjacent"),
+  v.literal("earlier"),
+  v.literal("transformational"),
+);
+
 export const mintCompassSession = action({
   args: {
     voiceId: v.optional(v.string()),
+    // Current density on the user's canvas at the moment of call start.
+    // Determines which cards (curated only / +extras / all visible) get
+    // injected into the system prompt. Defaults to "focused" if absent so
+    // older clients still mint successfully.
+    densityLevel: v.optional(DENSITY_VALIDATOR),
+    // Device surface — determines which tools get declared (setDensity is
+    // desktop-only, goToLane mobile-only) and how the prompt frames
+    // navigation verbs. Defaults to "desktop".
+    surface: v.optional(SURFACE_VALIDATOR),
+    // Mobile only — which lane is currently in the pager view. Updated
+    // mid-call via clientContent pushes from the hook when the user swipes.
+    activeLane: v.optional(LANE_VALIDATOR),
   },
   returns: v.union(
     v.object({
@@ -55,6 +88,10 @@ export const mintCompassSession = action({
         model: v.string(),
         voice: v.string(),
         systemInstruction: v.string(),
+        // Plain JSON `Tool[]` array, shipped verbatim into Gemini Live's
+        // setup message. Validated by the SDK on Google's side; we don't
+        // re-validate the shape here.
+        tools: v.array(v.any()),
       }),
     }),
     v.object({
@@ -79,6 +116,7 @@ export const mintCompassSession = action({
           model: string;
           voice: string;
           systemInstruction: string;
+          tools: unknown[];
         };
       }
     | { ok: false; reason: "anonymous" | "canvas-not-ready" | "no-api-key" }
@@ -108,10 +146,12 @@ export const mintCompassSession = action({
     const guidesById = new Map(bundle.guides.map((g) => [g._id, g]));
     const savedGuideIds = buildSavedGuideSet(bundle.reactions);
 
+    const density = args.densityLevel ?? "focused";
     const canvasCtx = buildCanvasSnapshotForVoice({
       canvas: bundle.canvas,
       guidesById,
       savedGuideIds,
+      density,
     });
 
     const profileCtx = buildProfileSnapshotForVoice({
@@ -124,12 +164,28 @@ export const mintCompassSession = action({
 
     const pivots = bundle.enrichment?.pivots ?? [];
 
+    const surface = args.surface ?? "desktop";
+    const dismissed = (
+      bundle.dismissedGuides as Array<{
+        guideId: Id<"career_guides">;
+        title: string;
+      }> | undefined
+    )?.map((d) => ({ guideId: d.guideId as string, title: d.title })) ?? [];
     const systemInstruction = compassAdviserPrompt({
       canvas: canvasCtx,
       profile: profileCtx,
       pivots,
       citations,
+      densityLevel: density,
+      surface,
+      activeLane: args.activeLane,
+      dismissed,
     });
+
+    // Resolve voice up-front — needed by both the token-mint constraints
+    // (so the constrained WS endpoint pins the right voice) and the
+    // sessionConfig the client echoes into the setup message.
+    const voiceId = args.voiceId ?? DEFAULT_VOICE;
 
     // Mint credentials — try ephemeral first, fall back to raw API key per
     // V1 commit 0689253. Gemini's auth_tokens endpoint occasionally flakes;
@@ -149,6 +205,21 @@ export const mintCompassSession = action({
           newSessionExpireTime: new Date(
             Date.now() + NEW_SESSION_TTL_MS,
           ).toISOString(),
+          // Lock model + voice at token mint time. The ephemeral WS endpoint
+          // (BidiGenerateContentConstrained) ignores anything in the client
+          // setup message that isn't bound here — without this lock Gemini
+          // picks a fallback voice (which appears to rotate) instead of
+          // honouring our prebuiltVoiceConfig.
+          liveConnectConstraints: {
+            model: LIVE_MODEL,
+            config: {
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: voiceId },
+                },
+              },
+            },
+          },
         },
       });
       if (!token.name) throw new Error("empty_token_name");
@@ -163,7 +234,6 @@ export const mintCompassSession = action({
       authMode = "apiKey";
     }
 
-    const voiceId = args.voiceId ?? DEFAULT_VOICE;
     const sessionId = crypto.randomUUID();
     const title = "Talking through your compass";
 
@@ -189,6 +259,7 @@ export const mintCompassSession = action({
         model: LIVE_MODEL,
         voice: voiceId,
         systemInstruction,
+        tools: compassAdviserTools(surface),
       },
     };
   },

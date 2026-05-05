@@ -158,6 +158,13 @@ export const mintSession = action({
       citations,
     });
 
+    // Resolve voice up-front — the token-mint constraints below need it so
+    // the constrained WS endpoint pins the right voice. Without locking
+    // voice at mint, Gemini ignores the prebuiltVoiceConfig in the client
+    // setup message (constrained mode honours only fields bound here) and
+    // falls back to a rotating default.
+    const voiceId = args.voiceId ?? DEFAULT_VOICE;
+
     // Mint the credential. Try ephemeral first (preferred — single-use,
     // short-lived, scoped to this session); fall back to API key if Google's
     // auth_tokens endpoint returns an error. V1 commit 0689253 documented
@@ -177,6 +184,16 @@ export const mintSession = action({
           newSessionExpireTime: new Date(
             Date.now() + NEW_SESSION_TTL_MS,
           ).toISOString(),
+          liveConnectConstraints: {
+            model: LIVE_MODEL,
+            config: {
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: voiceId },
+                },
+              },
+            },
+          },
         },
       });
       if (!token.name) throw new Error("empty_token_name");
@@ -190,8 +207,6 @@ export const mintSession = action({
       credential = { type: "api_key", value: apiKey };
       authMode = "apiKey";
     }
-
-    const voiceId = args.voiceId ?? DEFAULT_VOICE;
     const sessionId = crypto.randomUUID();
     const title = `Talking through: ${bundle.guide.title}`;
 

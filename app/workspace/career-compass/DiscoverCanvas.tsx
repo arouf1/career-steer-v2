@@ -9,10 +9,12 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  RotateCcw,
   SlidersHorizontal,
 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import {
   Popover,
   PopoverContent,
@@ -26,7 +28,14 @@ import {
   type GuideCardData,
 } from "./CanvasNodes";
 import { CardPreviewSheet, type CardPreviewData } from "./CardPreviewSheet";
-import { DensitySlider, type Density } from "./DensitySlider";
+import {
+  DensitySlider,
+  DENSITY_LEVEL_TO_VALUE,
+  DENSITY_STORAGE_KEY,
+  DENSITY_VALUE_TO_LEVEL,
+  type Density,
+  type DensityLevel,
+} from "./DensitySlider";
 import { DiscoverFailed, DiscoverGenerating } from "./DiscoverEmptyState";
 import { FocusedLaneView } from "./FocusedLaneView";
 import {
@@ -35,6 +44,7 @@ import {
   QUADRANT_HALF_WIDTH,
 } from "./lib/positionCard";
 import { CompassVoiceDock } from "@/components/career-compass/voice/CompassVoiceDock";
+import type { CompassToolCallbacks } from "@/components/career-compass/voice/useCompassVoiceCall";
 
 // Logical canvas size in virtual pixels. Everything is positioned relative
 // to the centre (0, 0). The actual rendered size is computed by the resize
@@ -95,8 +105,31 @@ function DiscoverCanvasInner() {
   // render and bust the `reactionByGuide` memo. Handle the null case below.
   const reactions = useQuery(api.discover.querySavedGuides);
   const manualRefresh = useMutation(api.discover.manualRefresh);
+  const saveGuide = useMutation(api.discover.saveGuide);
+  const removeSave = useMutation(api.discover.removeSave);
+  const dismissGuide = useMutation(api.discover.dismissGuide);
+  const undismissGuide = useMutation(api.discover.undismissGuide);
+  const dismissedGuides = useQuery(api.discover.queryDismissedGuides);
 
-  const [density, setDensity] = useState<Density>(18);
+  const [density, setDensityState] = useState<Density>(18);
+  // Hydrate density from localStorage on mount and write through on every
+  // change. The slider used to own this; lifted here so voice tool calls
+  // share the same source of truth and the slider visual follows them.
+  useEffect(() => {
+    const stored = localStorage.getItem(DENSITY_STORAGE_KEY);
+    if (!stored) return;
+    const n = Number(stored);
+    if (n === 18 || n === 36 || n === 60) setDensityState(n);
+  }, []);
+  const setDensity = useCallback((next: Density) => {
+    setDensityState(next);
+    try {
+      localStorage.setItem(DENSITY_STORAGE_KEY, String(next));
+    } catch {
+      // ignore quota / privacy-mode errors
+    }
+  }, []);
+
   const [previewCard, setPreviewCard] = useState<CardPreviewData | null>(null);
   const [zoom, setZoom] = useState(1);
   const [focusedLane, setFocusedLane] = useState<LaneKey | null>(null);
@@ -219,6 +252,174 @@ function DiscoverCanvasInner() {
   const handleRefresh = useCallback(() => {
     void manualRefresh({});
   }, [manualRefresh]);
+
+  // ── Voice tool callbacks ────────────────────────────────────────────────
+  // The compass voice adviser can act on the canvas — open a card, save /
+  // unsave, dismiss, refresh — through these callbacks. Each returns
+  // { ok, message } so the model can speak the result. We resolve guideId
+  // back to a card via the snapshot so we can use the title in the message
+  // and reject ids that aren't on the user's current canvas.
+  const findCardByGuideId = useCallback(
+    (guideId: string) => {
+      if (!snapshot || snapshot.status !== "ready") return null;
+      for (const lane of snapshot.lanes) {
+        for (const c of lane.cards) {
+          if ((c.guideId as string) === guideId) return c;
+        }
+      }
+      return null;
+    },
+    [snapshot],
+  );
+
+  const onOpenCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      setPreviewCard(card as unknown as CardPreviewData);
+      return { ok: true as const, message: `Opened ${card.title}.` };
+    },
+    [findCardByGuideId],
+  );
+
+  const onCloseCard = useCallback(async () => {
+    setPreviewCard(null);
+    return { ok: true as const, message: "Closed the card." };
+  }, []);
+
+  const onSaveCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      await saveGuide({ guideId: guideId as Id<"career_guides"> });
+      return { ok: true as const, message: `Saved ${card.title}.` };
+    },
+    [findCardByGuideId, saveGuide],
+  );
+
+  const onUnsaveCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      await removeSave({ guideId: guideId as Id<"career_guides"> });
+      return {
+        ok: true as const,
+        message: `Removed ${card.title} from your saved list.`,
+      };
+    },
+    [findCardByGuideId, removeSave],
+  );
+
+  const onDismissCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      await dismissGuide({ guideId: guideId as Id<"career_guides"> });
+      return {
+        ok: true as const,
+        message: `Dismissed ${card.title}. A replacement will slot in shortly.`,
+      };
+    },
+    [findCardByGuideId, dismissGuide],
+  );
+
+  const onUndismissCard = useCallback(
+    async (guideId: string) => {
+      const dismissed = dismissedGuides?.find(
+        (d) => (d.guideId as string) === guideId,
+      );
+      if (!dismissed) {
+        return {
+          ok: false as const,
+          message: "That guide isn't in the recently-dismissed list.",
+        };
+      }
+      await undismissGuide({ guideId: guideId as Id<"career_guides"> });
+      return {
+        ok: true as const,
+        message: `Restored ${dismissed.title}. It'll reappear after the canvas regenerates.`,
+      };
+    },
+    [dismissedGuides, undismissGuide],
+  );
+
+  const onRefreshCanvas = useCallback(async () => {
+    await manualRefresh({});
+    return {
+      ok: true as const,
+      message: "Refresh queued — give it about thirty seconds.",
+    };
+  }, [manualRefresh]);
+
+  const onSetDensity = useCallback(
+    async (level: string) => {
+      if (level !== "focused" && level !== "explore" && level !== "wide") {
+        return {
+          ok: false as const,
+          message: `Density must be focused, explore, or wide (got ${level}).`,
+        };
+      }
+      const target = DENSITY_LEVEL_TO_VALUE[level as DensityLevel];
+      if (target === density) {
+        return {
+          ok: true as const,
+          message: `Already at ${level} — no change.`,
+        };
+      }
+      setDensity(target);
+      return {
+        ok: true as const,
+        message: `Density set to ${level}.`,
+      };
+    },
+    [density, setDensity],
+  );
+
+  // Memoise the bundle so the dock's tools-ref effect only fires when one of
+  // the callback identities actually changes (i.e. when snapshot tick alters
+  // findCardByGuideId).
+  const voiceTools = useMemo<CompassToolCallbacks>(
+    () => ({
+      onOpenCard,
+      onCloseCard,
+      onSaveCard,
+      onUnsaveCard,
+      onDismissCard,
+      onUndismissCard,
+      onRefreshCanvas,
+      onSetDensity,
+    }),
+    [
+      onOpenCard,
+      onCloseCard,
+      onSaveCard,
+      onUnsaveCard,
+      onDismissCard,
+      onUndismissCard,
+      onRefreshCanvas,
+      onSetDensity,
+    ],
+  );
 
   if (snapshot === undefined) return <DiscoverGenerating initials={initials} />;
   if (snapshot === null || snapshot.status === "generating")
@@ -452,9 +653,48 @@ function DiscoverCanvasInner() {
           <PopoverContent
             side="right"
             align="end"
-            className="w-64 rounded-md border border-hairline bg-paper p-4 text-ink shadow-md"
+            className="w-72 rounded-md border border-hairline bg-paper p-4 text-ink shadow-md"
           >
-            <DensitySlider onChange={setDensity} />
+            <div className="flex flex-col gap-4">
+              <DensitySlider value={density} onChange={setDensity} />
+              {dismissedGuides && dismissedGuides.length > 0 && (
+                <>
+                  <div aria-hidden="true" className="h-px w-full bg-hairline" />
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
+                      Recently dismissed
+                    </span>
+                    <ul className="-mx-1 max-h-56 overflow-y-auto">
+                      {dismissedGuides.map((g) => (
+                        <li
+                          key={g.guideId}
+                          className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-paper-raised"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">
+                            {g.title}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void undismissGuide({ guideId: g.guideId })
+                            }
+                            aria-label={`Restore ${g.title}`}
+                            title="Restore to canvas"
+                            className="flex size-7 shrink-0 items-center justify-center rounded-md text-mute transition-colors hover:bg-ink hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+                          >
+                            <RotateCcw
+                              className="size-3.5"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
         <div aria-hidden="true" className="my-1 h-px w-5 bg-hairline" />
@@ -503,7 +743,13 @@ function DiscoverCanvasInner() {
         guaranteed status="ready" at this point in the render tree, so we
         always pass canvasReady={true}.
       */}
-      <CompassVoiceDock canvasReady />
+      <CompassVoiceDock
+        canvasReady
+        tools={voiceTools}
+        sheetOpen={previewCard !== null}
+        densityLevel={DENSITY_VALUE_TO_LEVEL[density]}
+        surface="desktop"
+      />
 
 
       {/*

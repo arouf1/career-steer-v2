@@ -6,6 +6,7 @@ import { useMotionValue, useReducedMotion } from "motion/react";
 import { RefreshCw } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { COMPASS_LANE_ORDER } from "../lib/mobileCompassGeometry";
 import type { CompassCard, CompassLane } from "../lib/mobileCompassTypes";
@@ -14,6 +15,7 @@ import { MobileLanePager } from "./MobileLanePager";
 import { MobileLaneFeed, type LaneFeedHandle } from "./MobileLaneFeed";
 import { MobileCardSheet } from "./MobileCardSheet";
 import { CompassVoiceDock } from "@/components/career-compass/voice/CompassVoiceDock";
+import type { CompassToolCallbacks } from "@/components/career-compass/voice/useCompassVoiceCall";
 
 export function MobileShell() {
   return (
@@ -30,6 +32,11 @@ function MobileShellInner() {
   // render and bust the `reactionByGuide` memo. Handle null below.
   const reactions = useQuery(api.discover.querySavedGuides);
   const manualRefresh = useMutation(api.discover.manualRefresh);
+  const saveGuide = useMutation(api.discover.saveGuide);
+  const removeSave = useMutation(api.discover.removeSave);
+  const dismissGuide = useMutation(api.discover.dismissGuide);
+  const undismissGuide = useMutation(api.discover.undismissGuide);
+  const dismissedGuides = useQuery(api.discover.queryDismissedGuides);
 
   const prefersReducedMotion = useReducedMotion() ?? false;
 
@@ -198,6 +205,171 @@ function MobileShellInner() {
     setActiveIndex(idx);
   }, []);
 
+  // ── Voice tool callbacks ───────────────────────────────────────────────
+  // Mirror DiscoverCanvas's wiring so the voice adviser can act on the
+  // mobile canvas the same way (open / close / save / unsave / dismiss /
+  // refresh), plus the mobile-specific `goToLane` for the pager. Density
+  // intentionally isn't here — there's no slider on mobile, the server's
+  // tool list excludes setDensity for surface="mobile".
+  const findCardByGuideId = useCallback(
+    (guideId: string): CompassCard | null => {
+      for (const c of compassCards) {
+        if ((c.guideId as string) === guideId) return c;
+      }
+      return null;
+    },
+    [compassCards],
+  );
+
+  const onOpenCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      setPreviewCard(card);
+      return { ok: true as const, message: `Opened ${card.title}.` };
+    },
+    [findCardByGuideId],
+  );
+
+  const onCloseCard = useCallback(async () => {
+    setPreviewCard(null);
+    return { ok: true as const, message: "Closed the card." };
+  }, []);
+
+  const onSaveCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      await saveGuide({ guideId: guideId as Id<"career_guides"> });
+      setLastFlash({ guideId, kind: "save", ts: Date.now() });
+      return { ok: true as const, message: `Saved ${card.title}.` };
+    },
+    [findCardByGuideId, saveGuide],
+  );
+
+  const onUnsaveCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      await removeSave({ guideId: guideId as Id<"career_guides"> });
+      return {
+        ok: true as const,
+        message: `Removed ${card.title} from your saved list.`,
+      };
+    },
+    [findCardByGuideId, removeSave],
+  );
+
+  const onDismissCard = useCallback(
+    async (guideId: string) => {
+      const card = findCardByGuideId(guideId);
+      if (!card) {
+        return {
+          ok: false as const,
+          message: "That card isn't on your current canvas.",
+        };
+      }
+      await dismissGuide({ guideId: guideId as Id<"career_guides"> });
+      setLastFlash({ guideId, kind: "dismiss", ts: Date.now() });
+      return {
+        ok: true as const,
+        message: `Dismissed ${card.title}. A replacement will slot in shortly.`,
+      };
+    },
+    [findCardByGuideId, dismissGuide],
+  );
+
+  const onUndismissCard = useCallback(
+    async (guideId: string) => {
+      const dismissed = dismissedGuides?.find(
+        (d) => (d.guideId as string) === guideId,
+      );
+      if (!dismissed) {
+        return {
+          ok: false as const,
+          message: "That guide isn't in the recently-dismissed list.",
+        };
+      }
+      await undismissGuide({ guideId: guideId as Id<"career_guides"> });
+      return {
+        ok: true as const,
+        message: `Restored ${dismissed.title}. It'll reappear after the canvas regenerates.`,
+      };
+    },
+    [dismissedGuides, undismissGuide],
+  );
+
+  const onRefreshCanvas = useCallback(async () => {
+    await manualRefresh({});
+    return {
+      ok: true as const,
+      message: "Refresh queued — give it about thirty seconds.",
+    };
+  }, [manualRefresh]);
+
+  const onGoToLane = useCallback(
+    async (lane: string) => {
+      const idx = COMPASS_LANE_ORDER.indexOf(lane as CompassLane);
+      if (idx === -1) {
+        return {
+          ok: false as const,
+          message: `Unknown lane: ${lane}.`,
+        };
+      }
+      if (idx === activeIndex) {
+        return {
+          ok: true as const,
+          message: `Already on the ${lane} lane.`,
+        };
+      }
+      setActiveIndex(idx);
+      triggerHaptic(prefersReducedMotion);
+      return {
+        ok: true as const,
+        message: `Switched to the ${lane} lane.`,
+      };
+    },
+    [activeIndex, prefersReducedMotion],
+  );
+
+  const voiceTools = useMemo<CompassToolCallbacks>(
+    () => ({
+      onOpenCard,
+      onCloseCard,
+      onSaveCard,
+      onUnsaveCard,
+      onDismissCard,
+      onUndismissCard,
+      onRefreshCanvas,
+      onGoToLane,
+    }),
+    [
+      onOpenCard,
+      onCloseCard,
+      onSaveCard,
+      onUnsaveCard,
+      onDismissCard,
+      onUndismissCard,
+      onRefreshCanvas,
+      onGoToLane,
+    ],
+  );
+
   return (
     <div className="relative flex h-full flex-col bg-paper">
       {/* Discrete hint — the canvas reveals more on a larger screen. Kept
@@ -225,14 +397,24 @@ function MobileShellInner() {
         />
 
         {compassState === "ready" && (
-          <button
-            type="button"
-            onClick={handleRefresh}
-            aria-label="Refresh career landscape"
-            className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full text-mute transition-colors hover:bg-paper-raised hover:text-ink active:bg-paper-raised"
-          >
-            <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
-          </button>
+          <div className="absolute right-3 top-3 flex items-center gap-1.5">
+            <CompassVoiceDock
+              canvasReady
+              variant="header-trigger"
+              tools={voiceTools}
+              surface="mobile"
+              activeLane={activeLane}
+              sheetOpen={previewCard !== null}
+            />
+            <button
+              type="button"
+              onClick={handleRefresh}
+              aria-label="Refresh career landscape"
+              className="flex size-9 items-center justify-center rounded-full text-mute transition-colors hover:bg-paper-raised hover:text-ink active:bg-paper-raised"
+            >
+              <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
         )}
 
         {compassState === "failed" && (
@@ -302,13 +484,10 @@ function MobileShellInner() {
         }
       />
 
-      {/* Voice dock — sticky at the bottom on mobile. Only mounts once the
-          canvas is ready so the disabled state isn't briefly visible during
-          generation; the desktop variant uses a different prop because the
-          canvas is gated upstream there. */}
-      {compassState === "ready" && (
-        <CompassVoiceDock canvasReady variant="sticky" />
-      )}
+      {/* Voice trigger lives in the header now (next to the refresh button)
+          via variant="header-trigger". When a call is active that variant
+          teleports the dock body to a fixed-bottom strip so the waveform
+          doesn't crowd the header. */}
     </div>
   );
 }

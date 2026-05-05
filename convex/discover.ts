@@ -1581,6 +1581,99 @@ export const removeSave = mutation({
 });
 
 /**
+ * Undo a dismissal — used by the "Recently dismissed" recovery affordance
+ * (and the voice undismissCard tool). Deletes the dismissed reaction so
+ * the guide is eligible for the next snapshot regen, then schedules the
+ * regen so the card actually reappears without the user also clicking
+ * refresh. Mirrors the pattern dismissGuide uses on the way out.
+ *
+ * Symmetrically deliberate no-op when the reaction is "saved" — restoring
+ * a saved guide is meaningless, and silently no-op'ing here protects
+ * against UI bugs that would call into this from the wrong path.
+ */
+export const undismissGuide = mutation({
+  args: { guideId: v.id("career_guides") },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const existing = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_guide", (q) =>
+        q.eq("userId", userId).eq("guideId", args.guideId),
+      )
+      .unique();
+    if (!existing || existing.reaction !== "dismissed") return;
+    await ctx.db.delete(existing._id);
+    await ctx.scheduler.runAfter(
+      0,
+      internal.discover.scheduleSnapshotRegeneration,
+      {
+        userId,
+        dedupKey: `undismiss:${args.guideId}`,
+        forceFreshReasons: false,
+      },
+    );
+  },
+});
+
+/**
+ * List the user's dismissed guides — title + slug + when it was dismissed
+ * — so the UI can offer a "recently dismissed" recovery view and the voice
+ * adviser can address them by name. Sorted most-recent-first; bounded at
+ * 20 to keep prompt and popover sizes reasonable. Older dismisses still
+ * exist in the table; we just don't surface them.
+ */
+export const queryDismissedGuides = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      guideId: v.id("career_guides"),
+      title: v.string(),
+      slug: v.string(),
+      reactedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!user) return [];
+
+    const reactions = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_reaction", (q) =>
+        q.eq("userId", user._id).eq("reaction", "dismissed"),
+      )
+      .collect();
+
+    reactions.sort((a, b) => b.reactedAt - a.reactedAt);
+    const recent = reactions.slice(0, 20);
+
+    const out: Array<{
+      guideId: Id<"career_guides">;
+      title: string;
+      slug: string;
+      reactedAt: number;
+    }> = [];
+    for (const r of recent) {
+      const g = await ctx.db.get(r.guideId);
+      if (!g) continue;
+      out.push({
+        guideId: r.guideId,
+        title: g.title,
+        slug: g.slug,
+        reactedAt: r.reactedAt,
+      });
+    }
+    return out;
+  },
+});
+
+/**
  * User-initiated discover refresh (Task 3.4).
  *
  * Invoked by the canvas UI when the user taps "refresh." Schedules a

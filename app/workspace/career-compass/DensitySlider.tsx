@@ -1,11 +1,13 @@
 // app/workspace/career-compass/DensitySlider.tsx
 "use client";
-import { useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 
-const STORAGE_KEY = "discover.density";
-const STOPS = [18, 36, 60] as const;
-export type Density = (typeof STOPS)[number];
+export const DENSITY_STOPS = [18, 36, 60] as const;
+export type Density = (typeof DENSITY_STOPS)[number];
+
+export const DENSITY_STORAGE_KEY = "discover.density";
+
+export type DensityLevel = "focused" | "explore" | "wide";
 
 const STOP_LABELS: Record<Density, string> = {
   18: "Focused",
@@ -13,24 +15,31 @@ const STOP_LABELS: Record<Density, string> = {
   60: "Wide",
 };
 
+export const DENSITY_LEVEL_TO_VALUE: Record<DensityLevel, Density> = {
+  focused: 18,
+  explore: 36,
+  wide: 60,
+};
+
+export const DENSITY_VALUE_TO_LEVEL: Record<Density, DensityLevel> = {
+  18: "focused",
+  36: "explore",
+  60: "wide",
+};
+
+/**
+ * Controlled — the parent owns density state (and persistence), the slider
+ * is purely presentational. Lets voice and pointer share one source of
+ * truth: when voice flips density, the slider visual follows and vice
+ * versa.
+ */
 export function DensitySlider({
+  value,
   onChange,
 }: {
+  value: Density;
   onChange: (density: Density) => void;
 }) {
-  const [value, setValue] = useState<Density>(18);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const n = Number(stored);
-      if (STOPS.includes(n as Density)) {
-        setValue(n as Density);
-        onChange(n as Density);
-      }
-    }
-  }, [onChange]);
-
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
@@ -43,14 +52,11 @@ export function DensitySlider({
       </div>
       <Slider
         min={0}
-        max={STOPS.length - 1}
+        max={DENSITY_STOPS.length - 1}
         step={1}
-        value={[STOPS.indexOf(value)]}
+        value={[DENSITY_STOPS.indexOf(value)]}
         onValueChange={([idx]) => {
-          const next = STOPS[idx] as Density;
-          setValue(next);
-          localStorage.setItem(STORAGE_KEY, String(next));
-          onChange(next);
+          onChange(DENSITY_STOPS[idx] as Density);
         }}
         className="w-full"
       />
