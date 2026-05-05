@@ -118,11 +118,11 @@ export const synthesize = internalAction({
                 ],
               },
             },
-            // Gemini's TTS docs use temperature 2.0 in their multi-speaker
-            // examples — higher creativity gives more expressive delivery
-            // (laugh tone variation, natural pauses) which is what we want
-            // for a podcast feel.
-            temperature: 2.0,
+            // 1.5 — stepped down from the docs' example value of 2.0
+            // because max creativity made Alice (the host) drift in pitch
+            // and timbre between episodes. Still well above the 1.0 default
+            // so the delivery keeps its podcast-y energy.
+            temperature: 1.5,
             abortSignal: controller.signal,
           },
         });
