@@ -1,7 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, Compass, Bookmark, BookOpen, ArrowUpRight } from "lucide-react";
+import {
+  User,
+  Compass,
+  Briefcase,
+  Bookmark,
+  BookOpen,
+  ArrowUpRight,
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +25,7 @@ import {
 const items = [
   { title: "Profile", url: "/workspace/profile", icon: User, external: false },
   { title: "Career Compass", url: "/workspace/career-compass", icon: Compass, external: false },
+  { title: "Jobs", url: "/workspace/jobs", icon: Briefcase, external: false },
   { title: "Saved guides", url: "/workspace/saved-guides", icon: Bookmark, external: false },
   { title: "Career guides", url: "/career-guides", icon: BookOpen, external: true },
 ] as const;
