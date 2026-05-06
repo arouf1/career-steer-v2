@@ -2,7 +2,6 @@
 
 import { SignInButton } from "@clerk/nextjs";
 import { Lock } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { JobsForGuideCard, type JobCardData } from "./JobsForGuideCard";
 
 type Props = {
@@ -24,7 +23,7 @@ export function JobsForGuideTeaseLock({
 }: Props) {
   return (
     <div className="relative">
-      <div className="space-y-2 opacity-90" aria-hidden>
+      <div className="space-y-3" aria-hidden>
         {blurredPlaceholders.map((p) => (
           <JobsForGuideCard
             key={p.jobPostingId}
@@ -34,18 +33,23 @@ export function JobsForGuideTeaseLock({
           />
         ))}
       </div>
-      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-background/40 via-background/80 to-background">
-        <div className="flex flex-col items-center gap-2 px-6 text-center">
-          <div className="flex size-10 items-center justify-center rounded-full bg-foreground/5">
-            <Lock className="size-4 text-muted-foreground" aria-hidden />
+      <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-b from-paper/0 via-paper/85 to-paper sm:items-center">
+        <div className="flex w-full max-w-md flex-col items-center gap-3 px-6 pb-6 text-center sm:pb-0">
+          <div className="flex size-9 items-center justify-center rounded-pill bg-paper-raised">
+            <Lock className="size-4 text-mute" aria-hidden />
           </div>
-          <p className="text-sm">
+          <p className="type-body text-ink">
             {totalRemaining > 0
               ? `Sign in to see all ${totalRemaining} jobs hiring ${guideTitle} ${geoLabel}.`
               : `Sign in to see jobs hiring ${guideTitle} ${geoLabel}.`}
           </p>
           <SignInButton mode="modal" forceRedirectUrl={signInRedirectUrl}>
-            <Button size="sm">Sign in</Button>
+            <button
+              type="button"
+              className="type-label inline-flex items-center justify-center rounded-pill bg-ink px-6 py-2.5 text-paper transition-colors hover:bg-ink-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
+            >
+              Sign in
+            </button>
           </SignInButton>
         </div>
       </div>

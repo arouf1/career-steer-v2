@@ -3,10 +3,8 @@
 import { useMemo, useState } from "react";
 import { useUser, SignInButton } from "@clerk/nextjs";
 import { useAction, useQuery } from "convex/react";
-import { Briefcase, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { describeLadderHit } from "@/lib/jobs/microcopy";
 import {
   JobsForGuideCard,
@@ -60,8 +58,6 @@ export function JobsForGuide({
 }: Props) {
   const { isLoaded: clerkLoaded, isSignedIn } = useUser();
 
-  // Profile-resolved geo trumps IP-derived geo for signed-in users. Falls
-  // back to anonymousGeo if the profile has no confirmed location.
   const profileGeo = useQuery(
     api.profiles.resolvedLocation,
     isSignedIn ? {} : "skip",
@@ -150,7 +146,7 @@ export function JobsForGuide({
           signInRedirectUrl={pageUrl}
         />
         {quotaMessage ? (
-          <p className="text-xs text-muted-foreground" role="status">
+          <p className="type-caption text-mute" role="status">
             {quotaMessage}
           </p>
         ) : null}
@@ -194,43 +190,45 @@ export function JobsForGuide({
     const remaining = Math.max(0, data.totalArchetypeMatches - visible.length);
 
     return (
-      <Section guideTitle={guideTitle}>
-        <p className="text-sm text-muted-foreground">
-          {heading} hiring {guideTitle}.
-        </p>
-        <div className="space-y-2">
+      <Section guideTitle={guideTitle} ladderLabel={heading}>
+        <ul className="space-y-3">
           {visible.map((c) => (
-            <JobsForGuideCard
-              key={c.jobPostingId}
-              job={c}
-              viewerState="anonymous"
-            />
+            <li key={c.jobPostingId}>
+              <JobsForGuideCard job={c} viewerState="anonymous" />
+            </li>
           ))}
-        </div>
+        </ul>
         {blurred.length > 0 ? (
-          <JobsForGuideTeaseLock
-            blurredPlaceholders={blurred}
-            totalRemaining={remaining}
-            geoLabel={
-              viewerCityLabel
-                ? `near ${viewerCityLabel}`
-                : viewerCountryLabel
-                  ? `in ${viewerCountryLabel}`
-                  : "near you"
-            }
-            guideTitle={guideTitle}
-            signInRedirectUrl={pageUrl}
-          />
+          <div className="mt-3">
+            <JobsForGuideTeaseLock
+              blurredPlaceholders={blurred}
+              totalRemaining={remaining}
+              geoLabel={
+                viewerCityLabel
+                  ? `near ${viewerCityLabel}`
+                  : viewerCountryLabel
+                    ? `in ${viewerCountryLabel}`
+                    : "near you"
+              }
+              guideTitle={guideTitle}
+              signInRedirectUrl={pageUrl}
+            />
+          </div>
         ) : (
-          // Soft footer for anonymous viewers when the archetype is small
-          // enough that every cached card fits in the visible slot. Keeps
-          // sign-in present without inventing a fake blurred stack.
-          <div className="flex items-center justify-between rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-            <span>Sign in to see how these match your profile.</span>
+          // Soft footer when the archetype is small enough that every cached
+          // card fits in the visible slot. Keeps sign-in present without
+          // inventing a fake blurred stack.
+          <div className="mt-6 flex items-center justify-between gap-4 border-t border-hairline pt-5">
+            <p className="type-caption text-mute">
+              Sign in to see how these match your profile.
+            </p>
             <SignInButton mode="modal" forceRedirectUrl={pageUrl}>
-              <Button size="sm" variant="ghost" className="h-7 text-xs">
+              <button
+                type="button"
+                className="type-label inline-flex items-center rounded-pill px-4 py-2 text-ink transition-colors hover:bg-paper-raised"
+              >
                 Sign in
-              </Button>
+              </button>
             </SignInButton>
           </div>
         )}
@@ -239,33 +237,30 @@ export function JobsForGuide({
   }
 
   return (
-    <Section guideTitle={guideTitle}>
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          {heading} hiring {guideTitle}.
-        </p>
-        <Button
-          variant="ghost"
-          size="sm"
+    <Section
+      guideTitle={guideTitle}
+      ladderLabel={heading}
+      action={
+        <button
+          type="button"
           onClick={onSearchLive}
           disabled={searchLivePending}
-          className="text-xs"
+          className="type-label inline-flex items-center gap-1.5 rounded-pill px-4 py-2 text-ink transition-colors hover:bg-paper-raised disabled:opacity-60"
         >
-          <Search className="mr-1.5 size-3.5" aria-hidden />
+          <Search className="size-3.5" aria-hidden />
           {searchLivePending ? "Searching…" : "Search live"}
-        </Button>
-      </div>
-      <div className="space-y-2">
+        </button>
+      }
+    >
+      <ul className="space-y-3">
         {cards.map((c) => (
-          <JobsForGuideCard
-            key={c.jobPostingId}
-            job={c}
-            viewerState={viewerState}
-          />
+          <li key={c.jobPostingId}>
+            <JobsForGuideCard job={c} viewerState={viewerState} />
+          </li>
         ))}
-      </div>
+      </ul>
       {quotaMessage ? (
-        <p className="text-xs text-muted-foreground" role="status">
+        <p className="type-caption mt-3 text-mute" role="status">
           {quotaMessage}
         </p>
       ) : null}
@@ -273,41 +268,67 @@ export function JobsForGuide({
   );
 }
 
+// Section shell mirrors RelatedGuides exactly so the two paired editorial
+// blocks stack with consistent rhythm — same width, same eyebrow→headline
+// hierarchy, same hairline top-border.
 function Section({
   guideTitle,
+  ladderLabel,
+  action,
   children,
 }: {
   guideTitle: string;
+  ladderLabel?: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section
       aria-labelledby="jobs-for-guide-heading"
-      className="mx-auto mt-12 w-full max-w-2xl space-y-3 border-t px-4 pt-8"
+      className="border-t border-hairline bg-paper"
     >
-      <h2
-        id="jobs-for-guide-heading"
-        className="flex items-center gap-2 text-base font-semibold"
-      >
-        <Briefcase className="size-4 text-muted-foreground" aria-hidden />
-        Jobs hiring {guideTitle}
-      </h2>
-      {children}
+      <div className="mx-auto w-full max-w-6xl px-6 py-12 lg:px-8 lg:py-16">
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="type-label uppercase text-mute">Find work</p>
+            <h2
+              id="jobs-for-guide-heading"
+              className="type-headline mt-2 text-ink"
+            >
+              Jobs hiring {guideTitle}
+            </h2>
+            {ladderLabel ? (
+              <p className="type-body mt-3 text-body">{ladderLabel}.</p>
+            ) : null}
+          </div>
+          {action}
+        </header>
+        <div className="mx-auto max-w-3xl">{children}</div>
+      </div>
     </section>
   );
 }
 
 function JobsForGuideSkeleton({ showBlurred }: { showBlurred: boolean }) {
   return (
-    <section className="mx-auto mt-12 w-full max-w-2xl space-y-3 border-t px-4 pt-8">
-      <Skeleton className="h-5 w-48" />
-      <div className="space-y-2">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full" />
-        ))}
-        {showBlurred ? <Skeleton className="h-20 w-full opacity-50" /> : null}
+    <section className="border-t border-hairline bg-paper">
+      <div className="mx-auto w-full max-w-6xl px-6 py-12 lg:px-8 lg:py-16">
+        <header className="mb-8 max-w-2xl space-y-3">
+          <div className="h-3 w-24 rounded-hair bg-paper-raised" />
+          <div className="h-9 w-64 rounded-surface bg-paper-raised" />
+        </header>
+        <div className="mx-auto max-w-3xl space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-24 w-full animate-pulse rounded-card border border-hairline bg-paper-raised"
+            />
+          ))}
+          {showBlurred ? (
+            <div className="h-24 w-full animate-pulse rounded-card border border-hairline bg-paper-raised opacity-60" />
+          ) : null}
+        </div>
       </div>
     </section>
   );
 }
-
