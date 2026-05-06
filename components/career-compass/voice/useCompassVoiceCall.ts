@@ -5,8 +5,10 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   PCMPlayer,
+  prewarmAudio,
   startPCMCapture,
   type PCMCaptureHandle,
+  type PrewarmedAudio,
 } from "@/lib/client/geminiAudio";
 import {
   COMPASS_TOOL_NAMES,
@@ -472,28 +474,67 @@ export function useCompassVoiceCall(
       return;
     }
 
+    // ── iOS Safari guard ────────────────────────────────────────────────
+    // Acquire mic + create + resume both AudioContexts INSIDE the user-
+    // gesture sync window. iOS rejects getUserMedia called after any await,
+    // and starts AudioContexts suspended unless resumed from a gesture.
+    // Must run before any await — including before the React state updates
+    // below (those are sync, but keeping the prewarm above any other work
+    // makes the gesture-window contract obvious).
+    let prewarm: PrewarmedAudio;
+    try {
+      prewarm = prewarmAudio();
+    } catch (err) {
+      console.warn("useCompassVoiceCall: prewarmAudio threw", err);
+      setError("Couldn't open audio on this device. Try another browser.");
+      setCallState("error");
+      return;
+    }
+
     setError(null);
     setCallState("connecting");
     finalizedRef.current = false;
 
+    // Race mint and mic-permission in parallel — both are network/UI round
+    // trips, no point serialising them.
     let mintResult: Awaited<ReturnType<typeof mintSession>>;
+    let micStream: MediaStream;
     try {
-      mintResult = await mintSession({
-        voiceId,
-        densityLevel: densityRef.current,
-        surface: surfaceRef.current,
-        activeLane: activeLaneRef.current,
-      });
+      const [mr, ms] = await Promise.all([
+        mintSession({
+          voiceId,
+          densityLevel: densityRef.current,
+          surface: surfaceRef.current,
+          activeLane: activeLaneRef.current,
+        }),
+        (async () => {
+          const stream = await prewarm.streamPromise;
+          await prewarm.ready;
+          return stream;
+        })(),
+      ]);
+      mintResult = mr;
+      micStream = ms;
     } catch (err) {
+      const name = err instanceof Error ? err.name : "Unknown";
+      console.warn("useCompassVoiceCall: prewarm/mint failed", name, err);
       setError(
-        err instanceof Error ? err.message : "Failed to start the call.",
+        name === "NotAllowedError"
+          ? "Microphone access was denied. Allow it in your browser settings and try again."
+          : name === "NotFoundError"
+          ? "No microphone found on this device."
+          : err instanceof Error
+          ? err.message
+          : "Failed to start the call.",
       );
       setCallState("error");
+      prewarm.abort();
       return;
     }
     if (!mintResult.ok) {
       setError(reasonToMessage(mintResult.reason));
       setCallState("error");
+      prewarm.abort();
       return;
     }
 
@@ -513,6 +554,7 @@ export function useCompassVoiceCall(
     wsRef.current = ws;
 
     const player = new PCMPlayer({
+      audioContext: prewarm.playbackContext,
       onPlaybackStart: () => setIsAITalking(true),
       onPlaybackEnd: () => setIsAITalking(false),
     });
@@ -571,32 +613,43 @@ export function useCompassVoiceCall(
 
         if ("setupComplete" in data && !captureRef.current) {
           try {
-            const handle = await startPCMCapture((base64PCM) => {
-              if (mutedRef.current) return;
-              if (
-                wsRef.current?.readyState !== WebSocket.OPEN ||
-                !setupCompleteRef.current
-              ) {
-                return;
-              }
-              wsRef.current.send(
-                JSON.stringify({
-                  realtimeInput: {
-                    audio: {
-                      mimeType: "audio/pcm;rate=16000",
-                      data: base64PCM,
+            const handle = await startPCMCapture(
+              (base64PCM) => {
+                if (mutedRef.current) return;
+                if (
+                  wsRef.current?.readyState !== WebSocket.OPEN ||
+                  !setupCompleteRef.current
+                ) {
+                  return;
+                }
+                wsRef.current.send(
+                  JSON.stringify({
+                    realtimeInput: {
+                      audio: {
+                        mimeType: "audio/pcm;rate=16000",
+                        data: base64PCM,
+                      },
                     },
-                  },
-                }),
-              );
-            });
+                  }),
+                );
+              },
+              {
+                stream: micStream,
+                audioContext: prewarm.captureContext,
+              },
+            );
             captureRef.current = handle;
             // Surface the handle to the dock for analyser attachment.
             setCaptureHandle(handle);
           } catch (err) {
-            console.error("useCompassVoiceCall: mic capture failed", err);
+            const name = err instanceof Error ? err.name : "Unknown";
+            console.error(
+              "useCompassVoiceCall: mic capture failed",
+              name,
+              err,
+            );
             setError(
-              "Microphone access was denied or unavailable. Allow it in your browser settings and try again.",
+              "Couldn't start the microphone. Try again in a moment.",
             );
             setCallState("error");
             await finalizeCall("error");
@@ -612,13 +665,23 @@ export function useCompassVoiceCall(
       }
     };
 
-    ws.onerror = () => {
+    ws.onerror = (event) => {
+      console.warn("[compass-voice] ws.onerror", event);
       setError("Connection error. Try again in a moment.");
       setCallState("error");
       void finalizeCall("error");
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      console.log(
+        "[compass-voice] ws.onclose",
+        "code=",
+        event.code,
+        "reason=",
+        event.reason,
+        "wasClean=",
+        event.wasClean,
+      );
       if (!finalizedRef.current) {
         setCallState((prev) =>
           prev === "connected" || prev === "connecting" ? "ended" : prev,
