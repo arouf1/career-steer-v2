@@ -14,12 +14,23 @@
  * add it to the allow-list below FIRST, then deploy.
  */
 
-const ALLOWED_DEPLOYMENTS = [
-  "striped-narwhal-926", // prod
-  "pleasant-pigeon-988", // dev
-] as const;
+const PROD_DEPLOYMENT = "striped-narwhal-926";
+const DEV_DEPLOYMENT = "pleasant-pigeon-988";
+
+const ALLOWED_DEPLOYMENTS = [PROD_DEPLOYMENT, DEV_DEPLOYMENT] as const;
 
 export function isCronAllowedDeployment(): boolean {
   const url = process.env.CONVEX_CLOUD_URL ?? "";
   return ALLOWED_DEPLOYMENTS.some((name) => url.includes(name));
+}
+
+/**
+ * True only on the production deployment. Use for things that touch
+ * external services where dev shouldn't fire — e.g. Google's Indexing API
+ * (we don't want our dev URLs in Google's index, and the 200/day quota is
+ * shared with prod).
+ */
+export function isProdDeployment(): boolean {
+  const url = process.env.CONVEX_CLOUD_URL ?? "";
+  return url.includes(PROD_DEPLOYMENT);
 }
