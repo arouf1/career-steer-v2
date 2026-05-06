@@ -1213,12 +1213,23 @@ export default defineSchema({
     ),
     illustrationLastError: v.optional(v.string()),
     illustrationCostCents: v.optional(v.number()),
+    // Denormalised geo coordinates for the posting's city. Sourced from the
+    // `locations` table at upsert time (see jobPostings.upsertFromSearch).
+    // Optional during the widen phase of the migration; tightens to required
+    // once backfill coverage stabilises. Powers the Haversine ranking in
+    // convex/jobsForGuide.forGuide without a per-read join against locations.
+    gps: v.optional(v.object({ lat: v.number(), lon: v.number() })),
   })
     .index("by_dedupKey", ["dedupKey"])
     .index("by_companyId", ["companyId"])
     .index("by_isActive_lastSeenAt", ["isActive", "lastSeenAt"])
     .index("by_lastChecked", ["lastChecked"])
-    .index("by_contentStatus_firstSeenAt", ["contentStatus", "firstSeenAt"]),
+    .index("by_contentStatus_firstSeenAt", ["contentStatus", "firstSeenAt"])
+    .index("by_roleArchetypeSlug_isActive_lastSeenAt", [
+      "roleArchetypeSlug",
+      "isActive",
+      "lastSeenAt",
+    ]),
 
   // ── Job-search query typo cache ───────────────────────────────────────
   // Layer-1 dedup for the typo-correction Flash call. Mirrors the
