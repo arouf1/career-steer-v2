@@ -4,16 +4,86 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Check, List } from "lucide-react";
 
-export type MobileTocSection = { id: string; label: string };
+export type SectionLink = { id: string; label: string };
+
+const eyebrowCls =
+  "text-[10px] uppercase tracking-[0.18em] font-medium text-mute";
 
 const mountedSubscribe = () => () => {};
 const mountedClientSnapshot = () => true;
 const mountedServerSnapshot = () => false;
 
+export function WikiTableOfContents({ sections }: { sections: SectionLink[] }) {
+  const [activeSection, setActiveSection] = useState<string>("");
+
+  useEffect(() => {
+    const els = sections
+      .map((s) => document.getElementById(s.id))
+      .filter((el): el is HTMLElement => !!el);
+    if (els.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveSection(visible[0].target.id);
+      },
+      { rootMargin: "-20% 0px -70% 0px", threshold: 0 },
+    );
+    els.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [sections]);
+
+  const handleClick = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      history.replaceState(null, "", `#${id}`);
+    }
+  };
+
+  return (
+    <nav aria-label="Article sections">
+      <p className={eyebrowCls}>In this guide</p>
+      <ul className="mt-4 space-y-0.5">
+        {sections.map((section, i) => {
+          const isActive = activeSection === section.id;
+          return (
+            <li key={section.id}>
+              <button
+                type="button"
+                onClick={() => handleClick(section.id)}
+                className={`group flex w-full items-baseline gap-3 py-1.5 text-left text-[13px] transition-colors duration-300 ${
+                  isActive
+                    ? "text-ink"
+                    : "text-ink/45 hover:text-ink/80"
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className={`w-6 shrink-0 text-[12px] tabular-nums leading-none [font-family:var(--font-serif)] transition-colors duration-300 ${
+                    isActive
+                      ? "text-ink"
+                      : "text-ink/30 group-hover:text-ink/60"
+                  }`}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                {section.label}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
 export function MobileTableOfContents({
   sections,
 }: {
-  sections: MobileTocSection[];
+  sections: SectionLink[];
 }) {
   const [active, setActive] = useState<string>("");
   const [open, setOpen] = useState(false);
