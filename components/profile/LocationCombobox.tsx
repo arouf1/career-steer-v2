@@ -4,9 +4,19 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
+export type LocationSelection = {
+  canonicalName: string;
+  countryCode: string;
+};
+
 type Props = {
   value: string | null;
   onChange: (next: string | null) => void;
+  // Fires only when the user picks an item from the dropdown (mouse or
+  // keyboard). Free-text typing does not invoke this — callers that need
+  // the country code should treat its absence as "user typed something we
+  // don't have a country code for."
+  onSelect?: (item: LocationSelection) => void;
   placeholder?: string;
   className?: string;
 };
@@ -17,6 +27,7 @@ const MIN_CHARS = 2;
 export function LocationCombobox({
   value,
   onChange,
+  onSelect,
   placeholder = "Location",
   className,
 }: Props) {
@@ -68,9 +79,10 @@ export function LocationCombobox({
     setActive(0);
   }, [items.length]);
 
-  const commit = (next: string) => {
+  const commit = (next: string, selection?: LocationSelection) => {
     setDraft(next);
     onChange(next.length === 0 ? null : next);
+    if (selection) onSelect?.(selection);
     setOpen(false);
   };
 
@@ -86,7 +98,11 @@ export function LocationCombobox({
     } else if (e.key === "Enter") {
       if (open && items[active]) {
         e.preventDefault();
-        commit(items[active].canonicalName);
+        const it = items[active];
+        commit(it.canonicalName, {
+          canonicalName: it.canonicalName,
+          countryCode: it.countryCode,
+        });
       }
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -152,7 +168,10 @@ export function LocationCombobox({
                 onMouseDown={(e) => {
                   // mousedown beats the input's blur and keeps focus.
                   e.preventDefault();
-                  commit(it.canonicalName);
+                  commit(it.canonicalName, {
+                    canonicalName: it.canonicalName,
+                    countryCode: it.countryCode,
+                  });
                 }}
                 className={`flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 type-body ${
                   i === active ? "bg-ink/5 text-ink" : "text-ink/90"
