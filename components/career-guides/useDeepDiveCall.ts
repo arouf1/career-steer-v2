@@ -56,11 +56,11 @@ type AppendMessageInput = {
   transcriptConfidence?: number;
 };
 
-type SessionConfigSnapshot = {
-  model: string;
-  voice: string;
-  systemInstruction: string;
-};
+// The server now hands back a ready-to-send setup message (minimal on the
+// ephemeral path, full on the API-key fallback path). The client just
+// ws.send()s it on open — see convex/lib/voiceLiveConfig.ts for the full
+// rationale. Plain alias kept so the flow inside startCall stays readable.
+type ServerSetupMessage = Record<string, unknown>;
 
 type AuthCredential =
   | { type: "ephemeral_token"; value: string }
@@ -315,7 +315,8 @@ export function useDeepDiveCall(
 
     sessionIdRef.current = mintResult.sessionId;
     startedAtRef.current = Date.now();
-    const config: SessionConfigSnapshot = mintResult.sessionConfig;
+    const setupMessage: ServerSetupMessage =
+      mintResult.setupMessage as ServerSetupMessage;
     const auth: AuthCredential = mintResult.auth;
 
     const isEphemeral = auth.type === "ephemeral_token";
@@ -335,41 +336,12 @@ export function useDeepDiveCall(
     playerRef.current = player;
 
     ws.onopen = () => {
-      const setupMessage = {
-        setup: {
-          model: `models/${config.model}`,
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: config.voice },
-              },
-            },
-            temperature: 0.8,
-          },
-          systemInstruction: {
-            parts: [{ text: config.systemInstruction }],
-          },
-          // VAD tuning — high sensitivity to speech start enables natural
-          // barge-in, low end-of-speech sensitivity gives the user space to
-          // pause mid-thought without the model jumping in.
-          realtimeInputConfig: {
-            automaticActivityDetection: {
-              startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
-              endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
-              prefixPaddingMs: 200,
-              silenceDurationMs: 500,
-            },
-          },
-          // Sliding-window context compression unlocks sessions beyond the
-          // base 15-min context window — important for an open-ended career
-          // conversation.
-          contextWindowCompression: { slidingWindow: {} },
-          tools: [{ googleSearch: {} }],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
-      } as const;
+      // Setup is built server-side (see convex/lib/voiceLiveConfig.ts).
+      // Ephemeral path: minimal — just `setup.model`. The full live config
+      // (voice, system instruction, VAD, context window compression,
+      // googleSearch tool, transcription) is bound at the token via
+      // liveConnectConstraints, so the constrained WS endpoint pulls it
+      // from there. API-key fallback path: full setup payload.
       ws.send(JSON.stringify(setupMessage));
     };
 

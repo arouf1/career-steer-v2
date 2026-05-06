@@ -39,6 +39,11 @@ import {
   buildProfileSnapshotForVoice,
   buildSystemInstructions,
 } from "./voiceCallContext";
+import {
+  buildFullSetupMessage,
+  buildLiveConfig,
+  buildMinimalSetupMessage,
+} from "./lib/voiceLiveConfig";
 
 // Per the plan: "verify the current Live model ID at implementation time".
 // 2026-05 — Gemini 3.x Live "preview" lineage. If Google rotates this, the
@@ -72,11 +77,12 @@ export const mintSession = action({
         type: v.union(v.literal("ephemeral_token"), v.literal("api_key")),
         value: v.string(),
       }),
-      sessionConfig: v.object({
-        model: v.string(),
-        voice: v.string(),
-        systemInstruction: v.string(),
-      }),
+      // Pre-built WebSocket setup message ready for the client to send
+      // verbatim. Minimal on the ephemeral path (every field is bound at
+      // the token); full on the API-key fallback path.
+      setupMessage: v.any(),
+      voice: v.string(),
+      model: v.string(),
     }),
     v.object({
       ok: v.literal(false),
@@ -98,7 +104,9 @@ export const mintSession = action({
         callId: Id<"voice_calls">;
         sessionId: string;
         auth: { type: "ephemeral_token" | "api_key"; value: string };
-        sessionConfig: { model: string; voice: string; systemInstruction: string };
+        setupMessage: Record<string, unknown>;
+        voice: string;
+        model: string;
       }
     | {
         ok: false;
@@ -160,20 +168,29 @@ export const mintSession = action({
 
     const voiceId = args.voiceId ?? DEFAULT_VOICE;
 
+    // Build the full live-session config once. We use this in two places:
+    //
+    //   1. As `liveConnectConstraints.config` at token mint, so every field
+    //      is bound to the ephemeral token. The constrained WS endpoint
+    //      then takes the effective config from the token, not from any
+    //      client setup message — this fixes the voice-rotation regression
+    //      that motivated yesterday's 22ee91c without re-introducing the
+    //      partial-overlap 1011 problem da8d6d3 had to revert.
+    //
+    //   2. To build a full WS setup message for the API-key fallback path,
+    //      where there's no constraint binding and the client must send
+    //      everything itself.
+    const liveConfig = buildLiveConfig({
+      model: LIVE_MODEL,
+      voice: voiceId,
+      systemInstruction,
+      tools: [{ googleSearch: {} }],
+    });
+
     // Mint the credential. Try ephemeral first (preferred — single-use,
     // short-lived, scoped to this session); fall back to API key if Google's
     // auth_tokens endpoint returns an error. V1 commit 0689253 documented
     // that this fallback is needed in practice.
-    //
-    // We deliberately do NOT pass `liveConnectConstraints`. Yesterday's
-    // 22ee91c locked model + voice at mint to stop voice rotation, but the
-    // v1alpha BidiGenerateContentConstrained endpoint then started rejecting
-    // our full client setup with WS close 1011 "Internal error encountered"
-    // — the constrained endpoint is strict about overlap between locked
-    // fields and the client setup payload, and we send a lot of additional
-    // setup (tools, transcription, VAD, contextWindowCompression, etc.).
-    // Rolling back to no-constraints lets the call connect; voice rotation
-    // is the lesser of two evils.
     const client = new GoogleGenAI({
       apiKey,
       httpOptions: { apiVersion: "v1alpha" },
@@ -181,6 +198,7 @@ export const mintSession = action({
 
     let credential: { type: "ephemeral_token" | "api_key"; value: string };
     let authMode: "ephemeral" | "apiKey";
+    let setupMessage: Record<string, unknown>;
     try {
       const token = await client.authTokens.create({
         config: {
@@ -189,11 +207,24 @@ export const mintSession = action({
           newSessionExpireTime: new Date(
             Date.now() + NEW_SESSION_TTL_MS,
           ).toISOString(),
+          // Bind the entire live config at the token. The SDK transforms
+          // the LiveConnectConfig shape (`liveConfig`) into the wire
+          // `bidiGenerateContentSetup` shape internally — see
+          // liveConnectConstraintsToMldev in @google/genai.
+          liveConnectConstraints: {
+            model: LIVE_MODEL,
+            // SDK accepts LiveConnectConfig top-level fields here; cast to
+            // satisfy the TS surface without depending on the SDK's
+            // internal generic.
+            config: liveConfig as never,
+          },
         },
       });
       if (!token.name) throw new Error("empty_token_name");
       credential = { type: "ephemeral_token", value: token.name };
       authMode = "ephemeral";
+      // Token has the whole config — client setup just declares the model.
+      setupMessage = buildMinimalSetupMessage(LIVE_MODEL);
     } catch (err) {
       console.warn(
         "voiceCallsNode.mintSession: ephemeral mint failed, falling back to API key",
@@ -201,6 +232,14 @@ export const mintSession = action({
       );
       credential = { type: "api_key", value: apiKey };
       authMode = "apiKey";
+      // No constraint binding on the API-key path; client must send the
+      // full setup itself.
+      setupMessage = buildFullSetupMessage({
+        model: LIVE_MODEL,
+        voice: voiceId,
+        systemInstruction,
+        tools: [{ googleSearch: {} }],
+      });
     }
     const sessionId = crypto.randomUUID();
     const title = `Talking through: ${bundle.guide.title}`;
@@ -220,11 +259,9 @@ export const mintSession = action({
       callId,
       sessionId,
       auth: credential,
-      sessionConfig: {
-        model: LIVE_MODEL,
-        voice: voiceId,
-        systemInstruction,
-      },
+      setupMessage,
+      voice: voiceId,
+      model: LIVE_MODEL,
     };
   },
 });

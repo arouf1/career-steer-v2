@@ -52,15 +52,12 @@ type AppendMessageInput = {
   transcriptConfidence?: number;
 };
 
-type SessionConfigSnapshot = {
-  model: string;
-  voice: string;
-  systemInstruction: string;
-  // Opaque `Tool[]` array assembled server-side and shipped verbatim into the
-  // Gemini Live setup message. Includes `googleSearch` plus the function
-  // declarations for the canvas action tools.
-  tools: unknown[];
-};
+// The server now hands back a ready-to-send setup message (minimal on the
+// ephemeral path, full on the API-key fallback path). The client just
+// ws.send()s it on open — see convex/lib/voiceLiveConfig.ts for the full
+// rationale. We keep `model` + `voice` as separate fields purely for
+// console diagnostics / display, not for wire use.
+type ServerSetupMessage = Record<string, unknown>;
 
 type AuthCredential =
   | { type: "ephemeral_token"; value: string }
@@ -561,7 +558,8 @@ export function useCompassVoiceCall(
 
     sessionIdRef.current = mintResult.sessionId;
     startedAtRef.current = Date.now();
-    const config: SessionConfigSnapshot = mintResult.sessionConfig;
+    const setupMessage: ServerSetupMessage =
+      mintResult.setupMessage as ServerSetupMessage;
     const auth: AuthCredential = mintResult.auth;
 
     const isEphemeral = auth.type === "ephemeral_token";
@@ -575,11 +573,9 @@ export function useCompassVoiceCall(
       "isEphemeral=",
       isEphemeral,
       "model=",
-      config.model,
+      mintResult.model,
       "voice=",
-      config.voice,
-      "toolsCount=",
-      Array.isArray(config.tools) ? config.tools.length : 0,
+      mintResult.voice,
     );
 
     const ws = new WebSocket(wsUrl);
@@ -594,40 +590,19 @@ export function useCompassVoiceCall(
 
     ws.onopen = () => {
       console.log("[compass-voice] ws.onopen");
-      const setupMessage = {
-        setup: {
-          model: `models/${config.model}`,
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: config.voice },
-              },
-            },
-            temperature: 0.8,
-          },
-          systemInstruction: { parts: [{ text: config.systemInstruction }] },
-          realtimeInputConfig: {
-            automaticActivityDetection: {
-              startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
-              endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
-              prefixPaddingMs: 200,
-              silenceDurationMs: 500,
-            },
-          },
-          contextWindowCompression: { slidingWindow: {} },
-          // Tools come pre-assembled from the server bundle: function
-          // declarations for the canvas action verbs + googleSearch for
-          // grounded citations. See compassAdviserTools().
-          tools: config.tools,
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
-      } as const;
-      // [compass-voice] Diagnostic: confirm tools array is reaching the wire.
+      // Setup is built server-side (see convex/lib/voiceLiveConfig.ts).
+      // Ephemeral path: minimal — just `setup.model`. The full session
+      // config is bound at the token via liveConnectConstraints, so the
+      // constrained WS endpoint pulls it from there.
+      // API-key fallback path: full setup payload, model + every option.
+      const isMinimalSetup =
+        Object.keys(
+          (setupMessage as { setup?: Record<string, unknown> }).setup ?? {},
+        ).length === 1;
       console.log(
-        "[compass-voice] setup tools:",
-        JSON.stringify(config.tools, null, 2),
+        "[compass-voice] sending setup",
+        "isMinimal=",
+        isMinimalSetup,
       );
       try {
         ws.send(JSON.stringify(setupMessage));
