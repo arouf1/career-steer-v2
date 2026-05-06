@@ -998,20 +998,25 @@ export default defineSchema({
   // end-of-call, internal.voiceCallsNode.processCallAnalysis fills aiSummary
   // and the three embeddings asynchronously.
   //
-  // Two surfaces share this table: per-guide deep-dive (modal on the article
-  // page) and per-canvas compass voice (ambient dock on /workspace/career-
-  // compass). `surface` discriminates; `guideId` and `canvasSnapshotId` are
-  // mutually exclusive — exactly one is set per row.
+  // Three surfaces share this table: per-guide deep-dive (modal on the
+  // article page), per-canvas compass voice (ambient dock on /workspace/
+  // career-compass), and per-posting job voice (modal on /jobs/listing/...).
+  // `surface` discriminates; `guideId`, `canvasSnapshotId`, and
+  // `jobPostingId` are mutually exclusive — exactly one is set per row.
   voice_calls: defineTable({
     userId: v.id("users"),
     // Discriminator. Optional only because legacy rows (created before the
     // compass surface shipped) lack it; readers should treat undefined as
     // "guide". A future narrow PR can flip this to required after a backfill.
     surface: v.optional(
-      v.union(v.literal("guide"), v.literal("compass")),
+      v.union(
+        v.literal("guide"),
+        v.literal("compass"),
+        v.literal("job"),
+      ),
     ),
-    // Set when surface === "guide". Optional so compass calls can omit it
-    // while keeping the by_guide index narrow (compass rows simply don't
+    // Set when surface === "guide". Optional so non-guide calls can omit it
+    // while keeping the by_guide index narrow (other surfaces simply don't
     // index here).
     guideId: v.optional(v.id("career_guides")),
     // Set when surface === "compass". Stamps the exact `discover_canvases`
@@ -1019,6 +1024,10 @@ export default defineSchema({
     // summary can reference "the canvas you saw on May 4". The canvas itself
     // may be regenerated later — this preserves the conversational anchor.
     canvasSnapshotId: v.optional(v.id("discover_canvases")),
+    // Set when surface === "job". The posting itself is reasonably stable
+    // (content rewrite is one-shot per posting) so this is a direct FK
+    // rather than a snapshot id.
+    jobPostingId: v.optional(v.id("job_postings")),
     // Client-generated UUID — opaque correlator for the live session, distinct
     // from Convex's _id so the client can reference the row before the round
     // trip resolves.
@@ -1066,6 +1075,356 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_created", ["userId", "createdAt"])
     .index("by_guide", ["guideId"])
+    .index("by_jobPosting", ["jobPostingId"])
     .index("by_session", ["sessionId"])
     .index("by_status", ["status"]),
+
+  // ── Job postings cache ─────────────────────────────────────────────────
+  // Foundation tables for the SearchAPI Google Jobs cache. Sub-project 1
+  // of the jobs-feature decomposition (see openapi-3-0-0-info-title-starry-
+  // dragon plan). Independent of profiles / career-guides / matching;
+  // optionally cross-references career_guides.slug via roleArchetypeSlug.
+
+  // One row per canonical company. Identity = nameNormalized (legal-suffix
+  // stripped, lowercased). New observations of the same company patch
+  // lastSeenAt; the original nameRaw is preserved for display.
+  companies: defineTable({
+    nameRaw: v.string(),
+    nameNormalized: v.string(),
+    slug: v.string(),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    // Filled by sub-project 5 (company research). Optional now.
+    domain: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    // Sub-project 4: Brandfetch-sourced metadata. logoUrl is a CDN URL
+    // (stable, no proxying needed); brandColor is the dominant brand colour
+    // when Brandfetch has it. Both nullable for "we tried but Brandfetch
+    // didn't recognise the company" so we don't keep retrying.
+    logoUrl: v.optional(v.union(v.string(), v.null())),
+    brandColor: v.optional(v.union(v.string(), v.null())),
+    brandEnrichedAt: v.optional(v.number()),
+  })
+    .index("by_nameNormalized", ["nameNormalized"])
+    .index("by_slug", ["slug"]),
+
+  // One row per real-world job, deduped on dedupKey
+  // = sha256(normalize(title)::normalize(company)::extractCity(location)).
+  // Same role at same company in same city collapses to one row regardless
+  // of which board surfaced it.
+  job_postings: defineTable({
+    // Dedup identity
+    dedupKey: v.string(),
+    // FK
+    companyId: v.id("companies"),
+    // Raw fields from SearchAPI (preserved for re-rewriting and audit)
+    title: v.string(),
+    titleSlug: v.string(),
+    city: v.string(),
+    citySlug: v.string(),
+    countryCode: v.optional(v.string()),
+    location: v.string(),
+    via: v.optional(v.string()),
+    rawDescription: v.string(),
+    applyLink: v.optional(v.string()),
+    applyLinkSource: v.optional(v.string()),
+    sharingLink: v.optional(v.string()),
+    thumbnail: v.optional(v.string()),
+    detectedExtensions: v.optional(
+      v.object({
+        schedule: v.optional(v.string()),
+        postedAt: v.optional(v.string()),
+        salary: v.optional(v.string()),
+        workFromHome: v.optional(v.boolean()),
+        healthInsurance: v.optional(v.boolean()),
+        dentalInsurance: v.optional(v.boolean()),
+        paidTimeOff: v.optional(v.boolean()),
+      }),
+    ),
+    // Provenance
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    seenCount: v.number(),
+    // Last N unique queries that surfaced this posting (capped to 20).
+    // Powers cache-hit lookups + future analytics.
+    searchQueries: v.array(v.string()),
+    // Lifecycle
+    isActive: v.boolean(),
+    archivedAt: v.optional(v.number()),
+    archivedReason: v.optional(v.string()),
+    // Sub-project 6 fields (cron sweep). Indexed for "oldest first".
+    lastChecked: v.optional(v.number()),
+    failedCheckCount: v.optional(v.number()),
+    // Enrichment status (sub-project 2 wires _rewriteContent to drain pending).
+    contentStatus: v.union(
+      v.literal("pending"),
+      v.literal("generating"),
+      v.literal("complete"),
+      v.literal("failed"),
+    ),
+    contentLastError: v.optional(v.string()),
+    contentLastFailureAt: v.optional(v.number()),
+    contentAttempts: v.optional(v.number()),
+    // Sub-project 2: LLM-rewritten posting in our voice. Optional until the
+    // _rewriteContent action drains it from "pending". Each section's word
+    // budget is enforced by the prompt, not by Zod (Gemini structured output
+    // rejects bounded constraints).
+    content: v.optional(
+      v.object({
+        overview: v.string(),
+        theRole: v.string(),
+        whatStandsOut: v.array(v.string()),
+        idealCandidate: v.string(),
+        // null when no salary information is available in the source posting.
+        // Renderers should hide the section in that case.
+        compSummary: v.union(v.string(), v.null()),
+        // SEO meta. Title kept short for SERP truncation safety; description
+        // sized for the standard 150-160 char snippet budget.
+        metaTitle: v.string(),
+        metaDescription: v.string(),
+        socialAlt: v.string(),
+      }),
+    ),
+    // Optional cost tracker for the rewrite call. Lets us spot-check spend
+    // per posting and per cohort without scraping logs.
+    contentCostCents: v.optional(v.number()),
+    // Synchronously resolved at upsert from cached title_canonicalizations.
+    // null means we'll resolve later via _resolveArchetype (LLM-canonicalize
+    // → guide lookup, fired on first /jobs/listing/... view per posting).
+    roleArchetypeSlug: v.optional(v.union(v.string(), v.null())),
+    // Set the moment _resolveArchetype completes a slug-resolution attempt,
+    // regardless of outcome. Distinguishes "we haven't tried yet" (undefined)
+    // from "tried, no matching career_guide for this canonical title" (set
+    // with roleArchetypeSlug still null). The detail page hides the role-
+    // overlay research cards once this is set without a slug — honest
+    // absence beats showing "Researching…" forever.
+    roleArchetypeResolvedAt: v.optional(v.number()),
+    // Sub-project 4: hero image lazy-generated on first /jobs/listing view.
+    // illustrationStatus undefined → never started; "generating" → action in
+    // flight; "complete" → storage id is populated; "failed" → an error,
+    // page renders the gradient placeholder.
+    illustrationStorageId: v.optional(v.id("_storage")),
+    illustrationStatus: v.optional(
+      v.union(
+        v.literal("generating"),
+        v.literal("complete"),
+        v.literal("failed"),
+      ),
+    ),
+    illustrationLastError: v.optional(v.string()),
+    illustrationCostCents: v.optional(v.number()),
+  })
+    .index("by_dedupKey", ["dedupKey"])
+    .index("by_companyId", ["companyId"])
+    .index("by_isActive_lastSeenAt", ["isActive", "lastSeenAt"])
+    .index("by_lastChecked", ["lastChecked"])
+    .index("by_contentStatus_firstSeenAt", ["contentStatus", "firstSeenAt"]),
+
+  // ── Job-search query typo cache ───────────────────────────────────────
+  // Layer-1 dedup for the typo-correction Flash call. Mirrors the
+  // title_canonicalizations pattern: lookup by inputNormalized; on miss the
+  // action calls Flash and write-throughs the result. Result rows live
+  // forever — corrections don't go stale and cache hits are free.
+  query_corrections: defineTable({
+    inputNormalized: v.string(),  // lowercased + whitespace-collapsed input
+    corrected: v.string(),         // what Flash returned (may equal input)
+    hadTypo: v.boolean(),
+    confidence: v.number(),        // 0..1, from Flash
+    model: v.string(),
+    createdAt: v.number(),
+  }).index("by_inputNormalized", ["inputNormalized"]),
+
+  // ── Google Indexing API queue (sub-project 6) ─────────────────────────
+  // Google's Indexing API caps at 200 publish requests per day. We enqueue
+  // every URL_UPDATED / URL_DELETED event here and drain via an hourly cron
+  // at 8 items/tick (192/day, 8/day headroom for ad-hoc operations). Items
+  // above the daily quota stay queued for the next day.
+  google_indexing_queue: defineTable({
+    url: v.string(),                    // fully-qualified, e.g. https://career-steer.app/jobs/listing/...
+    kind: v.union(
+      v.literal("URL_UPDATED"),
+      v.literal("URL_DELETED"),
+    ),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("sent"),
+      v.literal("failed"),
+    ),
+    queuedAt: v.number(),
+    sentAt: v.optional(v.number()),
+    attempts: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+  })
+    .index("by_status_queuedAt", ["status", "queuedAt"])
+    // Used by enqueue to dedup pending entries for the same URL+kind.
+    .index("by_url_kind_status", ["url", "kind", "status"]),
+
+  // ── Company research (sub-project 5) ──────────────────────────────────
+  // Per-company research bundle: culture + financials. One row per company.
+  // Lazy-generated on first /jobs/listing view; refreshed every 90 days.
+  // citations is the V2 mirror of career_guides.citations — keyed by field
+  // path so the page can hang per-field source links off each section.
+  company_research: defineTable({
+    companyId: v.id("companies"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("generating"),
+      v.literal("complete"),
+      v.literal("failed"),
+    ),
+    attempts: v.optional(v.number()),
+    lastFailureAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    lastResearchedAt: v.optional(v.number()),
+    costCents: v.optional(v.number()),
+    culture: v.optional(v.string()),
+    financials: v.optional(v.string()),
+    citations: v.optional(
+      v.record(
+        v.string(), // field key: "culture" | "financials"
+        v.array(
+          v.object({
+            url: v.string(),
+            title: v.string(),
+            publisher: v.optional(v.string()),
+            fetchedAt: v.number(),
+          }),
+        ),
+      ),
+    ),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_status", ["status"]),
+
+  // Per-(company, role-archetype) research overlay: interview process + comp
+  // specifics for THIS role at THIS company. Generic facts come from the
+  // matching career_guide via job_postings.roleArchetypeSlug, so this table
+  // only captures what's company-specific.
+  company_role_research: defineTable({
+    companyId: v.id("companies"),
+    roleArchetypeSlug: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("generating"),
+      v.literal("complete"),
+      v.literal("failed"),
+    ),
+    attempts: v.optional(v.number()),
+    lastFailureAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    lastResearchedAt: v.optional(v.number()),
+    costCents: v.optional(v.number()),
+    interview: v.optional(v.string()),
+    compensation: v.optional(v.string()),
+    citations: v.optional(
+      v.record(
+        v.string(), // field key: "interview" | "compensation"
+        v.array(
+          v.object({
+            url: v.string(),
+            title: v.string(),
+            publisher: v.optional(v.string()),
+            fetchedAt: v.number(),
+          }),
+        ),
+      ),
+    ),
+  })
+    .index("by_companyId_archetype", ["companyId", "roleArchetypeSlug"])
+    .index("by_status", ["status"]),
+
+  // ── Job-posting facet embeddings ──────────────────────────────────────
+  // Same 4-facet shape as career_guide_embeddings + profile_embeddings, so
+  // job vectors are directly comparable to profile vectors via the existing
+  // matching primitives (currentState↔currentState for "matches what I do",
+  // arc↔arc for "matches where I'm headed", domain↔domain for skill overlap).
+  // wholeVector also powers job↔job related-jobs on the detail page.
+  // Generated once when contentStatus flips to "complete"; no auto-refresh
+  // because content is one-shot per posting.
+  job_posting_embeddings: defineTable({
+    jobPostingId: v.id("job_postings"),
+    wholeVector: v.array(v.float64()),
+    arcVector: v.array(v.float64()),
+    currentStateVector: v.array(v.float64()),
+    domainVector: v.array(v.float64()),
+    dimensions: v.number(),
+    model: v.string(),
+    generatedAt: v.number(),
+  })
+    .index("by_jobPostingId", ["jobPostingId"])
+    .vectorIndex("by_whole", {
+      vectorField: "wholeVector",
+      dimensions: 1536,
+    })
+    .vectorIndex("by_arc", {
+      vectorField: "arcVector",
+      dimensions: 1536,
+    })
+    .vectorIndex("by_currentState", {
+      vectorField: "currentStateVector",
+      dimensions: 1536,
+    })
+    .vectorIndex("by_domain", {
+      vectorField: "domainVector",
+      dimensions: 1536,
+    }),
+
+  // Lightweight mirror of job_postings — dual-written on every patch.
+  // Carries only the fields hot-path queries need (sitemap, listings, admin).
+  // Avoids the 16MB tx byte limit when job_postings eventually carries
+  // embeddings + content + research blobs. Mirrors V1's jobsLivenessIndex
+  // pattern. ~1KB/row vs. eventual ~30KB on the main table.
+  job_postings_index: defineTable({
+    jobPostingId: v.id("job_postings"),
+    dedupKey: v.string(),
+    companyId: v.id("companies"),
+    companyName: v.string(),
+    companySlug: v.string(),
+    title: v.string(),
+    titleSlug: v.string(),
+    city: v.string(),
+    citySlug: v.string(),
+    isActive: v.boolean(),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    contentStatus: v.string(),
+  })
+    .index("by_jobPostingId", ["jobPostingId"])
+    .index("by_isActive_lastSeenAt", ["isActive", "lastSeenAt"])
+    .index("by_companyId", ["companyId"]),
+
+  // Per-user bookmark of a job posting. The (userId, jobPostingId) pair is
+  // unique by convention — enforced at write time in convex/savedJobs.ts via
+  // a by_userId_jobPostingId lookup before insert. Reads on the workspace
+  // jobs page hit by_userId_savedAt for the listing and by_userId_jobPostingId
+  // for the per-card "is saved?" check.
+  saved_jobs: defineTable({
+    userId: v.id("users"),
+    jobPostingId: v.id("job_postings"),
+    savedAt: v.number(),
+    note: v.optional(v.string()),
+  })
+    .index("by_userId_savedAt", ["userId", "savedAt"])
+    .index("by_userId_jobPostingId", ["userId", "jobPostingId"]),
+
+  // Per-query SearchAPI cache marker. One row per distinct
+  // (queryNormalized, citySlug, countryCode) tuple records the timestamp of
+  // the last successful SearchAPI run. The action consults this BEFORE the
+  // searchCache fan-out so a duplicate search inside the freshness window
+  // skips SearchAPI entirely — even if the original run returned fewer than
+  // the searchCache threshold. Empty strings are used in place of null for
+  // citySlug / countryCode so the index keys stay total. Without this table
+  // the cache only kicks in once a query has accumulated ≥N postings, which
+  // burned paid credits on niche / first-time queries.
+  search_runs: defineTable({
+    queryNormalized: v.string(),
+    citySlug: v.string(),
+    countryCode: v.string(),
+    lastRunAt: v.number(),
+    resultCount: v.number(),
+  }).index("by_query_city_country", [
+    "queryNormalized",
+    "citySlug",
+    "countryCode",
+  ]),
 });

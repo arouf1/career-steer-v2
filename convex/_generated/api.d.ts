@@ -45,6 +45,7 @@ import type * as lib_jobImagePrompts from "../lib/jobImagePrompts.js";
 import type * as lib_normalize from "../lib/normalize.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_titleAbbreviations from "../lib/titleAbbreviations.js";
+import type * as lib_voiceLiveConfig from "../lib/voiceLiveConfig.js";
 import type * as locations from "../locations.js";
 import type * as matching from "../matching.js";
 import type * as people from "../people.js";
@@ -107,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   "lib/normalize": typeof lib_normalize;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/titleAbbreviations": typeof lib_titleAbbreviations;
+  "lib/voiceLiveConfig": typeof lib_voiceLiveConfig;
   locations: typeof locations;
   matching: typeof matching;
   people: typeof people;
