@@ -182,14 +182,21 @@ export const mintCompassSession = action({
       dismissed,
     });
 
-    // Resolve voice up-front — needed by both the token-mint constraints
-    // (so the constrained WS endpoint pins the right voice) and the
-    // sessionConfig the client echoes into the setup message.
     const voiceId = args.voiceId ?? DEFAULT_VOICE;
 
     // Mint credentials — try ephemeral first, fall back to raw API key per
     // V1 commit 0689253. Gemini's auth_tokens endpoint occasionally flakes;
     // the fallback keeps calls working when it does.
+    //
+    // We deliberately do NOT pass `liveConnectConstraints`. Yesterday's
+    // 22ee91c locked model + voice at mint to stop voice rotation, but the
+    // v1alpha BidiGenerateContentConstrained endpoint then started rejecting
+    // our full client setup with WS close 1011 "Internal error encountered"
+    // — the constrained endpoint is strict about overlap between locked
+    // fields and the client setup payload, and we send a lot of additional
+    // setup (tools, transcription, VAD, contextWindowCompression, etc.).
+    // Rolling back to no-constraints lets the call connect; voice rotation
+    // is the lesser of two evils.
     const client = new GoogleGenAI({
       apiKey,
       httpOptions: { apiVersion: "v1alpha" },
@@ -205,21 +212,6 @@ export const mintCompassSession = action({
           newSessionExpireTime: new Date(
             Date.now() + NEW_SESSION_TTL_MS,
           ).toISOString(),
-          // Lock model + voice at token mint time. The ephemeral WS endpoint
-          // (BidiGenerateContentConstrained) ignores anything in the client
-          // setup message that isn't bound here — without this lock Gemini
-          // picks a fallback voice (which appears to rotate) instead of
-          // honouring our prebuiltVoiceConfig.
-          liveConnectConstraints: {
-            model: LIVE_MODEL,
-            config: {
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: voiceId },
-                },
-              },
-            },
-          },
         },
       });
       if (!token.name) throw new Error("empty_token_name");

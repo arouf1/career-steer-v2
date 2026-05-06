@@ -158,17 +158,22 @@ export const mintSession = action({
       citations,
     });
 
-    // Resolve voice up-front — the token-mint constraints below need it so
-    // the constrained WS endpoint pins the right voice. Without locking
-    // voice at mint, Gemini ignores the prebuiltVoiceConfig in the client
-    // setup message (constrained mode honours only fields bound here) and
-    // falls back to a rotating default.
     const voiceId = args.voiceId ?? DEFAULT_VOICE;
 
     // Mint the credential. Try ephemeral first (preferred — single-use,
     // short-lived, scoped to this session); fall back to API key if Google's
     // auth_tokens endpoint returns an error. V1 commit 0689253 documented
     // that this fallback is needed in practice.
+    //
+    // We deliberately do NOT pass `liveConnectConstraints`. Yesterday's
+    // 22ee91c locked model + voice at mint to stop voice rotation, but the
+    // v1alpha BidiGenerateContentConstrained endpoint then started rejecting
+    // our full client setup with WS close 1011 "Internal error encountered"
+    // — the constrained endpoint is strict about overlap between locked
+    // fields and the client setup payload, and we send a lot of additional
+    // setup (tools, transcription, VAD, contextWindowCompression, etc.).
+    // Rolling back to no-constraints lets the call connect; voice rotation
+    // is the lesser of two evils.
     const client = new GoogleGenAI({
       apiKey,
       httpOptions: { apiVersion: "v1alpha" },
@@ -184,16 +189,6 @@ export const mintSession = action({
           newSessionExpireTime: new Date(
             Date.now() + NEW_SESSION_TTL_MS,
           ).toISOString(),
-          liveConnectConstraints: {
-            model: LIVE_MODEL,
-            config: {
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: voiceId },
-                },
-              },
-            },
-          },
         },
       });
       if (!token.name) throw new Error("empty_token_name");
