@@ -9,9 +9,20 @@ import {
   CareerGuidePending,
   type Region,
 } from "@/components/career-guides/CareerGuideArticle";
+import { JobsForGuide } from "@/components/career-guides/JobsForGuide";
 import { RelatedGuides } from "@/components/career-guides/RelatedGuides";
 
 export const revalidate = 300;
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://career-steer.app";
+
+export type AnonymousGeo = {
+  city?: string;
+  countryCode?: string;
+  lat?: number;
+  lon?: number;
+};
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -27,6 +38,27 @@ const resolveRegion = async (
   const country = h.get("x-vercel-ip-country")?.toLowerCase();
   if (country === "gb" || country === "uk") return "uk";
   return "us";
+};
+
+// Pulls the Vercel-supplied request geo headers and decodes them into a
+// shape JobsForGuide can feed into the Convex location ladder. All fields
+// are optional — missing values fall through the ladder to country or
+// anywhere automatically. Local dev (no Vercel proxy) returns {} so the
+// orchestrator just shows globally-ranked results.
+const resolveAnonymousGeo = async (): Promise<AnonymousGeo> => {
+  const h = await headers();
+  const cityRaw = h.get("x-vercel-ip-city");
+  const countryCode = h.get("x-vercel-ip-country")?.toLowerCase() ?? undefined;
+  const latRaw = h.get("x-vercel-ip-latitude");
+  const lonRaw = h.get("x-vercel-ip-longitude");
+  const lat = latRaw ? Number(latRaw) : NaN;
+  const lon = lonRaw ? Number(lonRaw) : NaN;
+  return {
+    city: cityRaw ? decodeURIComponent(cityRaw) : undefined,
+    countryCode,
+    lat: Number.isFinite(lat) ? lat : undefined,
+    lon: Number.isFinite(lon) ? lon : undefined,
+  };
 };
 
 // Truncate at the last full word inside `max` chars and append an ellipsis.
@@ -122,10 +154,14 @@ export default async function CareerGuidePage({
       ? await fetchAction(api.careerGuides.relatedBySlug, { slug, limit: 4 })
       : [];
 
-  const region = await resolveRegion(sp.region);
+  const [region, anonymousGeo] = await Promise.all([
+    resolveRegion(sp.region),
+    resolveAnonymousGeo(),
+  ]);
   const existingByTitle: Record<string, string> = Object.fromEntries(
     allGuides.map((g) => [g.title.toLowerCase().trim(), g.slug]),
   );
+  const pageUrl = `${SITE_URL}/career-guides/${guide.slug}`;
 
   return (
     <>
@@ -138,6 +174,12 @@ export default async function CareerGuidePage({
               defaultRegion={region}
               existingByTitle={existingByTitle}
               initialBranches={initialBranches}
+            />
+            <JobsForGuide
+              guideSlug={guide.slug}
+              guideTitle={guide.title}
+              anonymousGeo={anonymousGeo}
+              pageUrl={pageUrl}
             />
             <RelatedGuides guides={relatedGuides} sourceTitle={guide.title} />
             <ArticleJsonLd
