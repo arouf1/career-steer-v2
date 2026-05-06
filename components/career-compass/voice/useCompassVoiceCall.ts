@@ -240,7 +240,11 @@ export function useCompassVoiceCall(
 
   const finalizeCall = useCallback(
     async (status: "completed" | "interrupted" | "error") => {
-      if (finalizedRef.current) return;
+      if (finalizedRef.current) {
+        console.log("[compass-voice] finalizeCall: already finalized, skip");
+        return;
+      }
+      console.log("[compass-voice] finalizeCall: status=", status);
       finalizedRef.current = true;
 
       const sessionId = sessionIdRef.current;
@@ -470,7 +474,15 @@ export function useCompassVoiceCall(
   );
 
   const startCall = useCallback(async () => {
+    console.log(
+      "[compass-voice] startCall: begin",
+      "callState=",
+      callState,
+      "ua=",
+      typeof navigator !== "undefined" ? navigator.userAgent : "n/a",
+    );
     if (callState !== "idle" && callState !== "ended" && callState !== "error") {
+      console.log("[compass-voice] startCall: bail, callState not idle/ended/error");
       return;
     }
 
@@ -485,7 +497,7 @@ export function useCompassVoiceCall(
     try {
       prewarm = prewarmAudio();
     } catch (err) {
-      console.warn("useCompassVoiceCall: prewarmAudio threw", err);
+      console.warn("[compass-voice] prewarmAudio threw", err);
       setError("Couldn't open audio on this device. Try another browser.");
       setCallState("error");
       return;
@@ -494,6 +506,7 @@ export function useCompassVoiceCall(
     setError(null);
     setCallState("connecting");
     finalizedRef.current = false;
+    console.log("[compass-voice] startCall: state=connecting, racing mint+mic");
 
     // Race mint and mic-permission in parallel — both are network/UI round
     // trips, no point serialising them.
@@ -515,9 +528,16 @@ export function useCompassVoiceCall(
       ]);
       mintResult = mr;
       micStream = ms;
+      console.log(
+        "[compass-voice] mint+mic resolved",
+        "mintOk=",
+        mintResult.ok,
+        "tracks=",
+        micStream.getTracks().length,
+      );
     } catch (err) {
       const name = err instanceof Error ? err.name : "Unknown";
-      console.warn("useCompassVoiceCall: prewarm/mint failed", name, err);
+      console.warn("[compass-voice] prewarm/mint failed", name, err);
       setError(
         name === "NotAllowedError"
           ? "Microphone access was denied. Allow it in your browser settings and try again."
@@ -532,6 +552,7 @@ export function useCompassVoiceCall(
       return;
     }
     if (!mintResult.ok) {
+      console.warn("[compass-voice] mint not ok, reason=", mintResult.reason);
       setError(reasonToMessage(mintResult.reason));
       setCallState("error");
       prewarm.abort();
@@ -549,6 +570,17 @@ export function useCompassVoiceCall(
       ? `access_token=${encodeURIComponent(auth.value)}`
       : `key=${encodeURIComponent(auth.value)}`;
     const wsUrl = `${baseUrl}?${authParam}`;
+    console.log(
+      "[compass-voice] opening WS",
+      "isEphemeral=",
+      isEphemeral,
+      "model=",
+      config.model,
+      "voice=",
+      config.voice,
+      "toolsCount=",
+      Array.isArray(config.tools) ? config.tools.length : 0,
+    );
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -561,6 +593,7 @@ export function useCompassVoiceCall(
     playerRef.current = player;
 
     ws.onopen = () => {
+      console.log("[compass-voice] ws.onopen");
       const setupMessage = {
         setup: {
           model: `models/${config.model}`,
@@ -596,7 +629,12 @@ export function useCompassVoiceCall(
         "[compass-voice] setup tools:",
         JSON.stringify(config.tools, null, 2),
       );
-      ws.send(JSON.stringify(setupMessage));
+      try {
+        ws.send(JSON.stringify(setupMessage));
+        console.log("[compass-voice] setup sent");
+      } catch (err) {
+        console.error("[compass-voice] setup send failed", err);
+      }
     };
 
     ws.onmessage = async (event) => {
@@ -608,10 +646,15 @@ export function useCompassVoiceCall(
         } else {
           data = JSON.parse(event.data as string);
         }
+        console.log(
+          "[compass-voice] ws.onmessage keys=",
+          Object.keys(data),
+        );
 
         handleServerMessage(data);
 
         if ("setupComplete" in data && !captureRef.current) {
+          console.log("[compass-voice] setupComplete received, starting PCM capture");
           try {
             const handle = await startPCMCapture(
               (base64PCM) => {
@@ -641,10 +684,12 @@ export function useCompassVoiceCall(
             captureRef.current = handle;
             // Surface the handle to the dock for analyser attachment.
             setCaptureHandle(handle);
+            console.log("[compass-voice] capture handle wired to ref + state");
           } catch (err) {
             const name = err instanceof Error ? err.name : "Unknown";
             console.error(
-              "useCompassVoiceCall: mic capture failed",
+              "[compass-voice] mic capture failed",
+              "name=",
               name,
               err,
             );
@@ -656,12 +701,13 @@ export function useCompassVoiceCall(
             return;
           }
 
+          console.log("[compass-voice] sending hello realtimeInput.text");
           wsRef.current?.send(
             JSON.stringify({ realtimeInput: { text: "Hello" } }),
           );
         }
       } catch (err) {
-        console.warn("useCompassVoiceCall: message parse error", err);
+        console.warn("[compass-voice] ws.onmessage parse error", err);
       }
     };
 
@@ -692,6 +738,7 @@ export function useCompassVoiceCall(
   }, [callState, finalizeCall, handleServerMessage, mintSession, voiceId]);
 
   const endCall = useCallback(async () => {
+    console.log("[compass-voice] endCall: user-initiated");
     setCallState("ended");
     await finalizeCall("completed");
   }, [finalizeCall]);
@@ -792,6 +839,13 @@ export function useCompassVoiceCall(
 
   useEffect(() => {
     return () => {
+      console.log(
+        "[compass-voice] hook unmount cleanup",
+        "finalized=",
+        finalizedRef.current,
+        "hasSession=",
+        !!sessionIdRef.current,
+      );
       if (!finalizedRef.current && sessionIdRef.current) {
         void finalizeCall("interrupted");
       } else {

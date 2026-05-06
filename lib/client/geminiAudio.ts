@@ -80,8 +80,20 @@ export interface PrewarmedAudio {
  * AudioContexts otherwise.
  */
 export function prewarmAudio(): PrewarmedAudio {
+  console.log("[gemini-audio] prewarmAudio: begin");
   const captureContext = new AudioContext({ sampleRate: 48_000 });
   const playbackContext = new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE });
+  console.log(
+    "[gemini-audio] prewarmAudio: contexts created",
+    "captureState=",
+    captureContext.state,
+    "captureRate=",
+    captureContext.sampleRate,
+    "playbackState=",
+    playbackContext.state,
+    "playbackRate=",
+    playbackContext.sampleRate,
+  );
 
   const streamPromise = navigator.mediaDevices.getUserMedia({
     audio: {
@@ -92,11 +104,41 @@ export function prewarmAudio(): PrewarmedAudio {
       channelCount: 1,
     },
   });
+  streamPromise.then(
+    (s) =>
+      console.log(
+        "[gemini-audio] prewarmAudio: getUserMedia resolved",
+        "tracks=",
+        s.getTracks().map((t) => ({ kind: t.kind, label: t.label, readyState: t.readyState })),
+      ),
+    (err) =>
+      console.warn(
+        "[gemini-audio] prewarmAudio: getUserMedia rejected",
+        "name=",
+        err?.name,
+        "message=",
+        err?.message,
+      ),
+  );
 
   const ready = Promise.all([
-    captureContext.resume(),
-    playbackContext.resume(),
-  ]).then(() => undefined);
+    captureContext.resume().then(
+      () => console.log("[gemini-audio] prewarmAudio: capture resumed", captureContext.state),
+      (err) => {
+        console.warn("[gemini-audio] prewarmAudio: capture resume failed", err);
+        throw err;
+      },
+    ),
+    playbackContext.resume().then(
+      () => console.log("[gemini-audio] prewarmAudio: playback resumed", playbackContext.state),
+      (err) => {
+        console.warn("[gemini-audio] prewarmAudio: playback resume failed", err);
+        throw err;
+      },
+    ),
+  ]).then(() => {
+    console.log("[gemini-audio] prewarmAudio: ready");
+  });
 
   let aborted = false;
   return {
@@ -107,6 +149,7 @@ export function prewarmAudio(): PrewarmedAudio {
     abort: () => {
       if (aborted) return;
       aborted = true;
+      console.log("[gemini-audio] prewarmAudio: abort");
       streamPromise
         .then((s) => s.getTracks().forEach((t) => t.stop()))
         .catch(() => {});
@@ -159,6 +202,13 @@ export async function startPCMCapture(
   onChunk: (base64PCM: string) => void,
   opts: PCMCaptureOptions = {},
 ): Promise<PCMCaptureHandle> {
+  console.log(
+    "[gemini-audio] startPCMCapture: begin",
+    "hasStream=",
+    !!opts.stream,
+    "hasContext=",
+    !!opts.audioContext,
+  );
   const stream = opts.stream
     ?? (await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -169,21 +219,39 @@ export async function startPCMCapture(
         channelCount: 1,
       },
     }));
+  console.log("[gemini-audio] startPCMCapture: stream resolved");
 
   const audioContext = opts.audioContext
     ?? new AudioContext({ sampleRate: 48_000 });
+  console.log(
+    "[gemini-audio] startPCMCapture: context",
+    "state=",
+    audioContext.state,
+    "rate=",
+    audioContext.sampleRate,
+  );
 
   // Defensive: if the context was passed in already-running, this is a no-op.
   // If it was created here (or somehow ended up suspended), nudge it to
   // running. iOS Safari requires a gesture for resume(), but the prewarm
   // path has already covered that.
   if (audioContext.state === "suspended") {
-    await audioContext.resume().catch(() => {});
+    console.log("[gemini-audio] startPCMCapture: resuming suspended context");
+    await audioContext.resume().catch((err) =>
+      console.warn("[gemini-audio] startPCMCapture: resume failed", err),
+    );
   }
 
   const source = audioContext.createMediaStreamSource(stream);
+  console.log("[gemini-audio] startPCMCapture: createMediaStreamSource ok");
 
-  await audioContext.audioWorklet.addModule("/audio-worklet-processor.js");
+  try {
+    await audioContext.audioWorklet.addModule("/audio-worklet-processor.js");
+    console.log("[gemini-audio] startPCMCapture: addModule ok");
+  } catch (err) {
+    console.error("[gemini-audio] startPCMCapture: addModule failed", err);
+    throw err;
+  }
 
   const workletNode = new AudioWorkletNode(
     audioContext,
@@ -194,10 +262,18 @@ export async function startPCMCapture(
       },
     },
   );
+  console.log("[gemini-audio] startPCMCapture: worklet node created");
 
+  let chunkCount = 0;
   workletNode.port.onmessage = (event: MessageEvent) => {
     if (event.data?.type === "pcm_data") {
       const base64 = arrayBufferToBase64(event.data.data);
+      chunkCount++;
+      if (chunkCount === 1) {
+        console.log("[gemini-audio] startPCMCapture: first PCM chunk emitted");
+      } else if (chunkCount === 50) {
+        console.log("[gemini-audio] startPCMCapture: 50 PCM chunks emitted (~5s)");
+      }
       onChunk(base64);
     }
   };
@@ -207,8 +283,10 @@ export async function startPCMCapture(
   // destination keeps the AudioContext processing — without this connection
   // some browsers stop scheduling worklet callbacks.
   workletNode.connect(audioContext.destination);
+  console.log("[gemini-audio] startPCMCapture: graph connected, returning handle");
 
   const stop = () => {
+    console.log("[gemini-audio] startPCMCapture: stop called, chunksEmitted=", chunkCount);
     try {
       workletNode.port.onmessage = null;
       workletNode.disconnect();
@@ -249,8 +327,18 @@ export class PCMPlayer {
   }) {
     this.audioContext = opts?.audioContext
       ?? new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE });
+    console.log(
+      "[gemini-audio] PCMPlayer: constructed",
+      "providedContext=",
+      !!opts?.audioContext,
+      "state=",
+      this.audioContext.state,
+    );
     if (this.audioContext.state === "suspended") {
-      this.audioContext.resume().catch(() => {});
+      this.audioContext.resume().then(
+        () => console.log("[gemini-audio] PCMPlayer: context resumed"),
+        (err) => console.warn("[gemini-audio] PCMPlayer: resume failed", err),
+      );
     }
     this.onPlaybackStart = opts?.onPlaybackStart;
     this.onPlaybackEnd = opts?.onPlaybackEnd;
