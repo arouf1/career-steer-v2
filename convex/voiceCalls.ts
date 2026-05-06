@@ -195,10 +195,16 @@ export const getActiveSessionForUser = query({
       callId: v.id("voice_calls"),
       sessionId: v.string(),
       // Resolved discriminator: "guide" for legacy rows that pre-date the
-      // discriminator landing, "compass" for ambient calls.
-      surface: v.union(v.literal("guide"), v.literal("compass")),
+      // discriminator landing, "compass" for ambient calls, "job" for
+      // per-posting calls.
+      surface: v.union(
+        v.literal("guide"),
+        v.literal("compass"),
+        v.literal("job"),
+      ),
       guideId: v.optional(v.id("career_guides")),
       canvasSnapshotId: v.optional(v.id("discover_canvases")),
+      jobPostingId: v.optional(v.id("job_postings")),
       title: v.string(),
       createdAt: v.number(),
     }),
@@ -225,6 +231,7 @@ export const getActiveSessionForUser = query({
       surface: latest.surface ?? "guide",
       guideId: latest.guideId,
       canvasSnapshotId: latest.canvasSnapshotId,
+      jobPostingId: latest.jobPostingId,
       title: latest.title,
       createdAt: latest.createdAt,
     };
@@ -242,9 +249,14 @@ export const _getCallById = internalQuery({
       userId: v.id("users"),
       // surface defaults to "guide" for legacy rows so the analysis pipeline
       // can branch on it without an extra null-check.
-      surface: v.union(v.literal("guide"), v.literal("compass")),
+      surface: v.union(
+        v.literal("guide"),
+        v.literal("compass"),
+        v.literal("job"),
+      ),
       guideId: v.optional(v.id("career_guides")),
       canvasSnapshotId: v.optional(v.id("discover_canvases")),
+      jobPostingId: v.optional(v.id("job_postings")),
       title: v.string(),
       status: v.union(
         v.literal("active"),
@@ -265,6 +277,7 @@ export const _getCallById = internalQuery({
       surface: row.surface ?? "guide",
       guideId: row.guideId,
       canvasSnapshotId: row.canvasSnapshotId,
+      jobPostingId: row.jobPostingId,
       title: row.title,
       status: row.status,
       messages: row.messages,
