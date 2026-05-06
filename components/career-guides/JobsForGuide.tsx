@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useUser, SignInButton } from "@clerk/nextjs";
 import { useAction, useQuery } from "convex/react";
 import { Briefcase, Search } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -173,7 +173,11 @@ export function JobsForGuide({
     fitTier: fitByJobId.get(j.jobPostingId as string) ?? null,
   }));
 
-  const viewerCityLabel = anonymousGeo.city;
+  // Profile-derived city wins over IP-derived city when signed-in.
+  const viewerCityLabel =
+    isSignedIn && profileGeo?.cityName
+      ? profileGeo.cityName
+      : anonymousGeo.city;
   const viewerCountryLabel = labelForCountryCode(viewer.countryCode);
 
   const heading = describeLadderHit({
@@ -217,7 +221,19 @@ export function JobsForGuide({
             guideTitle={guideTitle}
             signInRedirectUrl={pageUrl}
           />
-        ) : null}
+        ) : (
+          // Soft footer for anonymous viewers when the archetype is small
+          // enough that every cached card fits in the visible slot. Keeps
+          // sign-in present without inventing a fake blurred stack.
+          <div className="flex items-center justify-between rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+            <span>Sign in to see how these match your profile.</span>
+            <SignInButton mode="modal" forceRedirectUrl={pageUrl}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs">
+                Sign in
+              </Button>
+            </SignInButton>
+          </div>
+        )}
       </Section>
     );
   }

@@ -63,6 +63,7 @@ export const resolvedLocation = query({
       lat: v.number(),
       lon: v.number(),
       countryCode: v.string(),
+      cityName: v.string(),
     }),
   ),
   handler: async (ctx) => {
@@ -106,6 +107,7 @@ export const resolvedLocation = query({
       lat: best.gps.lat,
       lon: best.gps.lon,
       countryCode: best.countryCode.toLowerCase(),
+      cityName: best.name,
     };
   },
 });
