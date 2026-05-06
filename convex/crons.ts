@@ -1,6 +1,6 @@
 import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
-import { isCronAllowedDeployment } from "./lib/env";
+import { isCronAllowedDeployment, isProdDeployment } from "./lib/env";
 
 const crons = cronJobs();
 
@@ -46,6 +46,51 @@ if (isCronAllowedDeployment()) {
     "expand career guide catalog",
     { hours: 1 },
     internal.catalogExpansion.runExpansion,
+  );
+
+  // Sub-project 2 of the jobs feature. Drains job_postings rows stuck in
+  // contentStatus: "pending" (missed a runAfter schedule) or "failed" (under
+  // the 3-attempt cap and past cooldown). Same cadence as the career-guide
+  // retry — 30 minutes balances "don't burn retry budget" against "transient
+  // OpenRouter blips clear within an hour or two."
+  crons.interval(
+    "retry failed job-posting rewrites",
+    { minutes: 30 },
+    internal.jobPostingsContent._retryFailedContent,
+  );
+
+  // Sub-project 6 of the jobs feature.
+  //
+  // Google Indexing API drain. PROD-ONLY — we don't want dev URLs in
+  // Google's index, and the 200/day quota is shared across deployments.
+  // The queue caps each tick at 8 items (192/day, leaving 8/day headroom
+  // under Google's 200/day publish quota). Hourly cadence keeps the queue
+  // from sitting on URLs for too long while staying well inside the cap.
+  // The enqueue mutation also no-ops on dev so the queue table stays empty.
+  if (isProdDeployment()) {
+    crons.interval(
+      "drain google indexing queue",
+      { hours: 1 },
+      internal.googleIndexingQueue.drain,
+    );
+  }
+
+  // Apply-link liveness sweep. Two-hourly cadence with a per-row 24h cooldown
+  // means each posting gets one HEAD per day on average. Mirrors V1's
+  // behaviour. Stage-2 Exa LLM verification is deferred to a follow-up.
+  crons.interval(
+    "sweep job-posting liveness",
+    { hours: 2 },
+    internal.jobsLifecycle.sweepLiveness,
+  );
+
+  // Staleness sweep. Once a day archives postings with lastSeenAt > 45d.
+  // Captures listings that simply rolled off SearchAPI without us ever
+  // seeing a hard 404. Off-peak hour for batch friendliness.
+  crons.daily(
+    "sweep stale job postings",
+    { hourUTC: 4, minuteUTC: 30 },
+    internal.jobsLifecycle.sweepStalePostings,
   );
 }
 
