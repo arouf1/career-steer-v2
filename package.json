@@ -68,6 +68,9 @@
     "onlyBuiltDependencies": [
       "@clerk/shared",
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {
+      "eslint-plugin-react@7.37.5": "patches/eslint-plugin-react@7.37.5.patch"
+    }
   }
 }

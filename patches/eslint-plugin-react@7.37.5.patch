@@ -1,0 +1,32 @@
+diff --git a/lib/rules/jsx-filename-extension.js b/lib/rules/jsx-filename-extension.js
+index 4a2cfeede66b68255ca48bc38c0eb2f1537a785a..f5e4ced4602aa713ca179b5999eb74267ce00a91 100644
+--- a/lib/rules/jsx-filename-extension.js
++++ b/lib/rules/jsx-filename-extension.js
+@@ -61,7 +61,8 @@ module.exports = {
+   },
+ 
+   create(context) {
+-    const filename = context.getFilename();
++    // ESLint 10 compat: `context.getFilename()` is gone; use `context.filename`.
++    const filename = context.filename || (typeof context.getFilename === 'function' ? context.getFilename() : '<text>');
+ 
+     let jsxNode;
+ 
+diff --git a/lib/util/version.js b/lib/util/version.js
+index c9dc683b7d149c5a3a941bdcbd32f657facdfbf6..8a1ccbaa7b46b26daf0f2d4320befde8f6607fb0 100644
+--- a/lib/util/version.js
++++ b/lib/util/version.js
+@@ -28,7 +28,12 @@ function resetDetectedVersion() {
+ 
+ function resolveBasedir(contextOrFilename) {
+   if (contextOrFilename) {
+-    const filename = typeof contextOrFilename === 'string' ? contextOrFilename : contextOrFilename.getFilename();
++    // ESLint 10 removed `context.getFilename()` in favour of the
++    // `context.filename` getter. eslint-plugin-react 7.37.5 still calls the
++    // legacy method which throws under ESLint 10. Fall back to either shape.
++    const filename = typeof contextOrFilename === 'string'
++      ? contextOrFilename
++      : (contextOrFilename.filename || (typeof contextOrFilename.getFilename === 'function' ? contextOrFilename.getFilename() : process.cwd()));
+     const dirname = path.dirname(filename);
+     try {
+       if (fs.statSync(filename).isFile()) {

@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  eslint-plugin-react@7.37.5:
+    hash: 3f31a712e34370de63a3a93c30d0d7f6cb583be6b664c0f5d60af5332c4d1525
+    path: patches/eslint-plugin-react@7.37.5.patch
+
 importers:
 
   .:
@@ -6480,7 +6485,7 @@ snapshots:
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@10.2.1(jiti@2.6.1))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@10.2.1(jiti@2.6.1))(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1)(eslint@10.2.1(jiti@2.6.1))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@10.2.1(jiti@2.6.1))
-      eslint-plugin-react: 7.37.5(eslint@10.2.1(jiti@2.6.1))
+      eslint-plugin-react: 7.37.5(patch_hash=3f31a712e34370de63a3a93c30d0d7f6cb583be6b664c0f5d60af5332c4d1525)(eslint@10.2.1(jiti@2.6.1))
       eslint-plugin-react-hooks: 7.1.1(eslint@10.2.1(jiti@2.6.1))
       globals: 16.4.0
       typescript-eslint: 8.59.0(eslint@10.2.1(jiti@2.6.1))(typescript@6.0.3)
@@ -6585,7 +6590,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react@7.37.5(eslint@10.2.1(jiti@2.6.1)):
+  eslint-plugin-react@7.37.5(patch_hash=3f31a712e34370de63a3a93c30d0d7f6cb583be6b664c0f5d60af5332c4d1525)(eslint@10.2.1(jiti@2.6.1)):
     dependencies:
       array-includes: 3.1.9
       array.prototype.findlast: 1.2.5
