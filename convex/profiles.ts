@@ -46,6 +46,70 @@ export const current = query({
   },
 });
 
+// Resolves the signed-in user's free-text `profile.location` to a coords +
+// country-code triple via the locations table. Used by JobsForGuide to feed
+// `viewer.lat / lon / countryCode` into the location ladder. Returns null
+// when not signed-in, no profile, no confirmed location, or no matching
+// City row — callers fall back to anonymous IP geo in those cases.
+//
+// The lookup is at most one indexed read against `locations` per call;
+// Convex re-runs only when the underlying profile or matching locations
+// rows change, so the cost is amortised across guide-page renders.
+export const resolvedLocation = query({
+  args: {},
+  returns: v.union(
+    v.null(),
+    v.object({
+      lat: v.number(),
+      lon: v.number(),
+      countryCode: v.string(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!user) return null;
+
+    const profile = await ctx.db
+      .query("profiles")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (!profile?.location) return null;
+
+    // profile.location is free text from the profile editor (e.g. "London,
+    // United Kingdom" or "Bristol"). Use the head segment as the city; the
+    // typeahead writes canonical names so this is usually a clean city.
+    const cityName = profile.location.split(",")[0]?.trim().toLowerCase();
+    if (!cityName) return null;
+
+    const matches = await ctx.db
+      .query("locations")
+      .withIndex("by_target_nameLower", (q) =>
+        q.eq("targetType", "City").eq("nameLower", cityName),
+      )
+      .take(20);
+    if (matches.length === 0) return null;
+
+    // Prefer the highest-reach (most populous) match — handles ambiguous
+    // names ("Cambridge", "Springfield") by surfacing the canonical big
+    // city, mirroring locations.searchCities's popularity rerank.
+    const best = matches.reduce((a, b) => (b.reach > a.reach ? b : a));
+
+    return {
+      lat: best.gps.lat,
+      lon: best.gps.lon,
+      countryCode: best.countryCode.toLowerCase(),
+    };
+  },
+});
+
 export const upsert = internalMutation({
   args: {
     userId: v.id("users"),
