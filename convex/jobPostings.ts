@@ -4,6 +4,7 @@ import {
   internalQuery,
   mutation,
   query,
+  type MutationCtx,
 } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -15,6 +16,31 @@ import {
   slugify,
 } from "../lib/jobs/normalize";
 import { expandTitleAbbreviations } from "./lib/titleAbbreviations";
+
+// Resolve a posting's city → gps via the locations table, preferring the
+// matching country code when known. Returns undefined when no match — the
+// row stays without gps and the backfill migration picks it up later, or
+// the radius rung in jobsForGuide.forGuide silently excludes it.
+async function resolveGpsForCity(
+  ctx: MutationCtx,
+  cityName: string | undefined,
+  countryCode: string | undefined,
+): Promise<{ lat: number; lon: number } | undefined> {
+  if (!cityName) return undefined;
+  const lower = cityName.toLowerCase();
+  const candidates = await ctx.db
+    .query("locations")
+    .withIndex("by_target_nameLower", (q) =>
+      q.eq("targetType", "City").eq("nameLower", lower),
+    )
+    .take(20);
+  const match = countryCode
+    ? candidates.find(
+        (l) => l.countryCode.toLowerCase() === countryCode.toLowerCase(),
+      )
+    : candidates[0];
+  return match ? { lat: match.gps.lat, lon: match.gps.lon } : undefined;
+}
 
 // Maximum number of distinct queries to remember on a posting. Once we've
 // seen a posting under 20 different searches, additional ones are dropped.
@@ -510,6 +536,11 @@ export const upsertFromSearch = internalMutation({
           ctx,
           job.title,
         );
+        const gps = await resolveGpsForCity(
+          ctx,
+          cityFromLocation,
+          args.countryCode,
+        );
         const newId = await ctx.db.insert("job_postings", {
           dedupKey,
           companyId,
@@ -540,6 +571,7 @@ export const upsertFromSearch = internalMutation({
           isActive: true,
           contentStatus: "pending",
           roleArchetypeSlug,
+          gps,
         });
         await mirrorToIndex(ctx, newId);
         upsertedCount += 1;
