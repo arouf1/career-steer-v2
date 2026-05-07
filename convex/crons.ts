@@ -37,14 +37,14 @@ if (isCronAllowedDeployment()) {
     internal.podcasts._retryFailedPodcasts,
   );
 
-  // Autonomous catalog growth. Hourly cadence yields ~720 guides/month. The
-  // orchestrator brainstorms candidate titles for the current industry bucket
-  // (round-robin, 12-hour cycle), Exa-verifies legitimacy, and triggers the
-  // existing generation pipeline through _requestGenerationForCron. One new
-  // guide per tick at most; ticks with no surviving candidate are no-ops.
+  // Autonomous catalog growth. Six-hourly cadence yields ~120 guides/month.
+  // The orchestrator brainstorms candidate titles for the current industry
+  // bucket (round-robin, 12-hour cycle), Exa-verifies legitimacy, and triggers
+  // the existing generation pipeline through _requestGenerationForCron. One
+  // new guide per tick at most; ticks with no surviving candidate are no-ops.
   crons.interval(
     "expand career guide catalog",
-    { hours: 1 },
+    { hours: 6 },
     internal.catalogExpansion.runExpansion,
   );
 
