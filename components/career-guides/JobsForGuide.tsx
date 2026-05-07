@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser, SignInButton } from "@clerk/nextjs";
 import { useAction, useQuery } from "convex/react";
 import { Search } from "lucide-react";
@@ -106,11 +106,13 @@ export function JobsForGuide({
 
   const searchLive = useAction(api.jobsForGuide.searchLive);
   const [searchLivePending, setSearchLivePending] = useState(false);
+  const [autoSearchAttempted, setAutoSearchAttempted] = useState(false);
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
 
-  const onSearchLive = async () => {
+  const onSearchLive = useCallback(async () => {
     setSearchLivePending(true);
     setQuotaMessage(null);
+    setAutoSearchAttempted(true);
     try {
       await searchLive({
         guideSlug,
@@ -118,10 +120,13 @@ export function JobsForGuide({
         gl: viewer.countryCode,
       });
     } catch (err: unknown) {
-      const data = (err as { data?: { kind?: string; retryAfterMs?: number } })
+      const errData = (err as { data?: { kind?: string; retryAfterMs?: number } })
         ?.data;
-      if (data?.kind === "quota_exceeded" && typeof data.retryAfterMs === "number") {
-        const min = Math.max(1, Math.ceil(data.retryAfterMs / 60_000));
+      if (
+        errData?.kind === "quota_exceeded" &&
+        typeof errData.retryAfterMs === "number"
+      ) {
+        const min = Math.max(1, Math.ceil(errData.retryAfterMs / 60_000));
         setQuotaMessage(`Try again in ${min} min.`);
       } else {
         setQuotaMessage("Couldn't search right now. Try again soon.");
@@ -129,24 +134,60 @@ export function JobsForGuide({
     } finally {
       setSearchLivePending(false);
     }
-  };
+  }, [searchLive, guideSlug, anonymousGeo.city, viewer.countryCode]);
+
+  // Auto-fire live search when a signed-in user scrolls the empty section
+  // into view. Single-shot per (guide-page, mount) — the rate-limit on
+  // searchLive (5/archetype/hour, 20/user/day) bounds cross-mount spend.
+  // Anonymous viewers never auto-fire (cost gate).
+  const emptyRef = useRef<HTMLDivElement>(null);
+  const autoFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    if (!data || data.jobs.length > 0) return;
+    if (autoFiredRef.current || autoSearchAttempted) return;
+    if (!emptyRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !autoFiredRef.current) {
+          autoFiredRef.current = true;
+          void onSearchLive();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -10% 0px" },
+    );
+    observer.observe(emptyRef.current);
+    return () => observer.disconnect();
+  }, [isSignedIn, data, autoSearchAttempted, onSearchLive]);
 
   if (!clerkLoaded || data === undefined) {
     return <JobsForGuideSkeleton showBlurred={!isSignedIn} />;
   }
 
   if (data.jobs.length === 0) {
+    const emptyVariant: React.ComponentProps<typeof JobsForGuideEmpty>["variant"] =
+      !isSignedIn
+        ? "anonymous"
+        : searchLivePending
+          ? "signed-in-searching"
+          : autoSearchAttempted
+            ? "signed-in-empty-after-search"
+            : "signed-in-idle";
+
     return (
       <Section guideTitle={guideTitle}>
         <JobsForGuideEmpty
+          ref={emptyRef}
           guideTitle={guideTitle}
-          variant={isSignedIn ? "signed-in" : "anonymous"}
+          variant={emptyVariant}
           onSearchLive={isSignedIn ? onSearchLive : undefined}
-          searchLivePending={searchLivePending}
           signInRedirectUrl={pageUrl}
         />
         {quotaMessage ? (
-          <p className="type-caption text-mute" role="status">
+          <p className="type-caption mt-3 text-mute" role="status">
             {quotaMessage}
           </p>
         ) : null}
