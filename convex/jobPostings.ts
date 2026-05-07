@@ -12,6 +12,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import {
   computeDedupKey,
   extractCity,
+  extractCountryCode,
   normalizeCompanyName,
   slugify,
 } from "../lib/jobs/normalize";
@@ -536,10 +537,20 @@ export const upsertFromSearch = internalMutation({
           ctx,
           job.title,
         );
+        // Per-posting country detection. Google Jobs (via SearchAPI) often
+        // returns out-of-region results when local matches are thin —
+        // searching with `gl=gb` for a niche role can still surface US
+        // postings. Trusting the action's countryCode arg blindly stamps
+        // every row with that country, which then breaks the location
+        // ladder (US postings tagged "gb" pass the country rung for UK
+        // viewers). Detect from job.location instead, fall back to the
+        // arg only when the location string has no country segment.
+        const detectedCountry = extractCountryCode(job.location ?? "");
+        const countryCode = detectedCountry ?? args.countryCode;
         const gps = await resolveGpsForCity(
           ctx,
           cityFromLocation,
-          args.countryCode,
+          countryCode,
         );
         const newId = await ctx.db.insert("job_postings", {
           dedupKey,
@@ -548,7 +559,7 @@ export const upsertFromSearch = internalMutation({
           titleSlug,
           city: cityFromLocation,
           citySlug,
-          countryCode: args.countryCode,
+          countryCode,
           location: job.location ?? "",
           via: job.via ?? undefined,
           rawDescription: job.description ?? "",

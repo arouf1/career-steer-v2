@@ -66,6 +66,67 @@ export function extractCity(input: string): string {
   return first ?? "";
 }
 
+// Trailing-segment country names → ISO country code. SearchAPI's location
+// strings come in the form "City, [Region,] Country" or sometimes
+// "City, Country" or just "City". The country segment, when present, is the
+// reliable signal for which national job market the posting belongs to —
+// far more reliable than the action's `gl` parameter, which Google Jobs
+// often ignores when its results don't have local matches.
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  "united states": "us",
+  "united states of america": "us",
+  usa: "us",
+  "u.s.": "us",
+  "u.s.a.": "us",
+  "united kingdom": "gb",
+  uk: "gb",
+  "great britain": "gb",
+  england: "gb",
+  scotland: "gb",
+  wales: "gb",
+  "northern ireland": "gb",
+  ireland: "ie",
+  canada: "ca",
+  australia: "au",
+  germany: "de",
+  deutschland: "de",
+  france: "fr",
+  spain: "es",
+  italy: "it",
+  netherlands: "nl",
+  "new zealand": "nz",
+  india: "in",
+  japan: "jp",
+  singapore: "sg",
+  switzerland: "ch",
+  sweden: "se",
+  norway: "no",
+  denmark: "dk",
+  belgium: "be",
+  austria: "at",
+  finland: "fi",
+  portugal: "pt",
+  poland: "pl",
+  mexico: "mx",
+  brazil: "br",
+};
+
+export function extractCountryCode(input: string): string | undefined {
+  const cleaned = input.replace(TRAILING_PARENS, "").trim();
+  if (cleaned.length === 0) return undefined;
+  const segments = cleaned
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (segments.length === 0) return undefined;
+  const last = segments[segments.length - 1].toLowerCase();
+  const code = COUNTRY_NAME_TO_CODE[last];
+  if (code) return code;
+  // Already-lowercased ISO codes (rare, but tolerate them).
+  if (last.length === 2 && /^[a-z]{2}$/.test(last)) return last;
+  return undefined;
+}
+
 export function slugify(input: string, maxLength = 100): string {
   if (input.length === 0) return "";
   const lower = input.toLowerCase();

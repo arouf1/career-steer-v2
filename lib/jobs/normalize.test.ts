@@ -2,10 +2,63 @@ import { describe, expect, it } from "vitest";
 import {
   computeDedupKey,
   extractCity,
+  extractCountryCode,
   normalizeCompanyName,
   normalizeTitle,
   slugify,
 } from "./normalize";
+
+describe("extractCountryCode", () => {
+  it("detects US from 'City, ST, United States'", () => {
+    expect(extractCountryCode("Everett, WA, United States")).toBe("us");
+  });
+
+  it("detects US from 'USA' suffix", () => {
+    expect(extractCountryCode("Renton, WA, USA")).toBe("us");
+  });
+
+  it("detects UK from 'United Kingdom'", () => {
+    expect(extractCountryCode("Maidstone, England, United Kingdom")).toBe("gb");
+  });
+
+  it("detects UK from 'England'", () => {
+    expect(extractCountryCode("Wardle, England")).toBe("gb");
+  });
+
+  it("detects UK from 'Scotland' / 'Wales'", () => {
+    expect(extractCountryCode("Edinburgh, Scotland")).toBe("gb");
+    expect(extractCountryCode("Cardiff, Wales")).toBe("gb");
+  });
+
+  it("detects Ireland separately from the UK", () => {
+    expect(extractCountryCode("Dublin, Ireland")).toBe("ie");
+  });
+
+  it("returns undefined for city-only inputs", () => {
+    expect(extractCountryCode("Warrington")).toBeUndefined();
+  });
+
+  it("returns undefined for empty / Anywhere / Remote", () => {
+    expect(extractCountryCode("")).toBeUndefined();
+    expect(extractCountryCode("Anywhere")).toBeUndefined();
+    expect(extractCountryCode("Remote")).toBeUndefined();
+  });
+
+  it("strips trailing parentheticals like '(Hybrid)' before parsing", () => {
+    expect(extractCountryCode("London, United Kingdom (Hybrid)")).toBe("gb");
+  });
+
+  it("tolerates lowercase ISO codes if no name match", () => {
+    expect(extractCountryCode("Munich, de")).toBe("de");
+  });
+
+  it("recognises common European countries", () => {
+    expect(extractCountryCode("Berlin, Germany")).toBe("de");
+    expect(extractCountryCode("Paris, France")).toBe("fr");
+    expect(extractCountryCode("Madrid, Spain")).toBe("es");
+    expect(extractCountryCode("Amsterdam, Netherlands")).toBe("nl");
+  });
+});
 
 describe("normalizeCompanyName", () => {
   it("strips trailing legal suffixes", () => {
