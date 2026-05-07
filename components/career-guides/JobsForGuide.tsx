@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser, SignInButton } from "@clerk/nextjs";
 import { useAction, useQuery } from "convex/react";
 import { Search } from "lucide-react";
@@ -159,24 +159,36 @@ export function JobsForGuide({
     }
   }, [searchLive, guideSlug, searchCity, searchCountry]);
 
-  // Auto-fire live search when a signed-in user scrolls the empty section
-  // into view. Single-shot per (guide-page, mount). Suppressed when the
-  // viewer has no resolvable location yet — firing without a location
-  // returns SearchAPI's geographic default (US-centric) which is worse than
-  // showing the manual button.
+  // Auto-fire live search when a signed-in user scrolls the section into
+  // view AND the cache doesn't have anything in their actual radius —
+  // either entirely empty, or only country / anywhere fallbacks. Pulls
+  // location-relevant postings into the cache as a side effect; existing
+  // fallback cards stay visible until the new ones land and the ladder
+  // re-ranks naturally via the live query.
+  //
+  // Single-shot per (guide-page, mount). Bounded cross-mount by the
+  // existing rate-limit on searchLive (5/archetype/hour, 20/user/day).
+  // Suppressed when the viewer has no resolvable location — firing
+  // without one returns SearchAPI's geographic default (US-centric).
   const emptyRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const autoFiredRef = useRef(false);
 
   useEffect(() => {
     if (!isSignedIn) return;
-    if (!data || data.jobs.length > 0) return;
+    if (!data) return;
     if (autoFiredRef.current || autoSearchAttempted) return;
-    if (!emptyRef.current) return;
     // profileGeo === undefined is "still loading" — wait.
     if (profileGeo === undefined) return;
     // No usable location at all → don't auto-fire. User can still click
     // the manual button if they want.
     if (!searchCity && !searchCountry) return;
+    // Skip when the cache already has results in the viewer's radius —
+    // the ladder is doing its job, no need to spend SearchAPI quota.
+    if (data.jobs.length > 0 && data.ladderHit === "radius") return;
+
+    const target = emptyRef.current ?? sectionRef.current;
+    if (!target) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -188,7 +200,7 @@ export function JobsForGuide({
       },
       { rootMargin: "0px 0px -10% 0px" },
     );
-    observer.observe(emptyRef.current);
+    observer.observe(target);
     return () => observer.disconnect();
   }, [
     isSignedIn,
@@ -215,7 +227,7 @@ export function JobsForGuide({
             : "signed-in-idle";
 
     return (
-      <Section guideTitle={guideTitle}>
+      <Section guideTitle={guideTitle} ref={sectionRef}>
         <JobsForGuideEmpty
           ref={emptyRef}
           guideTitle={guideTitle}
@@ -254,7 +266,7 @@ export function JobsForGuide({
     const remaining = Math.max(0, data.totalArchetypeMatches - visible.length);
 
     return (
-      <Section guideTitle={guideTitle} ladderLabel={heading}>
+      <Section guideTitle={guideTitle} ladderLabel={heading} ref={sectionRef}>
         <ul className="divide-y divide-hairline">
           {visible.map((job) => (
             <li key={job.jobPostingId}>
@@ -319,6 +331,7 @@ export function JobsForGuide({
     <Section
       guideTitle={guideTitle}
       ladderLabel={heading}
+      ref={sectionRef}
       action={
         <button
           type="button"
@@ -357,19 +370,18 @@ export function JobsForGuide({
 // blocks stack with consistent rhythm — same width, same eyebrow→headline
 // hierarchy, same hairline top-border. Inner content rail widens to
 // max-w-5xl because JobCardRow's three-zone layout needs the room.
-function Section({
-  guideTitle,
-  ladderLabel,
-  action,
-  children,
-}: {
-  guideTitle: string;
-  ladderLabel?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+const Section = forwardRef<
+  HTMLElement,
+  {
+    guideTitle: string;
+    ladderLabel?: string;
+    action?: React.ReactNode;
+    children: React.ReactNode;
+  }
+>(function Section({ guideTitle, ladderLabel, action, children }, ref) {
   return (
     <section
+      ref={ref}
       aria-labelledby="jobs-for-guide-heading"
       className="border-t border-hairline bg-paper"
     >
@@ -393,7 +405,7 @@ function Section({
       </div>
     </section>
   );
-}
+});
 
 function JobsForGuideSkeleton({ showBlurred }: { showBlurred: boolean }) {
   return (
