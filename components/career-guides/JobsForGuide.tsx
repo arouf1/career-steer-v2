@@ -3,7 +3,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser, SignInButton } from "@clerk/nextjs";
 import { useAction, useQuery } from "convex/react";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { describeLadderHit } from "@/lib/jobs/microcopy";
@@ -213,7 +213,12 @@ export function JobsForGuide({
   ]);
 
   if (!clerkLoaded || data === undefined) {
-    return <JobsForGuideSkeleton showBlurred={!isSignedIn} />;
+    // The header already carries the guide title and the eyebrow — they're
+    // known synchronously from props. Render those at full fidelity and let
+    // the body slot stay quiet until the live query lands. No pulsing
+    // rectangles, no ghost cards: the message under the headline does the
+    // entire loading-state UX. Keeps the editorial rhythm intact.
+    return <Section guideTitle={guideTitle} ref={sectionRef} loading />;
   }
 
   if (data.jobs.length === 0) {
@@ -376,13 +381,18 @@ const Section = forwardRef<
     guideTitle: string;
     ladderLabel?: string;
     action?: React.ReactNode;
-    children: React.ReactNode;
+    children?: React.ReactNode;
+    loading?: boolean;
   }
->(function Section({ guideTitle, ladderLabel, action, children }, ref) {
+>(function Section(
+  { guideTitle, ladderLabel, action, children, loading = false },
+  ref,
+) {
   return (
     <section
       ref={ref}
       aria-labelledby="jobs-for-guide-heading"
+      aria-busy={loading || undefined}
       className="border-t border-hairline bg-paper"
     >
       <div className="mx-auto w-full max-w-6xl px-6 py-12 lg:px-8 lg:py-16">
@@ -395,41 +405,28 @@ const Section = forwardRef<
             >
               Jobs hiring {guideTitle}
             </h2>
-            {ladderLabel ? (
+            {loading ? (
+              <p
+                className="type-caption mt-3 inline-flex items-center gap-2 text-mute"
+                role="status"
+              >
+                <Loader2
+                  className="size-3.5 animate-spin motion-reduce:animate-none"
+                  aria-hidden
+                />
+                Looking for openings near you…
+              </p>
+            ) : ladderLabel ? (
               <p className="type-body mt-3 text-body">{ladderLabel}.</p>
             ) : null}
           </div>
           {action}
         </header>
-        <div className="mx-auto max-w-5xl">{children}</div>
+        {children ? <div className="mx-auto max-w-5xl">{children}</div> : null}
       </div>
     </section>
   );
 });
-
-function JobsForGuideSkeleton({ showBlurred }: { showBlurred: boolean }) {
-  return (
-    <section className="border-t border-hairline bg-paper">
-      <div className="mx-auto w-full max-w-6xl px-6 py-12 lg:px-8 lg:py-16">
-        <header className="mb-8 max-w-2xl space-y-3">
-          <div className="h-3 w-24 rounded-hair bg-paper-raised" />
-          <div className="h-9 w-64 rounded-surface bg-paper-raised" />
-        </header>
-        <div className="mx-auto max-w-5xl space-y-px">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-32 w-full animate-pulse border-b border-hairline bg-paper-raised/50"
-            />
-          ))}
-          {showBlurred ? (
-            <div className="h-32 w-full animate-pulse border-b border-hairline bg-paper-raised/30" />
-          ) : null}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // Suppress unused-import lint for the preserved Id type — exported in case
 // callers want to type their own helpers around the same shape later.
