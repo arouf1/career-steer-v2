@@ -5,12 +5,9 @@ import { useUser, SignInButton } from "@clerk/nextjs";
 import { useAction, useQuery } from "convex/react";
 import { Search } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { describeLadderHit } from "@/lib/jobs/microcopy";
-import {
-  JobsForGuideCard,
-  type JobCardData,
-  type ViewerState,
-} from "./JobsForGuideCard";
+import { JobCardRow } from "@/components/jobs/JobCardRow";
 import { JobsForGuideEmpty } from "./JobsForGuideEmpty";
 import { JobsForGuideTeaseLock } from "./JobsForGuideTeaseLock";
 
@@ -63,6 +60,17 @@ export function JobsForGuide({
     isSignedIn ? {} : "skip",
   );
 
+  // Search-time location: profile-city wins for signed-in users (the
+  // confirmed truth), with anonymous IP-derived city as the safety net for
+  // signed-out viewers (or signed-in users who haven't confirmed a profile
+  // location yet). The Convex query uses the same precedence for ranking.
+  const searchCity =
+    isSignedIn && profileGeo?.cityName ? profileGeo.cityName : anonymousGeo.city;
+  const searchCountry =
+    isSignedIn && profileGeo?.countryCode
+      ? profileGeo.countryCode
+      : anonymousGeo.countryCode;
+
   const viewer = useMemo(() => {
     if (isSignedIn && profileGeo) {
       return {
@@ -85,24 +93,39 @@ export function JobsForGuide({
     limit,
   });
 
-  const fit = useQuery(
-    api.jobsForGuide.fitScores,
-    isSignedIn && data && data.jobs.length > 0
-      ? { jobIds: data.jobs.map((j) => j.jobPostingId) }
+  // Live overview rewrite status, keyed by jobPostingId. Same subscription
+  // pattern as /workspace/jobs so the JobCardRow's "Writing a polished
+  // overview…" footer stays accurate as content lands.
+  const liveContentArr = useQuery(
+    api.jobPostings.liveContentByIds,
+    data && data.jobs.length > 0
+      ? { ids: data.jobs.map((j) => j.jobPostingId) }
       : "skip",
   );
-
-  const viewerState: ViewerState = !isSignedIn
-    ? "anonymous"
-    : fit
-      ? "signed-in-with-profile"
-      : "signed-in-no-profile";
-
-  const fitByJobId = useMemo(() => {
-    const m = new Map<string, "strong" | "worth" | null>();
-    fit?.forEach((f) => m.set(f.jobPostingId as string, f.tier));
+  const liveContentByJobId = useMemo(() => {
+    const m = new Map<
+      string,
+      { contentStatus: "pending" | "generating" | "complete" | "failed"; overview: string | null }
+    >();
+    liveContentArr?.forEach((row) => {
+      m.set(row.jobPostingId as string, {
+        contentStatus: row.contentStatus,
+        overview: row.overview,
+      });
+    });
     return m;
-  }, [fit]);
+  }, [liveContentArr]);
+
+  // Bookmark set for the save/unsave control inside JobCardRow. Anonymous
+  // viewers see no bookmark control regardless.
+  const savedSetArr = useQuery(
+    api.savedJobs.mySavedSet,
+    isSignedIn ? {} : "skip",
+  );
+  const savedSet = useMemo(() => {
+    if (!savedSetArr) return null;
+    return new Set<string>(savedSetArr.map((id) => id as string));
+  }, [savedSetArr]);
 
   const searchLive = useAction(api.jobsForGuide.searchLive);
   const [searchLivePending, setSearchLivePending] = useState(false);
@@ -116,8 +139,8 @@ export function JobsForGuide({
     try {
       await searchLive({
         guideSlug,
-        location: anonymousGeo.city,
-        gl: viewer.countryCode,
+        location: searchCity,
+        gl: searchCountry,
       });
     } catch (err: unknown) {
       const errData = (err as { data?: { kind?: string; retryAfterMs?: number } })
@@ -134,12 +157,13 @@ export function JobsForGuide({
     } finally {
       setSearchLivePending(false);
     }
-  }, [searchLive, guideSlug, anonymousGeo.city, viewer.countryCode]);
+  }, [searchLive, guideSlug, searchCity, searchCountry]);
 
   // Auto-fire live search when a signed-in user scrolls the empty section
-  // into view. Single-shot per (guide-page, mount) — the rate-limit on
-  // searchLive (5/archetype/hour, 20/user/day) bounds cross-mount spend.
-  // Anonymous viewers never auto-fire (cost gate).
+  // into view. Single-shot per (guide-page, mount). Suppressed when the
+  // viewer has no resolvable location yet — firing without a location
+  // returns SearchAPI's geographic default (US-centric) which is worse than
+  // showing the manual button.
   const emptyRef = useRef<HTMLDivElement>(null);
   const autoFiredRef = useRef(false);
 
@@ -148,6 +172,11 @@ export function JobsForGuide({
     if (!data || data.jobs.length > 0) return;
     if (autoFiredRef.current || autoSearchAttempted) return;
     if (!emptyRef.current) return;
+    // profileGeo === undefined is "still loading" — wait.
+    if (profileGeo === undefined) return;
+    // No usable location at all → don't auto-fire. User can still click
+    // the manual button if they want.
+    if (!searchCity && !searchCountry) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -161,7 +190,15 @@ export function JobsForGuide({
     );
     observer.observe(emptyRef.current);
     return () => observer.disconnect();
-  }, [isSignedIn, data, autoSearchAttempted, onSearchLive]);
+  }, [
+    isSignedIn,
+    data,
+    autoSearchAttempted,
+    profileGeo,
+    searchCity,
+    searchCountry,
+    onSearchLive,
+  ]);
 
   if (!clerkLoaded || data === undefined) {
     return <JobsForGuideSkeleton showBlurred={!isSignedIn} />;
@@ -195,22 +232,8 @@ export function JobsForGuide({
     );
   }
 
-  const cards: JobCardData[] = data.jobs.map((j) => ({
-    jobPostingId: j.jobPostingId as string,
-    title: j.title,
-    titleSlug: j.titleSlug,
-    companyName: j.companyName,
-    companySlug: j.companySlug,
-    city: j.city,
-    citySlug: j.citySlug,
-    countryCode: j.countryCode,
-    postedAt: j.postedAt,
-    salaryDisplay: j.salaryDisplay,
-    archetypeSlug: j.archetypeSlug,
-    fitTier: fitByJobId.get(j.jobPostingId as string) ?? null,
-  }));
-
-  // Profile-derived city wins over IP-derived city when signed-in.
+  // Section heading microcopy reads off the ladder rung the query landed on
+  // plus the viewer's confirmed city/country for honest framing.
   const viewerCityLabel =
     isSignedIn && profileGeo?.cityName
       ? profileGeo.cityName
@@ -219,30 +242,35 @@ export function JobsForGuide({
 
   const heading = describeLadderHit({
     ladderHit: data.ladderHit,
-    pickedCitySlugs: cards.map((c) => c.citySlug),
+    pickedCitySlugs: data.jobs.map((j) => j.citySlug),
     viewerCityLabel,
     viewerCountryLabel,
     total: data.totalArchetypeMatches,
   });
 
   if (!isSignedIn) {
-    const visible = cards.slice(0, 3);
-    const blurred = cards.slice(3, ANON_LIMIT);
+    const visible = data.jobs.slice(0, 3);
+    const blurred = data.jobs.slice(3, ANON_LIMIT);
     const remaining = Math.max(0, data.totalArchetypeMatches - visible.length);
 
     return (
       <Section guideTitle={guideTitle} ladderLabel={heading}>
-        <ul className="space-y-3">
-          {visible.map((c) => (
-            <li key={c.jobPostingId}>
-              <JobsForGuideCard job={c} viewerState="anonymous" />
+        <ul className="divide-y divide-hairline">
+          {visible.map((job) => (
+            <li key={job.jobPostingId}>
+              <JobCardRow
+                job={job}
+                index={0}
+                isSavedSet={null}
+                isSignedIn={false}
+                liveContent={liveContentByJobId.get(job.jobPostingId as string)}
+              />
             </li>
           ))}
         </ul>
         {blurred.length > 0 ? (
           <div className="mt-3">
             <JobsForGuideTeaseLock
-              blurredPlaceholders={blurred}
               totalRemaining={remaining}
               geoLabel={
                 viewerCityLabel
@@ -253,12 +281,22 @@ export function JobsForGuide({
               }
               guideTitle={guideTitle}
               signInRedirectUrl={pageUrl}
-            />
+            >
+              <ul className="divide-y divide-hairline">
+                {blurred.map((job) => (
+                  <li key={job.jobPostingId}>
+                    <JobCardRow
+                      job={job}
+                      index={0}
+                      isSavedSet={null}
+                      isSignedIn={false}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </JobsForGuideTeaseLock>
           </div>
         ) : (
-          // Soft footer when the archetype is small enough that every cached
-          // card fits in the visible slot. Keeps sign-in present without
-          // inventing a fake blurred stack.
           <div className="mt-6 flex items-center justify-between gap-4 border-t border-hairline pt-5">
             <p className="type-caption text-mute">
               Sign in to see how these match your profile.
@@ -293,10 +331,16 @@ export function JobsForGuide({
         </button>
       }
     >
-      <ul className="space-y-3">
-        {cards.map((c) => (
-          <li key={c.jobPostingId}>
-            <JobsForGuideCard job={c} viewerState={viewerState} />
+      <ul className="divide-y divide-hairline">
+        {data.jobs.map((job) => (
+          <li key={job.jobPostingId}>
+            <JobCardRow
+              job={job}
+              index={0}
+              isSavedSet={savedSet}
+              isSignedIn={true}
+              liveContent={liveContentByJobId.get(job.jobPostingId as string)}
+            />
           </li>
         ))}
       </ul>
@@ -311,7 +355,8 @@ export function JobsForGuide({
 
 // Section shell mirrors RelatedGuides exactly so the two paired editorial
 // blocks stack with consistent rhythm — same width, same eyebrow→headline
-// hierarchy, same hairline top-border.
+// hierarchy, same hairline top-border. Inner content rail widens to
+// max-w-5xl because JobCardRow's three-zone layout needs the room.
 function Section({
   guideTitle,
   ladderLabel,
@@ -344,7 +389,7 @@ function Section({
           </div>
           {action}
         </header>
-        <div className="mx-auto max-w-3xl">{children}</div>
+        <div className="mx-auto max-w-5xl">{children}</div>
       </div>
     </section>
   );
@@ -358,18 +403,22 @@ function JobsForGuideSkeleton({ showBlurred }: { showBlurred: boolean }) {
           <div className="h-3 w-24 rounded-hair bg-paper-raised" />
           <div className="h-9 w-64 rounded-surface bg-paper-raised" />
         </header>
-        <div className="mx-auto max-w-3xl space-y-3">
+        <div className="mx-auto max-w-5xl space-y-px">
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 w-full animate-pulse rounded-card border border-hairline bg-paper-raised"
+              className="h-32 w-full animate-pulse border-b border-hairline bg-paper-raised/50"
             />
           ))}
           {showBlurred ? (
-            <div className="h-24 w-full animate-pulse rounded-card border border-hairline bg-paper-raised opacity-60" />
+            <div className="h-32 w-full animate-pulse border-b border-hairline bg-paper-raised/30" />
           ) : null}
         </div>
       </div>
     </section>
   );
 }
+
+// Suppress unused-import lint for the preserved Id type — exported in case
+// callers want to type their own helpers around the same shape later.
+export type { Id };

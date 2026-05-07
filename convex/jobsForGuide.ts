@@ -3,12 +3,10 @@
 //   - forGuide(query): the read path the JobsForGuide component subscribes
 //     to. Pulls active postings by archetype slug, applies the location
 //     ladder (50 km radius → country → anywhere), hydrates company name,
-//     returns a viewer-state-agnostic card list plus a ladderHit tag the UI
-//     uses for honest microcopy.
-//
-//   - fitScores(query): signed-in-only side query that resolves a tier
-//     (strong / worth / null) per jobPostingId via the user's profile
-//     embedding + each posting's embedding.
+//     bakes in the fit tier when the viewer is signed-in with a profile
+//     embedding, and returns JobResult-shaped rows that JobCardRow can
+//     render directly — visual parity with /jobs/listing and
+//     /workspace/jobs.
 //
 //   - searchLive(action): rate-limited trigger that fans out to the public
 //     jobSearch.search action so signed-in users can fill thin caches. Two
@@ -31,8 +29,7 @@ import { loadProfileAndJobVectors } from "./lib/jobFit";
 import { cosineSim } from "./lib/discoverScoring";
 import { tryConsumeRateLimit } from "./lib/rateLimit";
 
-// Tunables — see "Open questions / tunables" in the spec for context. All
-// are safe to adjust without code refactors elsewhere.
+// Tunables — see "Open questions / tunables" in the spec for context.
 const RADIUS_KM = 50;
 const MAX_LADDER_CANDIDATES = 200;
 
@@ -49,18 +46,38 @@ const PER_USER_PER_DAY = 20;
 
 // ── forGuide ──────────────────────────────────────────────────────────────
 
+// JobResult-shaped — matches the projection in jobPostings.searchCache and
+// the action return shape in jobSearch.search. Kept in lockstep so that
+// JobCardRow renders both surfaces identically without an adapter.
+const fitTierValidator = v.union(
+  v.literal("strong"),
+  v.literal("worth"),
+  v.null(),
+);
+
 const cardValidator = v.object({
   jobPostingId: v.id("job_postings"),
-  title: v.string(),
-  titleSlug: v.string(),
-  companyName: v.string(),
-  companySlug: v.string(),
-  city: v.string(),
+  dedupKey: v.string(),
   citySlug: v.string(),
-  countryCode: v.optional(v.string()),
-  postedAt: v.number(),
-  salaryDisplay: v.optional(v.string()),
-  archetypeSlug: v.string(),
+  companySlug: v.union(v.string(), v.null()),
+  titleSlug: v.string(),
+  position: v.union(v.number(), v.null()),
+  title: v.string(),
+  companyName: v.union(v.string(), v.null()),
+  location: v.union(v.string(), v.null()),
+  via: v.union(v.string(), v.null()),
+  description: v.union(v.string(), v.null()),
+  applyLink: v.union(v.string(), v.null()),
+  sharingLink: v.union(v.string(), v.null()),
+  thumbnail: v.union(v.string(), v.null()),
+  schedule: v.union(v.string(), v.null()),
+  postedAt: v.union(v.string(), v.null()),
+  salary: v.union(v.string(), v.null()),
+  workFromHome: v.union(v.boolean(), v.null()),
+  companyDomain: v.union(v.string(), v.null()),
+  companyLogoUrl: v.union(v.string(), v.null()),
+  companyBrandColor: v.union(v.string(), v.null()),
+  fitTier: fitTierValidator,
 });
 
 export const forGuide = query({
@@ -83,9 +100,6 @@ export const forGuide = query({
     ),
   }),
   handler: async (ctx, { guideSlug, viewer, limit }) => {
-    // Hot path: archetype + active filter via the new compound index.
-    // Bounded at MAX_LADDER_CANDIDATES so the in-memory Haversine sort can't
-    // explode for very popular roles.
     const candidates = await ctx.db
       .query("job_postings")
       .withIndex("by_roleArchetypeSlug_isActive_lastSeenAt", (q) =>
@@ -120,11 +134,42 @@ export const forGuide = query({
       RADIUS_KM,
     );
 
+    // Fit tiers — only for signed-in viewers with a profile embedding. Falls
+    // back to fitTier=null for everyone else (anonymous, signed-out, signed
+    // in without a profile, or a profile that hasn't been embedded yet).
+    const identity = await ctx.auth.getUserIdentity();
+    const fitTierByJobId = new Map<Id<"job_postings">, "strong" | "worth" | null>();
+    if (identity) {
+      const fit = await loadProfileAndJobVectors(
+        ctx,
+        identity.tokenIdentifier,
+        picked.map((p) => p._id),
+      );
+      if (fit) {
+        for (const { jobPostingId, vector } of fit.jobVectors) {
+          let sim: number;
+          try {
+            sim = cosineSim(fit.profileVector, vector);
+          } catch {
+            continue;
+          }
+          fitTierByJobId.set(
+            jobPostingId,
+            sim >= FIT_TIER_STRONG_MIN
+              ? "strong"
+              : sim >= FIT_TIER_WORTH_MIN
+                ? "worth"
+                : null,
+          );
+        }
+      }
+    }
+
     const byId = new Map(candidates.map((c) => [c._id, c] as const));
     const jobs = await Promise.all(
       picked.map(async (p) => {
         const job = byId.get(p._id)!;
-        return await hydrateCard(ctx, job);
+        return await hydrateCard(ctx, job, fitTierByJobId.get(p._id) ?? null);
       }),
     );
 
@@ -136,84 +181,44 @@ export const forGuide = query({
   },
 });
 
-async function hydrateCard(ctx: QueryCtx, job: Doc<"job_postings">) {
+async function hydrateCard(
+  ctx: QueryCtx,
+  job: Doc<"job_postings">,
+  fitTier: "strong" | "worth" | null,
+) {
   const company = await ctx.db.get(job.companyId);
   return {
     jobPostingId: job._id,
-    title: job.title,
-    titleSlug: job.titleSlug,
-    companyName: company?.nameRaw ?? "Unknown",
-    companySlug: company?.slug ?? "unknown",
-    city: job.city,
+    dedupKey: job.dedupKey,
     citySlug: job.citySlug,
-    countryCode: job.countryCode,
-    postedAt: job.lastSeenAt,
-    salaryDisplay: job.detectedExtensions?.salary ?? undefined,
-    archetypeSlug: job.roleArchetypeSlug ?? "",
+    companySlug: company?.slug ?? null,
+    titleSlug: job.titleSlug,
+    position: null as number | null,
+    title: job.title,
+    companyName: company?.nameRaw ?? null,
+    location: job.location,
+    via: job.via ?? null,
+    description: job.rawDescription
+      ? job.rawDescription.length > 400
+        ? job.rawDescription.slice(0, 399).trimEnd() + "…"
+        : job.rawDescription
+      : null,
+    applyLink: job.applyLink ?? null,
+    sharingLink: job.sharingLink ?? null,
+    thumbnail: job.thumbnail ?? null,
+    schedule: job.detectedExtensions?.schedule ?? null,
+    postedAt: job.detectedExtensions?.postedAt ?? null,
+    salary: job.detectedExtensions?.salary ?? null,
+    workFromHome: job.detectedExtensions?.workFromHome ?? null,
+    companyDomain: company?.domain ?? null,
+    companyLogoUrl: company?.logoUrl ?? null,
+    companyBrandColor: company?.brandColor ?? null,
+    fitTier,
   };
 }
 
-// ── fitScores ─────────────────────────────────────────────────────────────
-
-const tierResultValidator = v.union(
-  v.null(),
-  v.array(
-    v.object({
-      jobPostingId: v.id("job_postings"),
-      tier: v.union(
-        v.literal("strong"),
-        v.literal("worth"),
-        v.null(),
-      ),
-    }),
-  ),
-);
-
-export const fitScores = query({
-  args: { jobIds: v.array(v.id("job_postings")) },
-  returns: tierResultValidator,
-  handler: async (ctx, { jobIds }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-
-    const data = await loadProfileAndJobVectors(
-      ctx,
-      identity.tokenIdentifier,
-      jobIds,
-    );
-    if (!data) return null;
-
-    const tierByJobId = new Map<Id<"job_postings">, "strong" | "worth" | null>();
-    for (const { jobPostingId, vector } of data.jobVectors) {
-      let sim: number;
-      try {
-        sim = cosineSim(data.profileVector, vector);
-      } catch {
-        // Dimension mismatch during a model migration — drop fit silently.
-        continue;
-      }
-      tierByJobId.set(
-        jobPostingId,
-        sim >= FIT_TIER_STRONG_MIN
-          ? "strong"
-          : sim >= FIT_TIER_WORTH_MIN
-            ? "worth"
-            : null,
-      );
-    }
-
-    return jobIds.map((id) => ({
-      jobPostingId: id,
-      tier: tierByJobId.get(id) ?? null,
-    }));
-  },
-});
-
 // ── searchLive (rate-limited action) ──────────────────────────────────────
 
-// Internal mutation that consumes both rate-limit windows. Two consume
-// calls because we want the per-archetype counter to bite first (tighter
-// constraint), then the per-user-per-day cap.
 export const _consumeSearchQuota = internalMutation({
   args: {
     userClerkId: v.string(),
@@ -251,7 +256,8 @@ export const searchLive = action({
     guideSlug: v.string(),
     // Free-text location passed through to jobSearch.search; the search
     // action extracts citySlug + applies its own normalisation. Pass the
-    // user's profile.location string (or undefined to search "anywhere").
+    // signed-in user's profile city (preferred), else IP-derived city,
+    // else undefined (search "anywhere").
     location: v.optional(v.string()),
     // Two-letter country code passed as the SearchAPI `gl` param.
     gl: v.optional(v.string()),
@@ -275,14 +281,10 @@ export const searchLive = action({
       });
     }
 
-    // Hand off to the existing public search action. The query string is the
-    // de-slugged archetype label — search action handles its own typo
-    // correction, cache lookup, and SearchAPI fan-out.
     await ctx.runAction(api.jobSearch.search, {
       query: guideSlug.replace(/-/g, " "),
       location,
       gl,
-      // Skip correction — slug-derived queries are already canonical.
       skipCorrection: true,
     });
 
