@@ -312,7 +312,9 @@ export function buildRubricPrompt(args: RubricPromptArgs): string {
   sections.push(`== Verbatim-quote rule (critical) ==`);
   sections.push(`bestMoment.quote and biggestMiss.quote MUST be substrings of the transcript exactly as the candidate spoke them. Do not paraphrase. If you cannot find a verbatim quote that supports the point you'd like to make, lower the score for that dimension instead of fabricating a quote.`);
   sections.push(``);
-  sections.push(`If the candidate barely answered a dimension (e.g. interview ended before depth questions came up), score it null and say so in whatToFix — do not guess.`);
+  sections.push(`== Null-score rule (strict) ==`);
+  sections.push(`Set score to null for a dimension when there is NO substantive candidate statement in the transcript that addresses it. "Substantive" means at least one candidate turn with more than a sentence of relevant content. If the candidate gave only a greeting, a vague one-liner, or no turn at all on that dimension, the score MUST be null — do not infer or extrapolate.`);
+  sections.push(`For very short transcripts (fewer than 5 candidate turns total), most dimensions will be null. That is correct and expected — report what actually happened.`);
   sections.push(``);
   if (args.failedQuotes?.length) {
     sections.push(`== CORRECTION ==`);
