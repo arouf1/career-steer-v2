@@ -27,6 +27,12 @@ const messageValidator = v.object({
   content: v.string(),
   timestamp: v.number(),
   transcriptConfidence: v.optional(v.number()),
+  groundingCitations: v.optional(
+    v.array(v.object({
+      url: v.string(),
+      title: v.optional(v.string()),
+    })),
+  ),
 });
 
 // ── Auth helper (mirrors peopleOutreach.ts / careerGuidePersonalizations.ts) ─
