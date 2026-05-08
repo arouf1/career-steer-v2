@@ -258,6 +258,20 @@ export const getActiveSessionForUser = query({
   },
 });
 
+// ── Public query: subscribe to a single call (auth-gated to owner) ────────
+
+export const getCallById = query({
+  args: { callId: v.id("voice_calls") },
+  returns: v.union(v.null(), v.any()),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return null;
+    const row = await ctx.db.get(args.callId);
+    if (!row || row.userId !== user._id) return null;
+    return row;
+  },
+});
+
 // ── Internal queries called from the Node action ─────────────────────────
 
 export const _getCallById = internalQuery({
