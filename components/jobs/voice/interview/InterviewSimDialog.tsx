@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
+import { X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import {
   Dialog,
@@ -43,6 +44,7 @@ export function InterviewSimDialog({
     api.interviewSim.subscribeToPrep,
     prepSessionId ? { prepSessionId } : "skip",
   );
+  const liveReady = prep?.status === "ready";
 
   // Reset state when the dialog closes.
   useEffect(() => {
@@ -53,13 +55,12 @@ export function InterviewSimDialog({
     }
   }, [open]);
 
-  // Auto-advance from prep → live as soon as the server reports ready.
-  // The live call is mounted from open=true; the prep progress just
-  // determines what we render in the dialog body until ready.
-  const liveReady = prep?.status === "ready";
+  // Advance prep → live as soon as the server reports ready.
+  // Driven by useEffect to avoid stale-closure bugs in callbacks.
+  useEffect(() => {
+    if (liveReady && phase === "prep") setPhase("live");
+  }, [liveReady, phase]);
 
-  // The InterviewLiveCall reports the call id when the call ends; we then
-  // flip to phase=feedback.
   const handleEnded = (id: Id<"voice_calls"> | null) => {
     setEndedCallId(id);
     setPhase("feedback");
@@ -70,13 +71,20 @@ export function InterviewSimDialog({
       ? `Mock interview feedback: ${callTitle}`
       : `Mock interview: ${callTitle}`;
 
+  // The InterviewLiveCall mounts ONCE per dialog open and stays mounted across
+  // the prep → live transition. During prep it's rendered into an sr-only
+  // wrapper so the WebSocket stays alive; once liveReady flips we drop the
+  // sr-only and the user sees it. This avoids the unmount/remount cycle that
+  // would tear down the WebSocket and trigger a duplicate mintInterviewSession.
+  const livePhaseActive = phase === "prep" || phase === "live";
+  const liveVisible = phase === "live" || (phase === "prep" && liveReady);
+
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // Block close while live (the InterviewLiveCall handles end-call
-        // gracefully; we just stop the user from accidentally torpedoing
-        // their interview with a click outside).
+        // Block accidental close while live; user has an explicit End Call
+        // button inside InterviewLiveCall.
         if (!next && phase === "live") return;
         onOpenChange(next);
       }}
@@ -90,7 +98,20 @@ export function InterviewSimDialog({
           <DialogTitle className="sr-only">{dialogTitleText}</DialogTitle>
 
           <div className="relative flex min-h-[600px] max-h-[90vh] flex-col bg-paper">
-            {/* Phase 1: prep — visible until liveReady && phase==="prep" */}
+            {/* Cancel affordance during prep — there's no End Call button yet
+                so give the user an explicit out if research stalls. */}
+            {phase === "prep" && !liveReady && (
+              <button
+                type="button"
+                aria-label="Cancel"
+                onClick={() => onOpenChange(false)}
+                className="absolute right-3 top-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-paper-raised text-mute transition-colors hover:bg-ink/5 hover:text-ink"
+              >
+                <X className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            )}
+
+            {/* Phase 1 — prep progress visible until live takes over. */}
             {phase === "prep" && !liveReady && (
               <InterviewPrepProgress
                 status={(prep?.status ?? "researching") as PrepStatus}
@@ -100,38 +121,21 @@ export function InterviewSimDialog({
               />
             )}
 
-            {/* Phase 1→2 transition: render the live call as soon as ready,
-                or always (mounting it kicks off the mint flow that writes
-                the prep status). */}
-            {(phase === "prep" && liveReady) || phase === "live" ? (
-              <InterviewLiveCall
-                jobPostingId={jobPostingId}
-                callTitle={callTitle}
-                voiceId={voiceId}
-                onEnded={handleEnded}
-                onPrepSessionId={(id) => {
-                  setPrepSessionId(id);
-                  if (phase === "prep" && liveReady) setPhase("live");
-                }}
-              />
-            ) : null}
-
-            {/* Mount-once invisible bootstrapper: the InterviewLiveCall will
-                START the prep on mount because useInterviewCall.startCall
-                runs immediately. We mount it offscreen during prep so the
-                mint kicks off; once liveReady flips we hoist it into view. */}
-            {phase === "prep" && !liveReady && (
-              <div className="sr-only" aria-hidden>
+            {/* Phase 2 — single InterviewLiveCall, mounted across prep/live.
+                Hidden via sr-only during prep so the WebSocket stays alive. */}
+            {livePhaseActive && (
+              <div className={liveVisible ? "flex flex-1 flex-col" : "sr-only"}>
                 <InterviewLiveCall
                   jobPostingId={jobPostingId}
                   callTitle={callTitle}
                   voiceId={voiceId}
-                  onEnded={() => void 0}
+                  onEnded={handleEnded}
                   onPrepSessionId={(id) => setPrepSessionId(id)}
                 />
               </div>
             )}
 
+            {/* Phase 3 — feedback, mounts after the live call ends. */}
             {phase === "feedback" && endedCallId && (
               <InterviewFeedback
                 callId={endedCallId}
