@@ -1086,6 +1086,30 @@ export default defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_status", ["status"]),
 
+  // Transient status doc the InterviewSimDialog subscribes to during the
+  // research → mint phase. Created by interviewSimNode.mintInterviewSession,
+  // patched as research progresses, then read once during Phase 1 of the
+  // dialog. Old rows accumulate harmlessly until a future cleanup cron.
+  interview_prep_status: defineTable({
+    prepSessionId: v.string(),
+    userId: v.id("users"),
+    jobPostingId: v.id("job_postings"),
+    status: v.union(
+      v.literal("researching"),
+      v.literal("synthesizing"),
+      v.literal("minting_token"),
+      v.literal("ready"),
+      v.literal("failed"),
+    ),
+    detail: v.optional(v.string()),       // e.g. company name for the human-readable line
+    voiceCallId: v.optional(v.id("voice_calls")),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_prepSessionId", ["prepSessionId"])
+    .index("by_userId_created", ["userId", "createdAt"]),
+
   // ── Job postings cache ─────────────────────────────────────────────────
   // Foundation tables for the SearchAPI Google Jobs cache. Sub-project 1
   // of the jobs-feature decomposition (see openapi-3-0-0-info-title-starry-
