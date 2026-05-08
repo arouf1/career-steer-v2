@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRive, useStateMachineInput } from "@rive-app/react-webgl2";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useInterviewCall } from "./useInterviewCall";
@@ -61,8 +61,12 @@ export function InterviewLiveCall({
     /* eslint-enable react-hooks/immutability */
   }, [isListening, isThinking, isSpeaking, listeningInput, thinkingInput, speakingInput]);
 
-  // Auto-start on mount.
+  const startedRef = useRef(false);
+
+  // Auto-start on mount, guarded against StrictMode double-fire and Fast Refresh.
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     void call.startCall();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

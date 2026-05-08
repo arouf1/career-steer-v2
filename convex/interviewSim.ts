@@ -32,6 +32,17 @@ export const _createPrepStatus = internalMutation({
   },
   returns: v.id("interview_prep_status"),
   handler: async (ctx, args) => {
+    // Idempotent on prepSessionId. Two callers with the same id (StrictMode
+    // double-fire, network retry, user double-click) get the same row
+    // instead of two rows that would later trip subscribeToPrep's .unique().
+    const existing = await ctx.db
+      .query("interview_prep_status")
+      .withIndex("by_prepSessionId", (q) =>
+        q.eq("prepSessionId", args.prepSessionId),
+      )
+      .first();
+    if (existing) return existing._id;
+
     const now = Date.now();
     return await ctx.db.insert("interview_prep_status", {
       prepSessionId: args.prepSessionId,
@@ -66,7 +77,7 @@ export const _patchPrepStatus = internalMutation({
       .withIndex("by_prepSessionId", (q) =>
         q.eq("prepSessionId", args.prepSessionId),
       )
-      .unique();
+      .first();
     if (!row) return null;
     await ctx.db.patch(row._id, {
       status: args.status,
@@ -106,7 +117,7 @@ export const subscribeToPrep = query({
       .withIndex("by_prepSessionId", (q) =>
         q.eq("prepSessionId", args.prepSessionId),
       )
-      .unique();
+      .first();
     if (!row) return null;
 
     // Auth: only the user who started the prep can subscribe.
