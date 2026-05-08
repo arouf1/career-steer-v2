@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Search, FileText, Sparkles, Phone, AlertCircle } from "lucide-react";
+import { Loader2, Search, Sparkles, Phone, AlertCircle } from "lucide-react";
 
 export type PrepStatus =
   | "researching"
@@ -51,7 +51,7 @@ export function InterviewPrepProgress({ status, detail, error, companyName }: Pr
     return (
       <div className="flex flex-col items-center gap-3 p-6 text-center">
         <AlertCircle className="h-8 w-8 text-mute" strokeWidth={1.5} />
-        <p className="text-sm text-ink">We couldn't prepare your interviewer.</p>
+        <p className="text-sm text-ink">We couldn&apos;t prepare your interviewer.</p>
         {error && <p className="text-[12px] text-mute">{error}</p>}
       </div>
     );

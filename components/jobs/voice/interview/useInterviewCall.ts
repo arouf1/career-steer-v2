@@ -101,6 +101,10 @@ export function useInterviewCall(
   const [currentAssistantUtterance, setCurrentAssistantUtterance] =
     useState("");
   const [isMuted, setIsMuted] = useState(false);
+  // These are exposed as reactive return values AND read in async closures —
+  // keep both a ref (for stable closure access) and a matching state.
+  const [callId, setCallId] = useState<Id<"voice_calls"> | null>(null);
+  const [prepSessionId, setPrepSessionId] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const playerRef = useRef<PCMPlayer | null>(null);
@@ -187,8 +191,10 @@ export function useInterviewCall(
       }
       sessionIdRef.current = null;
       callIdRef.current = null;
+      setCallId(null);
       startedAtRef.current = null;
       prepSessionIdRef.current = null;
+      setPrepSessionId(null);
     },
     [finalize, teardown],
   );
@@ -276,7 +282,9 @@ export function useInterviewCall(
     finalizedRef.current = false;
 
     if (!prepSessionIdRef.current) {
-      prepSessionIdRef.current = crypto.randomUUID();
+      const newPrepId = crypto.randomUUID();
+      prepSessionIdRef.current = newPrepId;
+      setPrepSessionId(newPrepId);
     }
 
     let mintResult: Awaited<ReturnType<typeof mintSession>>;
@@ -301,6 +309,7 @@ export function useInterviewCall(
 
     sessionIdRef.current = mintResult.sessionId;
     callIdRef.current = mintResult.callId ?? null;
+    setCallId(mintResult.callId ?? null);
     startedAtRef.current = Date.now();
     const config: SessionConfigSnapshot = mintResult.sessionConfig;
     const auth: AuthCredential = mintResult.auth;
@@ -459,8 +468,8 @@ export function useInterviewCall(
     endCall,
     toggleMute,
     isMuted,
-    callId: callIdRef.current,
-    prepSessionId: prepSessionIdRef.current,
+    callId,
+    prepSessionId,
   };
 }
 

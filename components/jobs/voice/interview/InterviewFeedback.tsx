@@ -83,7 +83,7 @@ export function InterviewFeedback({ callId, onClose }: Props) {
       {summary.bestMoment.quote && (
         <Card icon={Sparkles} title="Best moment">
           <blockquote className="rounded-card bg-paper-raised p-3 font-mono text-[12px] text-ink">
-            "{summary.bestMoment.quote}"
+            &ldquo;{summary.bestMoment.quote}&rdquo;
           </blockquote>
           <p className="mt-2 text-[12px] text-mute">{summary.bestMoment.why}</p>
         </Card>
@@ -92,7 +92,7 @@ export function InterviewFeedback({ callId, onClose }: Props) {
       {summary.biggestMiss.quote && (
         <Card icon={MessageSquareQuote} title="Biggest miss">
           <blockquote className="rounded-card bg-paper-raised p-3 font-mono text-[12px] text-ink">
-            "{summary.biggestMiss.quote}"
+            &ldquo;{summary.biggestMiss.quote}&rdquo;
           </blockquote>
           <p className="mt-2 text-[12px] text-mute">{summary.biggestMiss.why}</p>
           <p className="mt-2 text-[12px] text-ink">

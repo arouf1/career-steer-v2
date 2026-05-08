@@ -50,11 +50,7 @@ import {
   type InterviewRubric,
 } from "../lib/ai/prompts/interviewer";
 import { exaAnswer, type Citation } from "../lib/server/exa";
-import {
-  buildLiveConfig,
-  buildFullSetupMessage,
-  buildMinimalSetupMessage,
-} from "./lib/voiceLiveConfig";
+import { buildLiveConfig } from "./lib/voiceLiveConfig";
 
 const LIVE_MODEL = "gemini-3.1-flash-live-preview";
 const DEFAULT_VOICE = "Aoede";
@@ -271,7 +267,6 @@ export const mintInterviewSession = action({
 
     let credential: { type: "ephemeral_token" | "api_key"; value: string };
     let authMode: "ephemeral" | "apiKey";
-    let setupMessage: Record<string, unknown>;
     try {
       const token = await client.authTokens.create({
         config: {
@@ -291,7 +286,6 @@ export const mintInterviewSession = action({
       if (!token.name) throw new Error("empty_token_name");
       credential = { type: "ephemeral_token", value: token.name };
       authMode = "ephemeral";
-      setupMessage = buildMinimalSetupMessage(LIVE_MODEL);
     } catch (err) {
       console.warn(
         "[interviewSim:mint] ephemeral mint failed, falling back to API key",
@@ -299,13 +293,6 @@ export const mintInterviewSession = action({
       );
       credential = { type: "api_key", value: apiKey };
       authMode = "apiKey";
-      // Full setup must include tools on the API-key path (no constraint binding).
-      setupMessage = buildFullSetupMessage({
-        model: LIVE_MODEL,
-        voice: voiceId,
-        systemInstruction,
-        tools: [{ googleSearch: {} }],
-      });
     }
 
     const sessionId = crypto.randomUUID();

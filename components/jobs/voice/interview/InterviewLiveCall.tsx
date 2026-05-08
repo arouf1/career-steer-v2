@@ -53,9 +53,12 @@ export function InterviewLiveCall({
   const isSpeaking = call.callState === "connected" && call.isAITalking;
 
   useEffect(() => {
+    // StateMachineInput.value is a Rive mutable setter, not React state — safe to assign.
+    /* eslint-disable react-hooks/immutability */
     if (listeningInput) listeningInput.value = isListening;
     if (thinkingInput) thinkingInput.value = isThinking;
     if (speakingInput) speakingInput.value = isSpeaking;
+    /* eslint-enable react-hooks/immutability */
   }, [isListening, isThinking, isSpeaking, listeningInput, thinkingInput, speakingInput]);
 
   // Auto-start on mount.
@@ -70,8 +73,11 @@ export function InterviewLiveCall({
   }, [call.prepSessionId, onPrepSessionId]);
 
   // Notify parent when the call ends so it can advance to Phase 3.
+  // Setting state inside this effect is intentional — it's a one-shot guard
+  // that prevents the onEnded callback from firing more than once.
   useEffect(() => {
     if ((call.callState === "ended" || call.callState === "error") && !hasReportedEnded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasReportedEnded(true);
       onEnded(call.callId ?? null);
     }
