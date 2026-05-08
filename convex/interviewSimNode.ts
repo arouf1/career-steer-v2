@@ -98,6 +98,7 @@ export const mintInterviewSession = action({
         v.literal("posting-not-ready"),
         v.literal("rate-limited"),
         v.literal("no-api-key"),
+        v.literal("research-failed"),
       ),
     }),
   ),
@@ -124,7 +125,8 @@ export const mintInterviewSession = action({
           | "posting-not-found"
           | "posting-not-ready"
           | "rate-limited"
-          | "no-api-key";
+          | "no-api-key"
+          | "research-failed";
       }
   > => {
     const identity = await ctx.auth.getUserIdentity();
@@ -183,18 +185,28 @@ export const mintInterviewSession = action({
       // Inline synchronous call — the dialog status doc transitions keep the
       // user informed while we wait. We do not fire-and-forget because the
       // bundle must be ready before we build the system instruction below.
-      await ctx.runAction(
-        internal.interviewSimNode._synthesizeInterviewResearch,
-        {
-          prepSessionId: args.prepSessionId,
-          companyId: bundle.company._id,
-          companyName: bundle.company.nameRaw,
-          roleTitle: bundle.posting.title,
-          cacheKeySlug: bundle.cacheKeySlug,
-          runBundle: bundleStale,
-          runNews: newsStale,
-        },
-      );
+      try {
+        await ctx.runAction(
+          internal.interviewSimNode._synthesizeInterviewResearch,
+          {
+            prepSessionId: args.prepSessionId,
+            companyId: bundle.company._id,
+            companyName: bundle.company.nameRaw,
+            roleTitle: bundle.posting.title,
+            cacheKeySlug: bundle.cacheKeySlug,
+            runBundle: bundleStale,
+            runNews: newsStale,
+          },
+        );
+      } catch (err) {
+        console.error(
+          "[interviewSim:mint] synthesis failed",
+          err instanceof Error ? err.message : String(err),
+        );
+        // Prep status is already "failed" from the synthesis action's own catch block;
+        // surface a typed return to the client so the hook can show the right error UI.
+        return { ok: false, reason: "research-failed" };
+      }
     }
 
     // Re-fetch context now that synthesis may have populated the bundle.
