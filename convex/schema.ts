@@ -1013,6 +1013,7 @@ export default defineSchema({
         v.literal("guide"),
         v.literal("compass"),
         v.literal("job"),
+        v.literal("interview_job"),
       ),
     ),
     // Set when surface === "guide". Optional so non-guide calls can omit it
@@ -1055,6 +1056,12 @@ export default defineSchema({
         content: v.string(),
         timestamp: v.number(),
         transcriptConfidence: v.optional(v.number()),
+        groundingCitations: v.optional(
+          v.array(v.object({
+            url: v.string(),
+            title: v.optional(v.string()),
+          })),
+        ),
       }),
     ),
     totalDurationSeconds: v.number(),
@@ -1303,6 +1310,16 @@ export default defineSchema({
         ),
       ),
     ),
+    recentNews: v.optional(v.object({
+      bullets: v.array(v.object({
+        headline: v.string(),
+        summary: v.string(),
+        sourceUrl: v.string(),
+        publisher: v.optional(v.string()),
+        publishedAt: v.optional(v.number()),
+      })),
+      fetchedAt: v.number(),
+    })),
   })
     .index("by_companyId", ["companyId"])
     .index("by_status", ["status"]),
@@ -1326,6 +1343,37 @@ export default defineSchema({
     lastResearchedAt: v.optional(v.number()),
     costCents: v.optional(v.number()),
     interview: v.optional(v.string()),
+    interviewBundle: v.optional(v.object({
+      rounds: v.array(v.object({
+        name: v.string(),
+        durationMinutes: v.optional(v.number()),
+        focus: v.string(),
+        interviewerArchetype: v.string(),
+      })),
+      signatureQuestions: v.array(v.object({
+        question: v.string(),
+        rationale: v.string(),
+      })),
+      rubric: v.object({
+        rigor: v.number(),
+        rigorRationale: v.string(),
+        interviewerArchetype: v.string(),
+        dimensions: v.array(v.object({
+          key: v.string(),
+          anchorBelow: v.string(),
+          anchorAt: v.string(),
+          anchorAbove: v.string(),
+        })),
+      }),
+      prestigeSignals: v.object({
+        employeeBand: v.optional(v.string()),
+        fundingOrPublic: v.optional(v.string()),
+        brandMentions: v.optional(v.number()),
+        glassdoorDifficulty: v.optional(v.number()),
+      }),
+      generatedAt: v.number(),
+      modelUsed: v.string(),
+    })),
     compensation: v.optional(v.string()),
     citations: v.optional(
       v.record(

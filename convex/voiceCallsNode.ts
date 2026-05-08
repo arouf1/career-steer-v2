@@ -287,7 +287,7 @@ export const processCallAnalysis = internalAction({
     }
 
     const transcriptText = formatTranscript(call.messages);
-    const userTurns = call.messages.filter((m) => m.role === "user").length;
+    const userTurns = call.messages.filter((m: any) => m.role === "user").length;
     const assistantTurns = call.messages.length - userTurns;
     const durationMin = Math.max(1, Math.round(call.totalDurationSeconds / 60));
 

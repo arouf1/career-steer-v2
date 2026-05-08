@@ -196,11 +196,12 @@ export const getActiveSessionForUser = query({
       sessionId: v.string(),
       // Resolved discriminator: "guide" for legacy rows that pre-date the
       // discriminator landing, "compass" for ambient calls, "job" for
-      // per-posting calls.
+      // per-posting calls, "interview_job" for interview-simulation calls.
       surface: v.union(
         v.literal("guide"),
         v.literal("compass"),
         v.literal("job"),
+        v.literal("interview_job"),
       ),
       guideId: v.optional(v.id("career_guides")),
       canvasSnapshotId: v.optional(v.id("discover_canvases")),
@@ -253,6 +254,7 @@ export const _getCallById = internalQuery({
         v.literal("guide"),
         v.literal("compass"),
         v.literal("job"),
+        v.literal("interview_job"),
       ),
       guideId: v.optional(v.id("career_guides")),
       canvasSnapshotId: v.optional(v.id("discover_canvases")),
