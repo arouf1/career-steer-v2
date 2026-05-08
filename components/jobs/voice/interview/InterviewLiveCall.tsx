@@ -15,7 +15,7 @@ type Props = {
   jobPostingId: Id<"job_postings">;
   callTitle: string;
   voiceId?: string;
-  onEnded: (callId: Id<"voice_calls"> | null) => void;
+  onEnded: (callId: Id<"voice_calls"> | null, error: string | null) => void;
   onPrepSessionId: (id: string) => void;
 };
 
@@ -79,9 +79,12 @@ export function InterviewLiveCall({
     if ((call.callState === "ended" || call.callState === "error") && !hasReportedEnded) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasReportedEnded(true);
-      onEnded(call.callId ?? null);
+      onEnded(
+        call.callId ?? null,
+        call.callState === "error" ? (call.error ?? "Call failed.") : null,
+      );
     }
-  }, [call.callState, call.callId, hasReportedEnded, onEnded]);
+  }, [call.callState, call.callId, call.error, hasReportedEnded, onEnded]);
 
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-hidden p-4 sm:p-6">

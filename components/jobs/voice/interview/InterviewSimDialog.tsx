@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
-import { X } from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import {
   Dialog,
@@ -38,6 +38,7 @@ export function InterviewSimDialog({
   const [phase, setPhase] = useState<Phase>("prep");
   const [prepSessionId, setPrepSessionId] = useState<string | null>(null);
   const [endedCallId, setEndedCallId] = useState<Id<"voice_calls"> | null>(null);
+  const [endedError, setEndedError] = useState<string | null>(null);
 
   // Subscribe to the prep status doc once we have a prepSessionId.
   const prep = useQuery(
@@ -54,6 +55,7 @@ export function InterviewSimDialog({
       setPhase("prep");
       setPrepSessionId(null);
       setEndedCallId(null);
+      setEndedError(null);
     }
   }, [open]);
 
@@ -64,8 +66,9 @@ export function InterviewSimDialog({
     if (liveReady && phase === "prep") setPhase("live");
   }, [liveReady, phase]);
 
-  const handleEnded = (id: Id<"voice_calls"> | null) => {
+  const handleEnded = (id: Id<"voice_calls"> | null, error: string | null) => {
     setEndedCallId(id);
+    setEndedError(error);
     setPhase("feedback");
   };
 
@@ -138,7 +141,23 @@ export function InterviewSimDialog({
               </div>
             )}
 
-            {/* Phase 3 — feedback, mounts after the live call ends. */}
+            {/* Phase 3a — mint failed fast (no callId): show error + close affordance. */}
+            {phase === "feedback" && !endedCallId && (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+                <AlertCircle className="h-8 w-8 text-mute" strokeWidth={1.5} />
+                <p className="text-sm text-ink">Couldn&apos;t start your mock interview.</p>
+                {endedError && <p className="text-[12px] text-mute">{endedError}</p>}
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="mt-2 inline-flex h-9 items-center rounded-pill bg-ink px-4 text-[13px] font-medium text-paper transition-colors hover:bg-ink/80"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+
+            {/* Phase 3b — feedback, mounts after a real call ends with a callId. */}
             {phase === "feedback" && endedCallId && (
               <InterviewFeedback
                 callId={endedCallId}
