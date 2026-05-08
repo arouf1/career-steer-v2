@@ -180,11 +180,24 @@ export const finalize = mutation({
     // at least one round-trip — silent / errored / 0-message calls aren't
     // worth the OpenRouter spend, and the AI summary would be junk anyway.
     if (args.status === "completed" && row.messages.length >= 2) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.voiceCallsNode.processCallAnalysis,
-        { callId: row._id },
-      );
+      // Surface-aware dispatch. Interview rows need a different rubric
+      // (verbatim-quote enforcement, calibrated against the bundle); other
+      // surfaces continue to use the deep-dive summary pipeline.
+      if (row.surface === "interview_job") {
+        if (row.messages.length >= 4) {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.interviewSimNode.processInterviewAnalysis,
+            { callId: row._id },
+          );
+        }
+      } else {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.voiceCallsNode.processCallAnalysis,
+          { callId: row._id },
+        );
+      }
     }
 
     return { ok: true as const, callId: row._id };
