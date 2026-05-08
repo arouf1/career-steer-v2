@@ -360,6 +360,39 @@ export const _getPostingWithCompanyAndBundle = internalQuery({
   },
 });
 
+// ── Rubric persistence (post-call, no embeddings required) ───────────────
+
+export const _patchInterviewRubric = internalMutation({
+  args: {
+    callId: v.id("voice_calls"),
+    aiSummary: v.any(), // InterviewRubric — shape validated by action
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.callId, {
+      aiSummary: args.aiSummary,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+// ── Per-day rate limit counter ────────────────────────────────────────────
+
+export const _countRecentInterviews = internalQuery({
+  args: { userId: v.id("users"), since: v.number() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("voice_calls")
+      .withIndex("by_user_created", (q) =>
+        q.eq("userId", args.userId).gte("createdAt", args.since),
+      )
+      .collect();
+    return rows.filter((r) => r.surface === "interview_job").length;
+  },
+});
+
 // ── helpers ───────────────────────────────────────────────────────────────
 
 async function resolveUser(

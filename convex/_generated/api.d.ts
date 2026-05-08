@@ -27,6 +27,7 @@ import type * as guideBranches from "../guideBranches.js";
 import type * as guideEmbeddings from "../guideEmbeddings.js";
 import type * as http from "../http.js";
 import type * as interviewSim from "../interviewSim.js";
+import type * as interviewSimNode from "../interviewSimNode.js";
 import type * as jobPostingEmbeddings from "../jobPostingEmbeddings.js";
 import type * as jobPostings from "../jobPostings.js";
 import type * as jobPostingsContent from "../jobPostingsContent.js";
@@ -98,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   guideEmbeddings: typeof guideEmbeddings;
   http: typeof http;
   interviewSim: typeof interviewSim;
+  interviewSimNode: typeof interviewSimNode;
   jobPostingEmbeddings: typeof jobPostingEmbeddings;
   jobPostings: typeof jobPostings;
   jobPostingsContent: typeof jobPostingsContent;
