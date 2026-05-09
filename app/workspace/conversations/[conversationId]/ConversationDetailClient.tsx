@@ -210,7 +210,7 @@ export function ConversationDetailClient({ callId }: Props) {
         {/* Desktop TOC sidebar — sticky, hidden below lg */}
         <aside className="hidden lg:col-span-2 lg:block">
           <div className="sticky top-24">
-            <WikiTableOfContents sections={sections} />
+            <WikiTableOfContents sections={sections} eyebrow="In this summary" />
           </div>
         </aside>
 
@@ -238,12 +238,16 @@ export function ConversationDetailClient({ callId }: Props) {
             </div>
           )}
 
-          {/* Transcript — editorial section label, ScrollArea handled inside component */}
+          {/* Transcript — section label outside, ScrollArea sits inside a
+              hairline card so the bubble panel reads as a contained artifact
+              rather than floating against the page paper. */}
           <section id="transcript" className="mt-12 scroll-mt-24">
             <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
               Transcript
             </p>
-            <ConversationTranscript messages={call.messages ?? []} />
+            <div className="overflow-hidden rounded-card border border-hairline bg-paper-raised">
+              <ConversationTranscript messages={call.messages ?? []} />
+            </div>
           </section>
         </main>
       </div>

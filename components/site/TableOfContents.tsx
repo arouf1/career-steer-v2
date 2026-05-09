@@ -13,7 +13,13 @@ const mountedSubscribe = () => () => {};
 const mountedClientSnapshot = () => true;
 const mountedServerSnapshot = () => false;
 
-export function WikiTableOfContents({ sections }: { sections: SectionLink[] }) {
+export function WikiTableOfContents({
+  sections,
+  eyebrow = "In this guide",
+}: {
+  sections: SectionLink[];
+  eyebrow?: string;
+}) {
   const [activeSection, setActiveSection] = useState<string>("");
 
   useEffect(() => {
@@ -45,7 +51,7 @@ export function WikiTableOfContents({ sections }: { sections: SectionLink[] }) {
 
   return (
     <nav aria-label="Article sections">
-      <p className={eyebrowCls}>In this guide</p>
+      <p className={eyebrowCls}>{eyebrow}</p>
       <ul className="mt-4 space-y-0.5">
         {sections.map((section, i) => {
           const isActive = activeSection === section.id;
