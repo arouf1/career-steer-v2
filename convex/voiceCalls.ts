@@ -16,6 +16,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -34,6 +35,74 @@ const messageValidator = v.object({
     })),
   ),
 });
+
+// ── Trimmed list-row shape ─────────────────────────────────────────────────
+//
+// Shared between listForUser (returns) and _hydrateForList (returns) so the
+// mapping logic lives in exactly one place. No transcript, no embedding bytes
+// are included — only what the history page needs to render a card.
+
+const callListRowValidator = v.object({
+  _id: v.id("voice_calls"),
+  surface: v.optional(
+    v.union(
+      v.literal("guide"),
+      v.literal("compass"),
+      v.literal("job"),
+      v.literal("interview_job"),
+    ),
+  ),
+  guideId: v.optional(v.id("career_guides")),
+  jobPostingId: v.optional(v.id("job_postings")),
+  canvasSnapshotId: v.optional(v.id("discover_canvases")),
+  title: v.string(),
+  status: v.union(
+    v.literal("active"),
+    v.literal("completed"),
+    v.literal("interrupted"),
+    v.literal("error"),
+  ),
+  totalDurationSeconds: v.number(),
+  messagesCount: v.number(),
+  aiSummary: v.optional(v.any()),
+  archivedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+});
+
+type CallListRow = {
+  _id: Id<"voice_calls">;
+  surface?: "guide" | "compass" | "job" | "interview_job";
+  guideId?: Id<"career_guides">;
+  jobPostingId?: Id<"job_postings">;
+  canvasSnapshotId?: Id<"discover_canvases">;
+  title: string;
+  status: "active" | "completed" | "interrupted" | "error";
+  totalDurationSeconds: number;
+  messagesCount: number;
+  aiSummary?: unknown;
+  archivedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+function trimToListRow(row: Doc<"voice_calls">): CallListRow {
+  return {
+    _id: row._id,
+    surface: row.surface,
+    guideId: row.guideId,
+    jobPostingId: row.jobPostingId,
+    canvasSnapshotId: row.canvasSnapshotId,
+    title: row.title,
+    status: row.status,
+    totalDurationSeconds: row.totalDurationSeconds,
+    messagesCount: row.messages.length,
+    aiSummary: row.aiSummary,
+    archivedAt: row.archivedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 // ── Auth helper (mirrors peopleOutreach.ts / careerGuidePersonalizations.ts) ─
 
@@ -492,6 +561,155 @@ export const _gatherSessionContext = internalQuery({
       .unique();
 
     return { user, guide, profile, enrichment, branches, personalization };
+  },
+});
+
+// ── Public query: paginated list of calls for the current user ───────────
+//
+// Powers the /workspace/calls history page. Surface filter applied
+// in-memory on the materialised page (cheap at small N); archive filter is a
+// true index range via by_user_archived_created. Trimmed shape returned per
+// row — no transcript or embedding bytes shipped to the client list.
+
+export const listForUser = query({
+  args: {
+    surfaces: v.optional(
+      v.array(
+        v.union(
+          v.literal("guide"),
+          v.literal("compass"),
+          v.literal("job"),
+          v.literal("interview_job"),
+        ),
+      ),
+    ),
+    includeArchived: v.optional(v.boolean()),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.object({
+    page: v.array(callListRowValidator),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) {
+      return { page: [], isDone: true, continueCursor: null };
+    }
+
+    const includeArchived = args.includeArchived ?? false;
+
+    // Two-arm query: includeArchived means "archived view" (any archivedAt);
+    // !includeArchived means "active only" (archivedAt undefined). Both arms
+    // hit by_user_archived_created. Active arm uses the eq(undefined) bound to
+    // pull only rows where archivedAt is absent.
+    const builder = ctx.db
+      .query("voice_calls")
+      .withIndex("by_user_archived_created", (q) =>
+        includeArchived
+          ? q.eq("userId", user._id)
+          : q.eq("userId", user._id).eq("archivedAt", undefined),
+      )
+      .order("desc");
+
+    const result = await builder.paginate(args.paginationOpts);
+
+    // In-memory surface filter on the materialised page (cheap at <500 rows;
+    // if volume grows add a by_user_surface_created composite index). For the
+    // archived view, also drop active rows here since the index arm only
+    // constrains on userId when includeArchived is true.
+    const surfacesSet =
+      args.surfaces && args.surfaces.length > 0
+        ? new Set(args.surfaces)
+        : null;
+
+    const filtered = result.page
+      .filter((row) => {
+        if (includeArchived && row.archivedAt === undefined) return false;
+        if (surfacesSet && (!row.surface || !surfacesSet.has(row.surface as "guide" | "compass" | "job" | "interview_job")))
+          return false;
+        return true;
+      })
+      .map(trimToListRow);
+
+    return {
+      page: filtered,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// ── Public mutations: soft delete (archive) + restore ────────────────────
+
+export const archive = mutation({
+  args: { callId: v.id("voice_calls") },
+  returns: v.object({ ok: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return { ok: false };
+    const row = await ctx.db.get(args.callId);
+    if (!row || row.userId !== user._id) return { ok: false };
+    if (row.archivedAt !== undefined) return { ok: true }; // idempotent
+    await ctx.db.patch(args.callId, {
+      archivedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+export const unarchive = mutation({
+  args: { callId: v.id("voice_calls") },
+  returns: v.object({ ok: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return { ok: false };
+    const row = await ctx.db.get(args.callId);
+    if (!row || row.userId !== user._id) return { ok: false };
+    if (row.archivedAt === undefined) return { ok: true }; // idempotent
+    await ctx.db.patch(args.callId, {
+      archivedAt: undefined,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+// ── Internal query: project a set of call ids to the list-row shape ──────
+//
+// Used by voiceCallsSearch.searchByText to convert vector-search hits into
+// list rows. Auth is the caller's responsibility (the action already resolved
+// the user before handing ids here).
+
+export const _hydrateForList = internalQuery({
+  args: { ids: v.array(v.id("voice_calls")) },
+  returns: v.array(callListRowValidator),
+  handler: async (ctx, args) => {
+    const rows = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
+    return rows
+      .filter((r): r is Doc<"voice_calls"> => r !== null)
+      .map(trimToListRow);
+  },
+});
+
+// ── Internal helper: resolve userId from tokenIdentifier ─────────────────
+//
+// Actions cannot call resolveAuthedUser (which is typed for QueryCtx /
+// MutationCtx only). They resolve the identity themselves via ctx.auth, then
+// call this query to get the Convex userId in one round trip.
+
+export const _userByTokenIdentifier = internalQuery({
+  args: { tokenIdentifier: v.string() },
+  returns: v.union(v.null(), v.object({ _id: v.id("users") })),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", args.tokenIdentifier),
+      )
+      .unique();
+    return user ? { _id: user._id } : null;
   },
 });
 

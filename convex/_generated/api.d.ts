@@ -72,6 +72,7 @@ import type * as usersAccount from "../usersAccount.js";
 import type * as voiceCallContext from "../voiceCallContext.js";
 import type * as voiceCalls from "../voiceCalls.js";
 import type * as voiceCallsNode from "../voiceCallsNode.js";
+import type * as voiceCallsSearch from "../voiceCallsSearch.js";
 
 import type {
   ApiFromModules,
@@ -144,6 +145,7 @@ declare const fullApi: ApiFromModules<{
   voiceCallContext: typeof voiceCallContext;
   voiceCalls: typeof voiceCalls;
   voiceCallsNode: typeof voiceCallsNode;
+  voiceCallsSearch: typeof voiceCallsSearch;
 }>;
 
 /**
