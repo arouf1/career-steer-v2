@@ -74,10 +74,10 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
 
         <div className="mt-7 flex items-baseline gap-2">
           <span className="text-[48px] font-normal leading-none text-ink [font-family:var(--font-serif)]">
-            {rubric.overallScore.toFixed(1)}
+            {Math.round(rubric.overallScore)}
           </span>
           <span className="text-[14px] font-medium uppercase tracking-[0.18em] text-mute">
-            / 5
+            %
           </span>
         </div>
 
@@ -109,7 +109,8 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
                     <span className="text-mute">{"—"}</span>
                   ) : (
                     <>
-                      {d.score} <span className="text-mute">/ 5</span>
+                      {Math.round(d.score)}
+                      <span className="text-mute">%</span>
                     </>
                   )}
                 </p>

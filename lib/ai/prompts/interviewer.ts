@@ -121,7 +121,7 @@ export function buildSynthesisPrompt(args: SynthesisPromptArgs): string {
   sections.push("- 5k+ employees AND brand mentions >50, OR public, OR famously selective → rigor 4-5.");
   sections.push("- Glassdoor difficulty score (when present) is the strongest single signal; weight it heaviest.");
   sections.push("");
-  sections.push("Each dimension's `anchorAt` should describe what a 3 looks like at THIS company specifically (the bar for 'meets expectations' here, not in general). `anchorBelow` and `anchorAbove` describe weaker / stronger answers within that calibration.");
+  sections.push("Each dimension's `anchorAt` should describe what a 60/100 score looks like at THIS company specifically (the bar for 'meets expectations' here, not in general). `anchorBelow` describes what scores below 40 look like; `anchorAbove` describes what scores above 80 look like.");
   sections.push("");
   sections.push("Each round in `rounds` should have an `interviewerArchetype` like 'recruiter', 'hiring manager', 'engineering manager', 'staff engineer', 'bar raiser', 'principal', etc. The whole-loop `rubric.interviewerArchetype` should be the dominant one — this is the persona the live interviewer adopts.");
   sections.push("");
@@ -216,7 +216,7 @@ export function buildInterviewerPrompt(args: InterviewerPromptArgs): string {
     `**Persona:**`,
     `You are a ${archetype} at ${company.name}, interviewing ${candidate.firstName} for the ${posting.title} position. Your tone matches how this company actually conducts this loop, based on candidate accounts.`,
     ``,
-    `Calibration: this loop runs at rigor ${bundle.rubric.rigor}/5 (${bundle.rubric.rigorRationale}). Hold the bar at that level — your bar is not "hard" or "easy" in the abstract, it is what excellence looks like at ${company.name} for this role. Reference frame for what a 3 means here:`,
+    `Calibration: this loop runs at rigor ${bundle.rubric.rigor}/5 (${bundle.rubric.rigorRationale}). Hold the bar at that level — your bar is not "hard" or "easy" in the abstract, it is what excellence looks like at ${company.name} for this role. Reference frame for what "meets the bar" (60/100) means here:`,
     anchorAtBullets,
     ``,
     `**About ${candidate.firstName}:**`,
@@ -371,18 +371,19 @@ export type RubricPromptArgs = {
 export function buildRubricPrompt(args: RubricPromptArgs): string {
   const { candidate, posting, company, bundle, transcript } = args;
   const anchorBlock = bundle.rubric.dimensions
-    .map((d) => `- ${d.key}\n  Below (1-2): ${d.anchorBelow}\n  At (3): ${d.anchorAt}\n  Above (4-5): ${d.anchorAbove}`)
+    .map((d) => `- ${d.key}\n  Below (<40): ${d.anchorBelow}\n  At (60 = meets bar): ${d.anchorAt}\n  Above (>80): ${d.anchorAbove}`)
     .join("\n");
 
   const sections: string[] = [];
   sections.push(`You are grading a mock interview for the ${posting.title} role at ${company.name}.`);
   sections.push(`Calibration: rigor ${bundle.rubric.rigor}/5 (${bundle.rubric.rigorRationale}).`);
-  sections.push(`A 3 means "meets the bar at ${company.name} for this role" — NOT "good in general".`);
+  sections.push(`A score of 60 means "meets the bar at ${company.name} for this role" — NOT "good in general". 80+ is strong. 90+ is exceptional. 40-59 is below the bar. <40 is a significant gap.`);
   sections.push(``);
   sections.push(`== Output schema requirements ==`);
   sections.push(`- nextStepExercises: exactly 3 entries.`);
   sections.push(`- dimensions: exactly 4 entries with keys: structure, depth, role-fit, company-fit (matching the bundle).`);
-  sections.push(`- overallScore: weighted average of the 4 dimension scores (treat null as not contributing). Round to one decimal.`);
+  sections.push(`- overallScore: weighted average of the 4 dimension scores (treat null as not contributing). Round to an integer in the range 0-100.`);
+  sections.push(`- Each dimension score: an integer in the range 0-100 (or null if there was no substantive signal on that dimension).`);
   sections.push(`- oneLineVerdict: a single sentence the candidate sees above the fold.`);
   sections.push(``);
   sections.push(`== Verbatim-quote rule (critical) ==`);

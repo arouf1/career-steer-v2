@@ -133,13 +133,13 @@ describe("buildInterviewerPrompt", () => {
 describe("InterviewRubricSchema", () => {
   it("accepts a complete rubric with 4 dimensions, 3 exercises, and verbatim quotes", () => {
     const ok = {
-      overallScore: 3.5,
+      overallScore: 70,
       oneLineVerdict: "Strong on structure; tighten company-specific framing.",
       dimensions: [
-        { key: "structure", score: 4, whatWorked: "Used STAR.", whatToFix: "—" },
-        { key: "depth", score: 3, whatWorked: "—", whatToFix: "Probe own assumptions." },
+        { key: "structure", score: 80, whatWorked: "Used STAR.", whatToFix: "—" },
+        { key: "depth", score: 60, whatWorked: "—", whatToFix: "Probe own assumptions." },
         { key: "role-fit", score: null, whatWorked: "—", whatToFix: "Not enough signal." },
-        { key: "company-fit", score: 3, whatWorked: "—", whatToFix: "Cite specifics." },
+        { key: "company-fit", score: 60, whatWorked: "—", whatToFix: "Cite specifics." },
       ],
       bestMoment: { quote: "I led the migration from MySQL to Postgres.", why: "Concrete, scoped, owned." },
       biggestMiss: { quote: "I'd do something with caching.", why: "Vague.", betterAnswerSketch: "Name the caches, the layer, the eviction policy." },

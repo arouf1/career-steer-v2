@@ -92,10 +92,10 @@ export function InterviewRow({ call, onArchive, onUnarchive }: Props) {
       {score !== null && (
         <div className="pointer-events-none relative z-10 flex shrink-0 items-baseline gap-1 pt-0.5">
           <span className="text-[26px] font-normal leading-none text-ink [font-family:var(--font-serif)]">
-            {score.toFixed(1)}
+            {Math.round(score)}
           </span>
           <span className="text-[11px] font-medium uppercase tracking-wide text-mute">
-            /5
+            %
           </span>
         </div>
       )}
