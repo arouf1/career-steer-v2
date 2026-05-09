@@ -201,15 +201,17 @@ export function CareerGuidesByLadder({
   if (sections.length === 0) return null;
 
   return (
-    <div className="overflow-x-clip">
-      {/* Anchor strip */}
+    <div className="w-full max-w-full overflow-x-hidden">
+      {/* Anchor strip — sticky inside the section column, no negative
+          margins (those caused horizontal page overflow in some workspace
+          layouts). Strip itself owns its own horizontal scroll. */}
       <nav
         aria-label="Career ladders"
-        className="sticky top-0 z-20 -mx-4 mb-10 border-b border-hairline bg-paper/95 px-4 backdrop-blur-[2px] sm:-mx-6 sm:px-6"
+        className="sticky top-0 z-20 mb-10 w-full max-w-full border-b border-hairline bg-paper/95 backdrop-blur-[2px]"
       >
         <ul
           ref={stripScrollRef}
-          className="hide-scrollbar flex snap-x snap-mandatory gap-1.5 overflow-x-auto py-3"
+          className="hide-scrollbar flex w-full max-w-full snap-x snap-mandatory gap-1.5 overflow-x-auto py-3"
         >
           {sections.map((s) => {
             const isActive = s.ladder.slug === activeSlug;
