@@ -57,19 +57,22 @@ export function ProfileEditForm({ profile, onDone }: Props) {
         headline: values.headline,
         summary: values.summary,
         location: values.location,
+        // `||` (not `??`) so empty strings — used as a transient "no date
+        // picked" marker after unchecking "I currently work here" — get
+        // coerced to undefined on save, same as null/undefined.
         experience: values.experience.map((e) => ({
           title: e.title,
           company: e.company,
-          startDate: e.startDate ?? undefined,
-          endDate: e.endDate ?? undefined,
+          startDate: e.startDate || undefined,
+          endDate: e.endDate || undefined,
           description: e.description ?? undefined,
         })),
         education: values.education.map((e) => ({
           school: e.school,
           degree: e.degree ?? undefined,
           field: e.field ?? undefined,
-          startDate: e.startDate ?? undefined,
-          endDate: e.endDate ?? undefined,
+          startDate: e.startDate || undefined,
+          endDate: e.endDate || undefined,
         })),
         skills: values.skills,
       },
@@ -291,9 +294,18 @@ function ExperienceEntry({ form, index: i, onRemove, inputCls, labelCls }: Entry
 
   function handleCurrentToggle(checked: boolean) {
     setCurrentlyHere(checked);
-    if (checked) {
-      form.setValue(`experience.${i}.endDate`, null, { shouldDirty: true });
-    }
+    // Both directions need to mark the form dirty:
+    //   - check: clear the end date to null (current role)
+    //   - uncheck: set to "" so RHF sees a value-change away from null
+    //     (the picker treats empty string as "no date picked"; the submit
+    //     mapper coerces empty string back to undefined). Without this,
+    //     unchecking from a defaultValue of null was a no-op for RHF
+    //     and the floating Save bar never appeared.
+    form.setValue(
+      `experience.${i}.endDate`,
+      checked ? null : "",
+      { shouldDirty: true },
+    );
   }
 
   return (
