@@ -9,6 +9,7 @@ import {
   Bookmark,
   BookOpen,
   MessagesSquare,
+  X,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,6 +25,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 const items = [
@@ -51,17 +53,34 @@ const items = [
 
 export function WorkspaceSidebar() {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const isOn = (url: string) =>
     pathname === url || pathname.startsWith(url + "/");
 
+  // Close the mobile sheet on navigation. Desktop is no-op (the sidebar
+  // is a persistent rail there). Wired onto every nav-item Link so any
+  // route change collapses the sheet automatically.
+  const handleNavigate = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+
   return (
     <Sidebar collapsible="icon">
-      {/* h-14 spacer aligns nav items with the topbar baseline. The trigger
-          appears only when collapsed — when expanded, the topbar carries the
-          collapse affordance instead. */}
-      <SidebarHeader className="h-14 flex items-center justify-center px-2">
-        <SidebarTrigger className="group-data-[state=expanded]:hidden" />
+      {/* h-14 spacer aligns nav items with the topbar baseline.
+          - Desktop collapsed: PanelLeft trigger appears at the left to expand
+          - Desktop expanded: header is empty (topbar carries the collapse)
+          - Mobile open (sheet): X close button at top-right */}
+      <SidebarHeader className="h-14 flex items-center justify-between px-2">
+        <SidebarTrigger className="group-data-[state=expanded]:hidden md:flex hidden" />
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setOpenMobile(false)}
+          className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-full text-mute transition-colors hover:bg-paper-raised hover:text-ink md:hidden"
+        >
+          <X className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        </button>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="pt-1">
@@ -76,7 +95,7 @@ export function WorkspaceSidebar() {
                       isActive={active}
                       tooltip={item.title}
                     >
-                      <Link href={item.url}>
+                      <Link href={item.url} onClick={handleNavigate}>
                         <item.icon />
                         <span>{item.title}</span>
                       </Link>
@@ -101,7 +120,7 @@ export function WorkspaceSidebar() {
                                 "data-[active=true]:text-sidebar-accent-foreground data-[active=true]:[&>svg]:text-sidebar-accent-foreground",
                               )}
                             >
-                              <Link href={child.url}>
+                              <Link href={child.url} onClick={handleNavigate}>
                                 <child.icon />
                                 <span>{child.title}</span>
                               </Link>
