@@ -11,6 +11,10 @@ import {
 } from "@/components/career-guides/CareerGuideArticle";
 import { JobsForGuide } from "@/components/career-guides/JobsForGuide";
 import { RelatedGuides } from "@/components/career-guides/RelatedGuides";
+import {
+  CareerGuideLadderBreadcrumb,
+  CareerGuideLadderFooter,
+} from "@/components/career-guides/CareerGuideLadderContext";
 
 export const revalidate = 300;
 
@@ -133,9 +137,10 @@ export default async function CareerGuidePage({
 }: PageProps) {
   const { slug } = await params;
   const sp = await searchParams;
-  const [guide, allGuides] = await Promise.all([
+  const [guide, allGuides, ladderContext] = await Promise.all([
     fetchQuery(api.careerGuides.getBySlug, { slug }),
     fetchQuery(api.careerGuides.listAll, {}),
+    fetchQuery(api.careerLadders.getGuideLadderContext, { slug }),
   ]);
   if (!guide) notFound();
 
@@ -169,12 +174,19 @@ export default async function CareerGuidePage({
       <main className="flex flex-1 flex-col">
         {guide.contentStatus === "complete" && guide.content ? (
           <>
+            {ladderContext && (
+              <CareerGuideLadderBreadcrumb
+                ctx={ladderContext}
+                currentSlug={guide.slug}
+              />
+            )}
             <CareerGuideArticle
               guide={guide}
               defaultRegion={region}
               existingByTitle={existingByTitle}
               initialBranches={initialBranches}
             />
+            {ladderContext && <CareerGuideLadderFooter ctx={ladderContext} />}
             <JobsForGuide
               guideSlug={guide.slug}
               guideTitle={guide.title}

@@ -8,7 +8,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { GuideWithUrl } from "@/convex/careerGuides";
+import type { Tier } from "@/convex/lib/ladders";
 import { CareerGuideCard } from "./CareerGuideCard";
+import { CareerGuidesByLadder } from "./CareerGuidesByLadder";
 
 const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -22,7 +24,9 @@ const ease = [0.2, 0.65, 0.3, 1] as const;
 const eyebrowCls =
   "text-[10px] uppercase tracking-[0.18em] font-medium text-mute";
 
-type SortOption = "newest" | "alphabetical";
+type SortOption = "newest" | "alphabetical" | "ladder";
+
+const SORT_STORAGE_KEY = "career-guides-sort-v1";
 
 type ValidationState =
   | { phase: "idle" }
@@ -54,7 +58,34 @@ export function CareerGuidesIndexClient({
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortOption>("newest");
+  const [sort, setSort] = useState<SortOption>(() => {
+    if (typeof window === "undefined") return "newest";
+    const saved = window.localStorage.getItem(SORT_STORAGE_KEY);
+    if (saved === "newest" || saved === "alphabetical" || saved === "ladder") {
+      return saved;
+    }
+    return "newest";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SORT_STORAGE_KEY, sort);
+  }, [sort]);
+
+  // Catalog-wide ladder context. Loaded reactively; the listing renders
+  // immediately with the legacy flat grid and re-flows when this lands.
+  const ladderContext = useQuery(
+    api.careerLadders.listLadderContextForCatalog,
+    {},
+  );
+  const tierByGuideSlug = useMemo(() => {
+    const map = new Map<string, Tier>();
+    if (!ladderContext) return map;
+    for (const p of ladderContext.primaryPositions) {
+      map.set(p.guideSlug, p.tier);
+    }
+    return map;
+  }, [ladderContext]);
+
   const [validation, setValidation] = useState<ValidationState>({
     phase: "idle",
   });
@@ -289,13 +320,15 @@ export function CareerGuidesIndexClient({
                 [
                   { value: "newest", label: "Newest" },
                   { value: "alphabetical", label: "A – Z" },
+                  { value: "ladder", label: "By ladder" },
                 ] as const
               ).map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => setSort(opt.value)}
-                  className={`rounded-pill border px-3 py-1.5 text-[12px] tracking-wide transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/10 focus-visible:ring-offset-2 ${
+                  disabled={opt.value === "ladder" && !ladderContext}
+                  className={`rounded-pill border px-3 py-1.5 text-[12px] tracking-wide transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/10 focus-visible:ring-offset-2 disabled:opacity-50 ${
                     sort === opt.value
                       ? "border-ink bg-ink text-paper"
                       : "border-hairline text-body hover:border-hairline-strong hover:text-ink"
@@ -338,6 +371,21 @@ export function CareerGuidesIndexClient({
               generating={generating}
               onGenerate={handleGenerate}
             />
+          ) : sort === "ladder" && ladderContext ? (
+            <motion.div
+              key="ladder"
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.4, ease }}
+            >
+              <CareerGuidesByLadder
+                guides={filtered}
+                ladders={ladderContext.ladders}
+                primaryPositions={ladderContext.primaryPositions}
+              />
+            </motion.div>
           ) : (
             <motion.ul
               key="grid"
@@ -357,7 +405,11 @@ export function CareerGuidesIndexClient({
                     ease,
                   }}
                 >
-                  <CareerGuideCard guide={g} variant="medium" />
+                  <CareerGuideCard
+                    guide={g}
+                    variant="medium"
+                    tier={tierByGuideSlug.get(g.slug)}
+                  />
                 </motion.li>
               ))}
             </motion.ul>

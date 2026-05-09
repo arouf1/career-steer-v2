@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { internalQuery } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { LadderForPrompt } from "../lib/ai/prompts/career-ladders";
 import {
+  TIER_RANK,
   tierFromLegacyStage,
   type LegacyCareerStage,
   type Tier,
@@ -225,6 +226,315 @@ export const getPositionByProfile = internalQuery({
       ladderSlug: seededLadder.slug,
       rung: userRung,
       tier: userTier,
+    };
+  },
+});
+
+// ── Public queries (UI surfaces) ───────────────────────────────────────────
+
+// Catalog-wide ladder context for the listing page (`/career-guides/`).
+// Returns BOTH the ladder catalogue (so the page can render section
+// headers + an anchor strip) AND a flat map of guideSlug → primary
+// position (so each card can show its tier chip without the client
+// having to walk N rows of join data).
+//
+// "Primary position" here means: the position with the lowest rung number
+// on the ladder where the guide first appears. For X-Manager titles that
+// sit on two ladders, we surface the position from the FUNCTIONAL ladder
+// (engineering, product, etc.) rather than the People-Management ladder —
+// the people-mgmt ladder is cross-cutting and would clutter every section.
+// Heuristic: pick the position whose ladder family is NOT "people"; if
+// none, take the first position by rung.
+export const listLadderContextForCatalog = query({
+  args: {},
+  returns: v.object({
+    ladders: v.array(
+      v.object({
+        slug: v.string(),
+        name: v.string(),
+        family: v.string(),
+        description: v.string(),
+      }),
+    ),
+    primaryPositions: v.array(
+      v.object({
+        guideSlug: v.string(),
+        ladderSlug: v.string(),
+        ladderName: v.string(),
+        rung: v.number(),
+        tier: tierValidator,
+      }),
+    ),
+  }),
+  handler: async (ctx) => {
+    const ladders = await ctx.db.query("career_ladders").take(200);
+    const ladderById = new Map(ladders.map((l) => [l._id as string, l]));
+
+    // Walk all positions once. Group by guideId to pick the primary.
+    const positions = await ctx.db
+      .query("career_guide_ladder_positions")
+      .take(2000);
+    const byGuide = new Map<
+      string,
+      {
+        ladderId: Id<"career_ladders">;
+        ladderSlug: string;
+        ladderName: string;
+        rung: number;
+        tier: Tier;
+        family: string;
+      }[]
+    >();
+    for (const pos of positions) {
+      const ladder = ladderById.get(pos.ladderId as string);
+      if (!ladder) continue;
+      const list = byGuide.get(pos.guideId as string) ?? [];
+      list.push({
+        ladderId: pos.ladderId,
+        ladderSlug: ladder.slug,
+        ladderName: ladder.name,
+        rung: pos.rung,
+        tier: pos.tier,
+        family: ladder.family,
+      });
+      byGuide.set(pos.guideId as string, list);
+    }
+
+    // Resolve guideId → guide.slug in one batched lookup.
+    const guideIdsArr = Array.from(byGuide.keys()) as Id<"career_guides">[];
+    const guides = await Promise.all(
+      guideIdsArr.map((id) => ctx.db.get(id)),
+    );
+    const slugByGuideId = new Map<string, string>();
+    for (const g of guides) {
+      if (g) slugByGuideId.set(g._id as string, g.slug);
+    }
+
+    const primaryPositions: {
+      guideSlug: string;
+      ladderSlug: string;
+      ladderName: string;
+      rung: number;
+      tier: Tier;
+    }[] = [];
+    for (const [guideId, list] of byGuide.entries()) {
+      const guideSlug = slugByGuideId.get(guideId);
+      if (!guideSlug) continue;
+      // Prefer non-"people" family; fall back to lowest rung.
+      const sorted = [...list].sort((a, b) => {
+        if (a.family !== b.family) {
+          if (a.family === "people") return 1;
+          if (b.family === "people") return -1;
+        }
+        return a.rung - b.rung;
+      });
+      const primary = sorted[0];
+      primaryPositions.push({
+        guideSlug,
+        ladderSlug: primary.ladderSlug,
+        ladderName: primary.ladderName,
+        rung: primary.rung,
+        tier: primary.tier,
+      });
+    }
+
+    return {
+      ladders: ladders.map((l) => ({
+        slug: l.slug,
+        name: l.name,
+        family: l.family,
+        description: l.description,
+      })),
+      primaryPositions,
+    };
+  },
+});
+
+// Per-slug ladder context for an individual guide page. Powers the
+// breadcrumb (full rung sequence with neighbour titles), the
+// What's-next/Earlier-chapter footer pair, and the Same-altitude/different-
+// paths peer strip.
+export const getGuideLadderContext = query({
+  args: { slug: v.string() },
+  handler: async (ctx, args) => {
+    const guide = await ctx.db
+      .query("career_guides")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .unique();
+    if (!guide) return null;
+
+    const positions = await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_guide", (q) => q.eq("guideId", guide._id))
+      .take(5);
+    if (positions.length === 0) return null;
+
+    const ladderResults = await Promise.all(
+      positions.map(async (pos) => {
+        const ladder = await ctx.db.get(pos.ladderId);
+        if (!ladder) return null;
+
+        // All rungs on this ladder, ordered by rung asc. May contain
+        // multiple guides per rung; we group by rung and pick the first
+        // guide on each (alphabetical by title for determinism).
+        const rungPositions = await ctx.db
+          .query("career_guide_ladder_positions")
+          .withIndex("by_ladder_rung", (q) => q.eq("ladderId", ladder._id))
+          .order("asc")
+          .take(50);
+
+        const byRung = new Map<
+          number,
+          {
+            tier: Tier;
+            guides: { slug: string; title: string }[];
+          }
+        >();
+        for (const rp of rungPositions) {
+          const g = await ctx.db.get(rp.guideId);
+          if (!g) continue;
+          const entry = byRung.get(rp.rung);
+          if (entry) {
+            entry.guides.push({ slug: g.slug, title: g.title });
+          } else {
+            byRung.set(rp.rung, {
+              tier: rp.tier,
+              guides: [{ slug: g.slug, title: g.title }],
+            });
+          }
+        }
+        const rungs = Array.from(byRung.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([rung, { tier, guides }]) => ({
+            rung,
+            tier,
+            // Deterministic guide order within a rung — alphabetical by
+            // title, with the current guide first if it sits at this rung.
+            guides: guides.sort((a, b) => {
+              if (a.slug === guide.slug) return -1;
+              if (b.slug === guide.slug) return 1;
+              return a.title.localeCompare(b.title);
+            }),
+          }));
+
+        return {
+          ladderSlug: ladder.slug,
+          ladderName: ladder.name,
+          ladderFamily: ladder.family,
+          ladderDescription: ladder.description,
+          currentRung: pos.rung,
+          currentTier: pos.tier,
+          rungs,
+        };
+      }),
+    );
+
+    const ladders = ladderResults.filter(
+      (r): r is NonNullable<typeof r> => r !== null,
+    );
+    if (ladders.length === 0) return null;
+
+    // Primary ladder: the FUNCTIONAL one (not "people"). If both are
+    // functional or both are people, take the one that appears first
+    // (positions order = insertion order, which mirrors backfill primary).
+    const primary =
+      ladders.find((l) => l.ladderFamily !== "people") ?? ladders[0];
+    const secondary = ladders.find((l) => l !== primary) ?? null;
+
+    // Same-tier peers on OTHER ladders. Scan the by_tier index, exclude
+    // our ladders, exclude the current guide. Peers are ranked by family
+    // proximity to the source ladder so a Product Manager doesn't see
+    // Marine Biologist as a "peer" — same tier alone is too coarse.
+    const peerPositions = await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_tier", (q) => q.eq("tier", primary.currentTier))
+      .take(200);
+    const ourLadderIds = new Set(positions.map((p) => p.ladderId as string));
+
+    // Resolve each peer position to ladder + guide once.
+    type PeerCandidate = {
+      slug: string;
+      title: string;
+      family: string;
+    };
+    const candidates: PeerCandidate[] = [];
+    const seenPeers = new Set<string>();
+    for (const pp of peerPositions) {
+      if (ourLadderIds.has(pp.ladderId as string)) continue;
+      if (pp.guideId === guide._id) continue;
+      const g = await ctx.db.get(pp.guideId);
+      if (!g) continue;
+      if (seenPeers.has(g.slug)) continue;
+      const ladder = await ctx.db.get(pp.ladderId);
+      if (!ladder) continue;
+      seenPeers.add(g.slug);
+      candidates.push({
+        slug: g.slug,
+        title: g.title,
+        family: ladder.family,
+      });
+    }
+
+    // Family proximity rank: 0 = same broad cluster, 1 = adjacent cluster,
+    // 2 = far. Source ladder family decides which cluster the user sits in.
+    const CLUSTERS: Record<string, string[]> = {
+      tech: ["product", "engineering", "design", "data"],
+      gtm: ["marketing", "sales", "customer-success"],
+      corp: ["finance", "legal", "operations", "people"],
+      domain: ["research", "healthcare", "education", "trades", "creative"],
+    };
+    const clusterOf = (family: string): string => {
+      for (const [name, families] of Object.entries(CLUSTERS)) {
+        if (families.includes(family)) return name;
+      }
+      return "other";
+    };
+    const sourceCluster = clusterOf(primary.ladderFamily);
+    const proximity = (peerFamily: string): number => {
+      if (peerFamily === primary.ladderFamily) return 0;
+      if (clusterOf(peerFamily) === sourceCluster) return 1;
+      return 2;
+    };
+
+    const peers = candidates
+      .sort((a, b) => {
+        const pa = proximity(a.family);
+        const pb = proximity(b.family);
+        if (pa !== pb) return pa - pb;
+        return a.title.localeCompare(b.title);
+      })
+      .slice(0, 6)
+      .map(({ slug, title }) => ({ slug, title }));
+
+    // Footer pair: previous and next rung relative to primary.currentRung.
+    // Skip rungs that the current guide also sits on (so a guide at rung 3
+    // doesn't link back to itself if rung 3 holds multiple guides).
+    let earlier: { slug: string; title: string; tier: Tier } | null = null;
+    let next: { slug: string; title: string; tier: Tier } | null = null;
+    for (let i = primary.rungs.length - 1; i >= 0; i--) {
+      const r = primary.rungs[i];
+      if (r.rung >= primary.currentRung) continue;
+      const candidate = r.guides.find((g) => g.slug !== guide.slug);
+      if (candidate) {
+        earlier = { slug: candidate.slug, title: candidate.title, tier: r.tier };
+        break;
+      }
+    }
+    for (const r of primary.rungs) {
+      if (r.rung <= primary.currentRung) continue;
+      const candidate = r.guides.find((g) => g.slug !== guide.slug);
+      if (candidate) {
+        next = { slug: candidate.slug, title: candidate.title, tier: r.tier };
+        break;
+      }
+    }
+
+    return {
+      primary,
+      secondary,
+      earlier,
+      next,
+      peers,
     };
   },
 });

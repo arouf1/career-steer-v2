@@ -1,15 +1,20 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { GuideWithUrl } from "@/convex/careerGuides";
+import { tierChip, type Tier } from "@/lib/tier-display";
 
 type Variant = "lead" | "medium" | "small";
 
 export function CareerGuideCard({
   guide,
   variant = "small",
+  tier,
 }: {
   guide: GuideWithUrl;
   variant?: Variant;
+  // Optional tier chip shown in the top-right of the illustration. Only
+  // rendered when a tier is provided — leaves legacy callers untouched.
+  tier?: Tier;
 }) {
   const isLead = variant === "lead";
   const dek = guide.content?.overview ?? "";
@@ -37,6 +42,15 @@ export function CareerGuideCard({
         />
       ) : (
         <div className="absolute inset-0 bg-paper" aria-hidden />
+      )}
+
+      {tier && (
+        <span
+          aria-label={`Tier: ${tierChip(tier).toLowerCase()}`}
+          className="absolute right-3 top-3 z-10 rounded-pill bg-paper/85 px-2 py-0.5 text-[10px] font-medium tracking-[0.12em] text-mute"
+        >
+          {tierChip(tier)}
+        </span>
       )}
 
       <div
