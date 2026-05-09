@@ -26,13 +26,6 @@ import type { DeepDiveSummary } from "@/lib/ai/prompts/voiceAdviser";
 
 type Surface = "guide" | "compass" | "job" | "interview_job";
 
-const SURFACE_LABEL: Record<Surface, string> = {
-  guide: "Career deep dive",
-  compass: "Compass",
-  job: "Job deep dive",
-  interview_job: "Mock interview",
-};
-
 type Props = {
   callId: string;
 };
@@ -48,9 +41,11 @@ export function ConversationDetailClient({ callId }: Props) {
   const unarchive = useMutation(api.voiceCalls.unarchive);
 
   // ── Loading state ────────────────────────────────────────────────────────
+  // Page width: max-w-3xl (~768px) keeps body lines under ~75ch at standard
+  // text size — matches the editorial reading-flow rule in DESIGN.md.
   if (call === undefined) {
     return (
-      <div className="mx-auto flex w-full max-w-4xl items-center gap-2 p-8 text-[13px] text-mute">
+      <div className="mx-auto flex w-full max-w-3xl items-center gap-2 p-8 text-[13px] text-mute">
         <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} aria-hidden />
         Loading conversation…
       </div>
@@ -60,7 +55,7 @@ export function ConversationDetailClient({ callId }: Props) {
   // ── 404 / not-owned fallback ─────────────────────────────────────────────
   if (call === null) {
     return (
-      <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-3 p-12 text-center">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-3 p-12 text-center">
         <p className="text-[14px] text-ink">Conversation not found.</p>
         <p className="text-[12px] text-mute">
           It may have been archived from a different account, or the link is
@@ -93,16 +88,29 @@ export function ConversationDetailClient({ callId }: Props) {
   };
 
   const summary = call.aiSummary as DeepDiveSummary | InterviewRubric | null | undefined;
+  // companyName / companyLogoUrl are bundled onto the row by getCallById's
+  // posting→company join (see convex/voiceCalls.ts) but aren't part of the
+  // base voice_calls Doc shape, so they're surfaced via an unknown-cast.
+  const callExtras = call as unknown as {
+    companyName?: string;
+    companyLogoUrl?: string;
+  };
   const meta = {
     title: call.title as string,
     createdAt: call.createdAt as number,
     durationSeconds: call.totalDurationSeconds as number,
+    companyName: callExtras.companyName,
+    companyLogoUrl: callExtras.companyLogoUrl,
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
+  // max-w-3xl (~768px) keeps body lines under the 65-75ch editorial rule
+  // from DESIGN.md. Panels render flush onto paper — no wrapping cards.
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-4 sm:p-6">
-      {/* Header: back link + surface chip + archived badge + actions */}
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-4 sm:p-6">
+      {/* Header: back link on the left, archived chip + actions on the right.
+          The surface label is no longer rendered here — it now lives on the
+          masthead inside each panel. */}
       <header className="flex items-center justify-between gap-3">
         <Link
           href="/workspace/conversations"
@@ -113,10 +121,6 @@ export function ConversationDetailClient({ callId }: Props) {
         </Link>
 
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-mute">
-            {SURFACE_LABEL[surface]}
-          </span>
-
           {isArchived && (
             <span className="inline-flex items-center rounded-full border border-hairline bg-paper-raised px-2 py-0.5 text-[10px] font-medium text-mute">
               Archived
@@ -160,37 +164,34 @@ export function ConversationDetailClient({ callId }: Props) {
         </div>
       </header>
 
-      {/* Surface-aware summary panel */}
+      {/* Surface-aware summary panel — flush on paper, no wrapping card */}
       {summary != null ? (
         isInterview ? (
           <InterviewDetailPanel
             rubric={summary as InterviewRubric}
             meta={meta}
-            className="rounded-xl border border-hairline bg-paper"
           />
         ) : (
           <DeepDiveDetailPanel
             summary={summary as DeepDiveSummary}
             meta={meta}
-            className="rounded-xl border border-hairline bg-paper"
+            surface={surface as "guide" | "compass" | "job"}
           />
         )
       ) : (
-        <div className="rounded-xl border border-hairline bg-paper p-6">
+        <div className="py-6">
           <p className="text-[13px] text-mute">
             No summary available for this conversation.
           </p>
         </div>
       )}
 
-      {/* Transcript — always rendered below the summary panel */}
-      <section>
-        <h2 className="mb-2 text-[13px] font-medium text-ink">
+      {/* Transcript — flush, with editorial section label, no card chrome */}
+      <section className="mt-12">
+        <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
           Transcript
-        </h2>
-        <div className="rounded-xl border border-hairline bg-paper p-4">
-          <ConversationTranscript messages={call.messages ?? []} />
-        </div>
+        </p>
+        <ConversationTranscript messages={call.messages ?? []} />
       </section>
     </div>
   );

@@ -31,7 +31,7 @@ type Surface = "guide" | "compass" | "job" | "interview_job";
 const ALL_SURFACES: Surface[] = ["guide", "compass", "job", "interview_job"];
 
 const SURFACE_LABEL: Record<Surface, string> = {
-  guide: "Deep dives",
+  guide: "Career deep dives",
   compass: "Compass",
   job: "Job deep dives",
   interview_job: "Mock interviews",

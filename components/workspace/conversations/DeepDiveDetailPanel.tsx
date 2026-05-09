@@ -1,13 +1,13 @@
+// components/workspace/conversations/DeepDiveDetailPanel.tsx
+//
+// Editorial detail panel for deep-dive conversations (career / compass / job).
+// Single-column reading flow on plain paper — no card-in-card chrome, no
+// priority-grouped action-point sub-cards, no chromatic sentiment chips
+// (those quietly violated the One Voice Rule). Section breaks are hairline
+// dividers; typography carries the hierarchy.
+
 "use client";
 
-import {
-  AlertTriangle,
-  ArrowRight,
-  Circle,
-  Hash,
-  Lightbulb,
-  MessageCircleQuestion,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DeepDiveSummary } from "@/lib/ai/prompts/voiceAdviser";
 
@@ -19,251 +19,184 @@ type Props = {
     createdAt: number;
     durationSeconds: number;
   };
+  surface: "guide" | "compass" | "job";
   className?: string;
 };
 
-export function DeepDiveDetailPanel({ summary, meta, className }: Props) {
-  const highPoints = summary.actionPoints.filter((a) => a.priority === "high");
-  const mediumPoints = summary.actionPoints.filter(
-    (a) => a.priority === "medium",
-  );
-  const lowPoints = summary.actionPoints.filter((a) => a.priority === "low");
+const SURFACE_LABEL: Record<Props["surface"], string> = {
+  guide: "Career deep dive",
+  compass: "Compass",
+  job: "Job deep dive",
+};
+
+export function DeepDiveDetailPanel({
+  summary,
+  meta,
+  surface,
+  className,
+}: Props) {
+  // Strip the conversational "Talking through: " prefix the deep-dive
+  // pipeline uses — the masthead label already sets surface context. Mirrors
+  // DeepDiveRow.
+  const cleanMetaTitle = meta.title.replace(/^Talking through:\s*/i, "");
+  const title = summary.title?.trim() || cleanMetaTitle;
+
+  // Action points — flatten with priority-implicit ordering (high → med → low).
+  // No grouped sub-cards; the order alone communicates priority.
+  const orderedActionPoints = [
+    ...summary.actionPoints.filter((a) => a.priority === "high"),
+    ...summary.actionPoints.filter((a) => a.priority === "medium"),
+    ...summary.actionPoints.filter((a) => a.priority === "low"),
+  ];
 
   return (
-    <div className={cn("flex flex-col gap-5 p-5 sm:p-6", className)}>
-      {/* Header */}
+    <div className={cn("flex flex-col", className)}>
+      {/* ── Masthead ────────────────────────────────────────────────────── */}
       <header>
-        <p className="text-[12px] uppercase tracking-wide text-mute">
-          Deep dive · {meta.title}
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          {SURFACE_LABEL[surface]} <span aria-hidden>·</span>{" "}
+          {summary.sentiment} <span aria-hidden>·</span>{" "}
+          {formatDuration(meta.durationSeconds)} <span aria-hidden>·</span>{" "}
+          {formatRelative(meta.createdAt)}
         </p>
-        <h2 className="mt-1 text-[22px] font-medium leading-snug text-ink [font-family:var(--font-serif)]">
-          {summary.title || meta.title}
-        </h2>
-        {/* Status chips */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          <SentimentChip sentiment={summary.sentiment} />
-          <EngagementChip engagement={summary.userEngagement} />
-          <GuideRelevanceChip relevance={summary.guideRelevance} />
-        </div>
-        <p className="mt-3 text-[14px] leading-relaxed text-ink">
-          {summary.summary}
-        </p>
+
+        <h1 className="mt-5 text-[36px] font-normal leading-tight text-ink [font-family:var(--font-serif)]">
+          {title}
+        </h1>
+
+        {summary.summary && (
+          <p className="mt-4 max-w-[60ch] text-[17px] italic leading-relaxed text-body [font-family:var(--font-serif)]">
+            {summary.summary}
+          </p>
+        )}
       </header>
 
-      {/* Insights */}
+      {/* ── Insights ───────────────────────────────────────────────────── */}
       {summary.insights.length > 0 && (
-        <section aria-label="Insights">
-          <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-            <Lightbulb className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+        <>
+          <hr className="mt-12 border-t border-hairline" />
+          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
             Insights
           </p>
-          <ul className="mt-2 flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-5">
             {summary.insights.map((insight, i) => (
-              <li key={i} className="text-[13px] text-ink/80 pl-1">
-                {insight}
+              <li
+                key={i}
+                className="flex items-start gap-4 max-w-[60ch] text-[15px] leading-relaxed text-ink"
+              >
+                {/* Editorial hairline-bullet — 1px vertical rule per DESIGN.md */}
+                <span
+                  className="mt-2 inline-block h-2.5 w-px shrink-0 bg-hairline-strong"
+                  aria-hidden
+                />
+                <span>{insight}</span>
               </li>
             ))}
           </ul>
-        </section>
+        </>
       )}
 
-      {/* Key topics */}
+      {/* ── Topics covered ─────────────────────────────────────────────── */}
       {summary.keyTopics.length > 0 && (
-        <section aria-label="Key topics">
-          <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-            <Hash className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-            Key topics
+        <>
+          <hr className="mt-12 border-t border-hairline" />
+          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+            Topics covered
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
             {summary.keyTopics.map((topic, i) => (
               <span
                 key={i}
-                className="border-hairline rounded-pill border bg-paper-raised px-3 py-1 text-[12px] text-mute"
+                className="rounded-pill border border-hairline bg-paper-raised px-3 py-1 text-[12px] text-ink"
               >
                 {topic}
               </span>
             ))}
           </div>
-        </section>
+        </>
       )}
 
-      {/* Action points */}
-      {summary.actionPoints.length > 0 && (
-        <section aria-label="Action points">
-          <p className="text-[13px] font-medium text-ink">Action points</p>
-          <div className="mt-2 flex flex-col gap-3">
-            {highPoints.length > 0 && (
-              <PriorityGroup
-                priority="high"
-                items={highPoints.map((a) => a.description)}
-              />
-            )}
-            {mediumPoints.length > 0 && (
-              <PriorityGroup
-                priority="medium"
-                items={mediumPoints.map((a) => a.description)}
-              />
-            )}
-            {lowPoints.length > 0 && (
-              <PriorityGroup
-                priority="low"
-                items={lowPoints.map((a) => a.description)}
-              />
-            )}
-          </div>
-        </section>
+      {/* ── Action points (numbered editorial list, priority implicit in order) ─ */}
+      {orderedActionPoints.length > 0 && (
+        <>
+          <hr className="mt-12 border-t border-hairline" />
+          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+            Action points
+          </p>
+          <ol className="flex flex-col">
+            {orderedActionPoints.map((a, i) => (
+              <li
+                key={i}
+                className={cn(
+                  "flex items-start gap-5 py-5",
+                  i === 0 ? "" : "border-t border-hairline",
+                )}
+              >
+                <span
+                  className={cn(
+                    "shrink-0 text-[24px] leading-none text-ink [font-family:var(--font-serif)]",
+                    a.priority === "high" ? "font-medium" : "font-normal",
+                  )}
+                  aria-hidden
+                >
+                  {i + 1}
+                </span>
+                <p className="min-w-0 flex-1 max-w-[60ch] text-[14px] leading-relaxed text-ink">
+                  {a.description}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </>
       )}
 
-      {/* Follow-ups */}
+      {/* ── Suggested follow-ups ───────────────────────────────────────── */}
       {summary.followUpNeeded && summary.followUpSuggestions.length > 0 && (
-        <section aria-label="Follow-up suggestions">
-          <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-            <MessageCircleQuestion
-              className="h-3.5 w-3.5"
-              strokeWidth={1.75}
-              aria-hidden
-            />
+        <>
+          <hr className="mt-12 border-t border-hairline" />
+          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
             Suggested follow-ups
           </p>
-          <ul className="mt-2 flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-5">
             {summary.followUpSuggestions.map((suggestion, i) => (
               <li
                 key={i}
-                className="border-hairline rounded-card border bg-paper-raised px-3 py-2 text-[13px] text-ink"
+                className="flex items-start gap-4 max-w-[60ch] text-[14px] leading-relaxed text-ink"
               >
-                {suggestion}
+                <span
+                  className="mt-2 inline-block h-2.5 w-px shrink-0 bg-hairline-strong"
+                  aria-hidden
+                />
+                <span>{suggestion}</span>
               </li>
             ))}
           </ul>
-        </section>
+        </>
       )}
     </div>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────
 
-function SentimentChip({
-  sentiment,
-}: {
-  sentiment: DeepDiveSummary["sentiment"];
-}) {
-  const label: Record<typeof sentiment, string> = {
-    positive: "Positive",
-    neutral: "Neutral",
-    negative: "Negative",
-  };
-  const styles: Record<typeof sentiment, string> = {
-    positive:
-      "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
-    neutral: "bg-paper-raised text-mute border-hairline",
-    negative: "bg-rose-500/10 text-rose-700 border-rose-500/30",
-  };
-  return (
-    <span
-      className={cn(
-        "rounded-pill border px-2.5 py-0.5 text-[11px] font-medium",
-        styles[sentiment],
-      )}
-    >
-      {label[sentiment]}
-    </span>
-  );
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m < 1) return `${s}s`;
+  return `${m}m ${s}s`;
 }
 
-function EngagementChip({
-  engagement,
-}: {
-  engagement: DeepDiveSummary["userEngagement"];
-}) {
-  const label: Record<typeof engagement, string> = {
-    high: "High engagement",
-    medium: "Medium engagement",
-    low: "Low engagement",
-  };
-  const styles: Record<typeof engagement, string> = {
-    high: "bg-ink/10 text-ink border-ink/20",
-    medium: "bg-paper-raised text-mute border-hairline",
-    low: "bg-paper-raised text-mute border-hairline opacity-70",
-  };
-  return (
-    <span
-      className={cn(
-        "rounded-pill border px-2.5 py-0.5 text-[11px] font-medium",
-        styles[engagement],
-      )}
-    >
-      {label[engagement]}
-    </span>
-  );
-}
-
-function GuideRelevanceChip({
-  relevance,
-}: {
-  relevance: DeepDiveSummary["guideRelevance"];
-}) {
-  const label: Record<typeof relevance, string> = {
-    "on-topic": "On topic",
-    "partially-relevant": "Partially relevant",
-    "off-topic": "Off topic",
-  };
-  const styles: Record<typeof relevance, string> = {
-    "on-topic": "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
-    "partially-relevant": "bg-amber-500/10 text-amber-700 border-amber-500/30",
-    "off-topic": "bg-rose-500/10 text-rose-700 border-rose-500/30",
-  };
-  return (
-    <span
-      className={cn(
-        "rounded-pill border px-2.5 py-0.5 text-[11px] font-medium",
-        styles[relevance],
-      )}
-    >
-      {label[relevance]}
-    </span>
-  );
-}
-
-function PriorityGroup({
-  priority,
-  items,
-}: {
-  priority: "high" | "medium" | "low";
-  items: string[];
-}) {
-  const chipStyles = {
-    high: "bg-rose-500/10 text-rose-700 border-rose-500/30",
-    medium: "bg-amber-500/10 text-amber-700 border-amber-500/30",
-    low: "bg-paper-raised text-mute border-hairline",
-  };
-  const Icon = {
-    high: AlertTriangle,
-    medium: Circle,
-    low: ArrowRight,
-  }[priority];
-
-  return (
-    <div>
-      <span
-        className={cn(
-          "mb-1.5 inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-[11px] font-medium capitalize",
-          chipStyles[priority],
-        )}
-      >
-        <Icon className="h-3 w-3" strokeWidth={1.75} aria-hidden />
-        {priority}
-      </span>
-      <ul className="flex flex-col gap-1.5">
-        {items.map((item, i) => (
-          <li
-            key={i}
-            className="border-hairline rounded-card border bg-paper-raised px-3 py-2 text-[13px] text-ink"
-          >
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+function formatRelative(ms: number): string {
+  const diff = Date.now() - ms;
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(ms).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }

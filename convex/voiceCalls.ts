@@ -485,6 +485,12 @@ export const getActiveSessionForUser = query({
 });
 
 // ── Public query: subscribe to a single call (auth-gated to owner) ────────
+//
+// For interview_job + job surfaces (the surfaces that carry a jobPostingId),
+// resolve posting → company in two extra ctx.db.get reads and bundle
+// companyName + companyLogoUrl onto the returned row so the detail-page
+// masthead can render the company anchor without a second roundtrip. The
+// return validator stays v.any() so the wire shape is unchanged.
 
 export const getCallById = query({
   args: { callId: v.id("voice_calls") },
@@ -494,7 +500,21 @@ export const getCallById = query({
     if (!user) return null;
     const row = await ctx.db.get(args.callId);
     if (!row || row.userId !== user._id) return null;
-    return row;
+
+    // Skip the join when there's no posting to resolve (guide / compass).
+    if (!row.jobPostingId) return row;
+
+    const posting = await ctx.db.get(row.jobPostingId);
+    if (!posting) return row;
+
+    const company = await ctx.db.get(posting.companyId);
+    if (!company) return row;
+
+    return {
+      ...row,
+      companyName: company.nameRaw,
+      companyLogoUrl: company.logoUrl ?? undefined,
+    };
   },
 });
 
