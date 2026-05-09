@@ -58,6 +58,7 @@ type SessionConfigSnapshot = {
   model: string;
   voice: string;
   systemInstruction: string;
+  tools: unknown[];
 };
 
 type AuthCredential =
@@ -92,6 +93,7 @@ export function useInterviewCall(
   const mintSession = useAction(api.interviewSimNode.mintInterviewSession);
   const appendMessage = useMutation(api.voiceCalls.appendMessage);
   const finalize = useMutation(api.voiceCalls.finalize);
+  const markCovered = useMutation(api.voiceCalls.markDimensionCovered);
 
   const [callState, setCallState] = useState<InterviewCallState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +151,62 @@ export function useInterviewCall(
     [appendMessage],
   );
 
+  // Dispatch a single Gemini Live function call to the matching Convex mutation.
+  // Returns { ok: false, error } rather than throwing so the WS message handler
+  // can never crash on a malformed or unknown call.
+  const runToolCall = useCallback(
+    async (call: {
+      id?: string;
+      name?: string;
+      args?: Record<string, unknown>;
+    }): Promise<{ ok: boolean; [key: string]: unknown }> => {
+      if (!call.name) return { ok: false, error: "missing function name" };
+      if (call.name !== "markDimensionCovered") {
+        return { ok: false, error: `unknown function: ${call.name}` };
+      }
+
+      const sessionId = sessionIdRef.current;
+      if (!sessionId) {
+        return { ok: false, error: "no active session" };
+      }
+
+      const args = call.args ?? {};
+      const dimension =
+        typeof args.dimension === "string" ? args.dimension : null;
+      const evidence =
+        typeof args.evidence === "string" ? args.evidence : null;
+      const confidenceRaw =
+        typeof args.confidence === "string" ? args.confidence : null;
+      const confidence =
+        confidenceRaw === "weak" ||
+        confidenceRaw === "solid" ||
+        confidenceRaw === "strong"
+          ? confidenceRaw
+          : null;
+
+      if (!dimension || !evidence || !confidence) {
+        return { ok: false, error: "invalid args" };
+      }
+
+      try {
+        const result = await markCovered({
+          sessionId,
+          dimension,
+          evidence,
+          confidence,
+        });
+        return result;
+      } catch (err) {
+        console.error("[interview-voice] markDimensionCovered failed", err);
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+    [markCovered],
+  );
+
   const teardown = useCallback(() => {
     setupCompleteRef.current = false;
     captureRef.current?.stop();
@@ -204,6 +262,45 @@ export function useInterviewCall(
       if ("setupComplete" in data) {
         setupCompleteRef.current = true;
         setCallState("connected");
+        return;
+      }
+
+      // Tool calls arrive as their own top-level message, separate from
+      // `serverContent`. Run each, then ship a single `toolResponse` frame
+      // back over the same socket — Gemini correlates by `id`. Mirrors
+      // useCompassVoiceCall.
+      const toolCall = data.toolCall as
+        | {
+            functionCalls?: Array<{
+              id?: string;
+              name?: string;
+              args?: Record<string, unknown>;
+            }>;
+          }
+        | undefined;
+      if (toolCall?.functionCalls?.length) {
+        const calls = toolCall.functionCalls;
+        console.log("[interview-voice] toolCall received:", calls);
+        void (async () => {
+          const responses = await Promise.all(
+            calls.map(async (c) => {
+              const result = await runToolCall(c);
+              console.log("[interview-voice] tool dispatched:", c.name, "→", result);
+              return {
+                id: c.id,
+                name: c.name,
+                response: result,
+              };
+            }),
+          );
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                toolResponse: { functionResponses: responses },
+              }),
+            );
+          }
+        })();
         return;
       }
 
@@ -267,7 +364,7 @@ export function useInterviewCall(
         setUserSpeaking(true);
       }
     },
-    [persistMessage],
+    [persistMessage, runToolCall],
   );
 
   const startCall = useCallback(async () => {
@@ -353,7 +450,7 @@ export function useInterviewCall(
             },
           },
           contextWindowCompression: { slidingWindow: {} },
-          tools: [{ googleSearch: {} }],
+          tools: config.tools,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
