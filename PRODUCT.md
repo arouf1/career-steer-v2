@@ -43,7 +43,7 @@ Career Steer must not look or feel like:
 - **LinkedIn** — dense corporate-blue UI, ad-driven attention, transactional tone.
 - **ZipRecruiter / Indeed** — quantity-over-quality lists, busy chrome, urgency manufactured by the platform.
 - **Generic SaaS dashboards** — gradient hero metrics, identical card grids, "Pro" plan modals.
-- **AI-product cliché** — purple/teal gradients, glassmorphism, animated sparkles, "AI-powered" badges, copy that uses the word "unlock," and emoji used as decoration or affordance.
+- **AI-product cliché** — purple/teal gradients, glassmorphism, animated sparkles, "AI-powered" badges, copy that uses the word "unlock," and emoji used as decoration or affordance. **Sparkle iconography is banned outright** — no `Sparkles`, `Wand`, `WandSparkles`, or animated shimmer in any UI surface, including AI-driven affordances (semantic search, summaries, generated content). The product uses AI; it does not advertise it. Replace the impulse with a plain text label, a domain-appropriate lucide glyph, or no marker at all.
 - **Anything that reads as "shipped in a hurry"** — empty states with stock illustrations, lorem-ipsum-shaped placeholders, generic icon + heading + text cards repeated down the page.
 
 ## Design Principles
