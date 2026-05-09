@@ -154,7 +154,7 @@ export function ProfileView({ profile }: Props) {
           <p className="text-[10px] uppercase tracking-[0.18em] font-medium text-mute">
             Summary
           </p>
-          <p className="mt-4 max-w-prose text-[16px] leading-[1.7] text-ink [&::first-letter]:float-left [&::first-letter]:[font-family:var(--font-serif)] [&::first-letter]:text-[64px] [&::first-letter]:leading-[0.85] [&::first-letter]:font-normal [&::first-letter]:pr-2 [&::first-letter]:pt-1 [&::first-letter]:text-ink">
+          <p className="mt-4 max-w-prose text-[16px] leading-[1.7] text-ink [&::first-letter]:float-left [&::first-letter]:[font-family:var(--font-serif)] [&::first-letter]:text-[56px] [&::first-letter]:leading-[1] [&::first-letter]:font-normal [&::first-letter]:pr-3 [&::first-letter]:pt-[6px] [&::first-letter]:text-ink">
             {summary}
           </p>
         </section>
