@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import {
   ArrowLeft,
   Archive,
@@ -77,9 +77,17 @@ function buildSections(
 export function ConversationDetailClient({ callId }: Props) {
   const router = useRouter();
 
-  const call = useQuery(api.voiceCalls.getCallById, {
-    callId: callId as Id<"voice_calls">,
-  });
+  // Gate the query on auth being ready. Without this, useQuery fires before
+  // Clerk's JWT is available to Convex; getCallById then runs unauthenticated,
+  // resolveAuthedUser returns null, the handler returns null, and the user
+  // sees a "Conversation not found" flicker for ~1s until auth lands and the
+  // query re-runs. Skip until auth is ready and treat auth-loading as part
+  // of the loading state.
+  const { isLoading: authLoading } = useConvexAuth();
+  const call = useQuery(
+    api.voiceCalls.getCallById,
+    authLoading ? "skip" : { callId: callId as Id<"voice_calls"> },
+  );
 
   const archive = useMutation(api.voiceCalls.archive);
   const unarchive = useMutation(api.voiceCalls.unarchive);
@@ -89,7 +97,7 @@ export function ConversationDetailClient({ callId }: Props) {
   // masthead + section stack) so the page rhythm doesn't shift when the
   // Convex query resolves. Honours prefers-reduced-motion via the shared
   // .skeleton-block utility.
-  if (call === undefined) {
+  if (authLoading || call === undefined) {
     return <WorkspaceLoadingArticle />;
   }
 
