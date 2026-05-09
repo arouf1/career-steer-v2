@@ -137,6 +137,7 @@ export function CareerGuidesByLadder({
   );
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const anchorRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  const stripScrollRef = useRef<HTMLUListElement>(null);
   // While a click-driven smooth scroll is in flight, the IntersectionObserver
   // would otherwise see intermediate sections crossing the rootMargin and
   // flip activeSlug back and forth. The lock suppresses observer updates
@@ -166,15 +167,18 @@ export function CareerGuidesByLadder({
     return () => observer.disconnect();
   }, [sections]);
 
-  // Keep the active anchor in view inside the horizontal strip.
+  // Keep the active anchor in view inside the horizontal strip. Use a
+  // direct scrollLeft on the strip container instead of scrollIntoView —
+  // scrollIntoView propagates to ancestors and can shift the entire page
+  // horizontally when the inline offset can't be satisfied within the
+  // strip alone.
   useEffect(() => {
-    const el = anchorRefs.current.get(activeSlug);
-    if (!el) return;
-    el.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
+    const link = anchorRefs.current.get(activeSlug);
+    const strip = stripScrollRef.current;
+    if (!link || !strip) return;
+    const targetLeft =
+      link.offsetLeft - strip.clientWidth / 2 + link.offsetWidth / 2;
+    strip.scrollTo({ left: targetLeft, behavior: "smooth" });
   }, [activeSlug]);
 
   const jumpToSection = (slug: string) => {
@@ -197,13 +201,16 @@ export function CareerGuidesByLadder({
   if (sections.length === 0) return null;
 
   return (
-    <div>
+    <div className="overflow-x-clip">
       {/* Anchor strip */}
       <nav
         aria-label="Career ladders"
         className="sticky top-0 z-20 -mx-4 mb-10 border-b border-hairline bg-paper/95 px-4 backdrop-blur-[2px] sm:-mx-6 sm:px-6"
       >
-        <ul className="hide-scrollbar flex snap-x snap-mandatory gap-1.5 overflow-x-auto py-3">
+        <ul
+          ref={stripScrollRef}
+          className="hide-scrollbar flex snap-x snap-mandatory gap-1.5 overflow-x-auto py-3"
+        >
           {sections.map((s) => {
             const isActive = s.ladder.slug === activeSlug;
             return (
