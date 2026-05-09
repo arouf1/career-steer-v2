@@ -1088,6 +1088,10 @@ export default defineSchema({
         }),
       ),
     ),
+    // Soft-delete marker for the calls history page. Absent = active row;
+    // unix-ms timestamp = archived at that moment. Reversible via
+    // voiceCalls.unarchive. We never hard-delete in this round.
+    archivedAt: v.optional(v.number()),
     // Three semantic vectors over the call: full conversation, structured
     // summary, and joined key topics. 1536-dim Gemini embeddings via OpenRouter
     // — same model + dim as career_guide_embeddings so future Discover
@@ -1103,7 +1107,20 @@ export default defineSchema({
     .index("by_guide", ["guideId"])
     .index("by_jobPosting", ["jobPostingId"])
     .index("by_session", ["sessionId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    // Composite for the calls history list. Lets us hit either the active
+    // view (archivedAt eq undefined) or the archived view (archivedAt eq
+    // <any>) cheaply, sorted by creation desc within each.
+    .index("by_user_archived_created", ["userId", "archivedAt", "createdAt"])
+    // Vector index for semantic search over the call's structured summary.
+    // summaryEmbedding is populated by voiceCallsNode.processCallAnalysis
+    // for guide/compass/job; this PR also extends interviewSimNode.
+    // processInterviewAnalysis to populate it for interview_job rows.
+    .vectorIndex("by_summaryVector", {
+      vectorField: "summaryEmbedding",
+      dimensions: 1536,
+      filterFields: ["userId", "surface", "archivedAt"],
+    }),
 
   // Transient status doc the InterviewSimDialog subscribes to during the
   // research → mint phase. Created by interviewSimNode.mintInterviewSession,

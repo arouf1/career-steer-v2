@@ -31,7 +31,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { GoogleGenAI } from "@google/genai";
 import { generateText, Output } from "ai";
-import { chatModel } from "../lib/ai/providers";
+import { chatModel, embed } from "../lib/ai/providers";
 import { CONTENT_MODEL_ID } from "../lib/ai/prompts/career-guides";
 import {
   buildInterviewQueries,
@@ -571,9 +571,36 @@ export const processInterviewAnalysis = internalAction({
       // Strip offending quote fields if still bad after 2 attempts.
       const stripped = stripFailedQuotesIfStillBad(transcript, rubric);
 
+      // Build a compact verdict string from the rubric and embed it so this
+      // interview_job row surfaces in the by_summaryVector semantic search
+      // alongside guide/compass/job rows. Soft-fail — rubric still writes.
+      const verdictText = [
+        rubric.oneLineVerdict,
+        rubric.bestMoment.why,
+        rubric.biggestMiss.why,
+      ]
+        .filter((s) => s && s.length > 0)
+        .join(" ");
+
+      let summaryEmbedding: number[] | undefined;
+      try {
+        summaryEmbedding = await embed(
+          { text: verdictText, taskHint: "sentence similarity" },
+          { signal: controller.signal },
+        );
+      } catch (err) {
+        console.error(
+          "[interviewSim:analysis] summary embedding failed",
+          err instanceof Error ? err.message : String(err),
+        );
+        // Soft-fail — the rubric is still written; the row just won't surface
+        // in semantic search until a backfill runs.
+      }
+
       await ctx.runMutation(internal.interviewSim._patchInterviewRubric, {
         callId: args.callId,
         aiSummary: stripped,
+        ...(summaryEmbedding !== undefined ? { summaryEmbedding } : {}),
       });
     } catch (err) {
       console.error(

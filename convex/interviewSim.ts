@@ -377,11 +377,15 @@ export const _patchInterviewRubric = internalMutation({
   args: {
     callId: v.id("voice_calls"),
     aiSummary: v.any(), // InterviewRubric — shape validated by action
+    summaryEmbedding: v.optional(v.array(v.float64())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.callId, {
       aiSummary: args.aiSummary,
+      ...(args.summaryEmbedding !== undefined
+        ? { summaryEmbedding: args.summaryEmbedding }
+        : {}),
       updatedAt: Date.now(),
     });
     return null;
