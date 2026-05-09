@@ -57,6 +57,7 @@ import type * as locations from "../locations.js";
 import type * as matching from "../matching.js";
 import type * as migrations_2026_05_06_jobPostings_gps from "../migrations/2026_05_06_jobPostings_gps.js";
 import type * as migrations_2026_05_07_jobPostings_countryCode from "../migrations/2026_05_07_jobPostings_countryCode.js";
+import type * as migrations_scoresToPercent from "../migrations/scoresToPercent.js";
 import type * as people from "../people.js";
 import type * as peopleOutreach from "../peopleOutreach.js";
 import type * as podcasts from "../podcasts.js";
@@ -130,6 +131,7 @@ declare const fullApi: ApiFromModules<{
   matching: typeof matching;
   "migrations/2026_05_06_jobPostings_gps": typeof migrations_2026_05_06_jobPostings_gps;
   "migrations/2026_05_07_jobPostings_countryCode": typeof migrations_2026_05_07_jobPostings_countryCode;
+  "migrations/scoresToPercent": typeof migrations_scoresToPercent;
   people: typeof people;
   peopleOutreach: typeof peopleOutreach;
   podcasts: typeof podcasts;
