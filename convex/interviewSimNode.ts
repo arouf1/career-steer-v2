@@ -46,6 +46,7 @@ import {
   buildInterviewerPrompt,
   buildRubricPrompt,
   enforceVerbatimQuotes,
+  interviewerTools,
   type CandidateContext,
   type InterviewRubric,
 } from "../lib/ai/prompts/interviewer";
@@ -249,14 +250,17 @@ export const mintInterviewSession = action({
 
     const voiceId = args.voiceId ?? DEFAULT_VOICE;
 
+    const tools = interviewerTools(interviewBundle.rubric.dimensions.map((d) => d.key));
+
     // Build the live config with tools bound at token time (same pattern as
-    // voiceCallsNode.mintSession). googleSearch is the only tool — the
-    // interviewer prompt instructs the model to call it at most once per call.
+    // voiceCallsNode.mintSession). Tools include markDimensionCovered (function)
+    // for silent coverage tracking and googleSearch (built-in) for current-events
+    // questions about the company.
     const liveConfig = buildLiveConfig({
       model: LIVE_MODEL,
       voice: voiceId,
       systemInstruction,
-      tools: [{ googleSearch: {} }],
+      tools,
     });
 
     // Mint the Gemini Live token.
@@ -330,7 +334,7 @@ export const mintInterviewSession = action({
         model: LIVE_MODEL,
         voice: voiceId,
         systemInstruction,
-        tools: [{ googleSearch: {} }],
+        tools,
       },
     };
   },

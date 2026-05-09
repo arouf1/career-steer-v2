@@ -233,7 +233,7 @@ export function buildInterviewerPrompt(args: InterviewerPromptArgs): string {
     loopBullets,
     ``,
     `**Coverage target — what "done" looks like:**`,
-    `Your job is to come away with enough signal to grade the candidate against these four dimensions: ${bundle.rubric.dimensions.map((d) => d.key).join(", ")}. You are NOT trying to cover every signature question — you are trying to leave with a confident read on each dimension. Each dimension needs at least one substantive exchange (the candidate said something specific enough that you could write a non-trivial sentence about it). Track this implicitly as you go; never narrate it out loud.`,
+    `Your job is to come away with enough signal to grade the candidate against these four dimensions: ${bundle.rubric.dimensions.map((d) => d.key).join(", ")}. You are NOT trying to cover every signature question — you are trying to leave with a confident read on each dimension. Each dimension needs at least one substantive exchange (the candidate said something specific enough that you could write a non-trivial sentence about it). After each substantive exchange, call markDimensionCovered to mark which dimension you just got signal on (silently — do NOT narrate the call out loud, the candidate must not hear it). When all four dimensions are marked solid or stronger, you have enough to wrap.`,
     ``,
     `**Conversational rules:**`,
     `1. Open with a 30-second warm hello. One ice-breaker. Then transition.`,
@@ -245,9 +245,10 @@ export function buildInterviewerPrompt(args: InterviewerPromptArgs): string {
     signatureSpine,
     `7. Mid-call, if the candidate references current events about ${company.name} you don't already know from the brief above, you may call googleSearch ONCE to fetch context. Do not search proactively.`,
     `8. Cap each spoken response at ~25 seconds.`,
-    `9. **Knowing when you're done.** End the interview when EITHER (a) you have a confident read on all four dimensions and further questions would be padding, OR (b) you reach minute 13 — whichever comes first. The minimum interview length is ~5 minutes (you need at least the warm hello, two substantive exchanges, and a wrap); ending earlier than that means you didn't really interview them. To wrap, say: "I think I have a good sense of where you're at — before we close, what questions do you have for me?" Answer honestly from the hiring-manager POV. End by thanking them and naming one specific thing they did well — only if they earned it; if the interview was weak, end professionally without false praise.`,
+    `9. **Knowing when you're done.** End the interview when EITHER (a) you have called markDimensionCovered on all four dimensions with confidence solid or stronger, OR (b) you reach minute 13 — whichever comes first. The minimum interview length is ~5 minutes (you need at least the warm hello, two substantive exchanges, and a wrap); ending earlier than that means you didn't really interview them. To wrap, say: "I think I have a good sense of where you're at — before we close, what questions do you have for me?" Answer honestly from the hiring-manager POV. End by thanking them and naming one specific thing they did well — only if they earned it; if the interview was weak, end professionally without false praise.`,
     ``,
     `**Tool usage:**`,
+    `- markDimensionCovered: silently call after each exchange that gave you real signal on a dimension. Idempotent — re-call if the candidate elaborates and your confidence changes. Use the dimension keys ${bundle.rubric.dimensions.map((d) => '"' + d.key + '"').join(", ")} verbatim.`,
     `- googleSearch: only when the candidate references something about ${company.name} you cannot answer from the brief. One search per call max.`,
     ``,
     `**Guardrails:**`,
@@ -256,6 +257,75 @@ export function buildInterviewerPrompt(args: InterviewerPromptArgs): string {
     `- Never repeat what the candidate said back to them.`,
     `- If the candidate asks for feedback during the call, defer: "I'll have thoughts at the end — let's keep going."`,
   ].join("\n");
+}
+
+// ─── Live tools (Gemini Live function calling) ─────────────────────────────
+
+export type InterviewerLiveTool =
+  | {
+      functionDeclarations: Array<{
+        name: string;
+        description: string;
+        parameters: {
+          type: "OBJECT";
+          properties: Record<string, unknown>;
+          required?: string[];
+        };
+      }>;
+    }
+  | { googleSearch: Record<string, never> };
+
+/**
+ * Build the tool list for an interview-sim Gemini Live session.
+ *
+ * Two tools:
+ *   - markDimensionCovered (function): the interviewer calls this once it has
+ *     substantive signal on a rubric dimension. Idempotent on dimension; the
+ *     hook routes the call to the markDimensionCovered Convex mutation, which
+ *     stores it on voice_calls.coverage so the dialog gauge can render
+ *     progress and the model can self-ground via getCoverageStatus (deferred).
+ *   - googleSearch (built-in): for current-events questions about the company.
+ *
+ * The dimension enum is derived from the bundle's actual dimension keys so
+ * any future schema evolution stays consistent across the prompt, the tool,
+ * and the rubric grader.
+ */
+export function interviewerTools(dimensionKeys: string[]): InterviewerLiveTool[] {
+  return [
+    {
+      functionDeclarations: [
+        {
+          name: "markDimensionCovered",
+          description:
+            "Call this once you have substantive signal on a rubric dimension — i.e. the candidate has said something specific enough that you could write a non-trivial sentence about that dimension. Idempotent: if you've already marked a dimension and your view changes (e.g. they elaborated and demonstrated more), call it again with the new evidence and confidence; the latest call wins. Do NOT narrate the call out loud — keep it silent. Do NOT mark a dimension based on hand-waving or vague answers; if in doubt, don't mark it yet.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              dimension: {
+                type: "STRING",
+                enum: dimensionKeys,
+                description:
+                  "Which rubric dimension this exchange covered. Must be one of the listed values verbatim.",
+              },
+              evidence: {
+                type: "STRING",
+                description:
+                  "One sentence summarizing what the candidate said that gave you signal on this dimension. Keep it concrete — quote a phrase or number if useful.",
+              },
+              confidence: {
+                type: "STRING",
+                enum: ["weak", "solid", "strong"],
+                description:
+                  "How strong the signal is. 'weak' = surface mention only; 'solid' = a real example with specifics; 'strong' = depth, specificity, and probing follow-ups all landed.",
+              },
+            },
+            required: ["dimension", "evidence", "confidence"],
+          },
+        },
+      ],
+    },
+    { googleSearch: {} },
+  ];
 }
 
 // ─── 3. Post-call rubric ──────────────────────────────────────────────────
