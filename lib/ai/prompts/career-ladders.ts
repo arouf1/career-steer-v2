@@ -147,6 +147,12 @@ export const LadderLookupSchema = z.object({
   // names a brand-new rung that should be created on this ladder).
   isExistingRung: z.boolean(),
   matchedGuideSlug: z.string().nullable(),
+  // The FULL canonical title for the role at this rung — what the new guide
+  // should be named, with all acronyms expanded ("CPO" → "Chief Product
+  // Officer", "VP Marketing" → "Vice President of Marketing"). The caller
+  // uses this verbatim as the guide title so on-demand creations are never
+  // titled with a raw acronym, regardless of what the user typed.
+  canonicalTitle: z.string(),
   confidence: ConfidenceLiteral,
   reasoning: z.string(),
 });
@@ -173,6 +179,28 @@ RULES
 - Pick the tier the user's title lives at (rubric below). Tier is the same vocabulary used by every ladder.
 - "isExistingRung": true only if the user's query refers to the SAME role as a guide already shown above. Two roles are the same if they describe the same scope, function, and altitude (e.g. "Senior Software Engineer" vs an existing "Software Engineer" guide is NOT the same — different altitude — return isExistingRung=false unless a Senior SWE guide already exists). "Head of Product" vs "Product Manager" is NEVER the same — they are different altitudes on the same ladder.
 - "matchedGuideSlug": when isExistingRung=true, the slug of the matching guide. When false, null.
+- "canonicalTitle": the FULL, properly-capitalised, expanded job title for the rung the query refers to. ALWAYS expand acronyms and short forms here so the new guide is never titled with a raw acronym. Examples:
+    "CPO" → "Chief Product Officer"
+    "VP Marketing" → "Vice President of Marketing"
+    "CEO" → "Chief Executive Officer"
+    "CFO" → "Chief Financial Officer"
+    "CTO" → "Chief Technology Officer"
+    "CMO" → "Chief Marketing Officer"
+    "CHRO" → "Chief Human Resources Officer"
+    "CRO" → "Chief Revenue Officer"
+    "PM" → "Product Manager"
+    "PMM" → "Product Marketing Manager"
+    "SDR" → "Sales Development Representative"
+    "AE" → "Account Executive"
+    "CSM" → "Customer Success Manager"
+    "SWE" → "Software Engineer"
+    "SRE" → "Site Reliability Engineer"
+    "FP&A Manager" → "Financial Planning and Analysis Manager"
+    "QA Engineer" → "Quality Assurance Engineer"
+    "UX Designer" → "User Experience Designer"
+    "Head of Product" stays "Head of Product"
+    "Director of Engineering" stays "Director of Engineering"
+  Use judgement when an acronym is the established industry-standard term that would feel awkward expanded ("AI", "ML", "DevOps", "QA" inside "QA Engineer" stays as the leading word but "QA Engineer" still expands to "Quality Assurance Engineer" because the full form is genuinely the canonical title). When in doubt, expand.
 - Tier rubric (same vocabulary as the ladder placement):
   - ic-entry: Junior / Associate / Trainee.
   - ic-mid: plain title (Software Engineer, Designer, Marketing Manager).

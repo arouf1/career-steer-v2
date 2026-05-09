@@ -60,6 +60,7 @@ import type * as matching from "../matching.js";
 import type * as migrations_2026_05_06_jobPostings_gps from "../migrations/2026_05_06_jobPostings_gps.js";
 import type * as migrations_2026_05_07_jobPostings_countryCode from "../migrations/2026_05_07_jobPostings_countryCode.js";
 import type * as migrations_2026_05_09_backfill_guide_ladder_positions from "../migrations/2026_05_09_backfill_guide_ladder_positions.js";
+import type * as migrations_2026_05_09_canonicalize_guide_titles from "../migrations/2026_05_09_canonicalize_guide_titles.js";
 import type * as migrations_2026_05_09_recompute_all_snapshots from "../migrations/2026_05_09_recompute_all_snapshots.js";
 import type * as migrations_2026_05_09_seed_ladders from "../migrations/2026_05_09_seed_ladders.js";
 import type * as migrations_scoresToPercent from "../migrations/scoresToPercent.js";
@@ -139,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/2026_05_06_jobPostings_gps": typeof migrations_2026_05_06_jobPostings_gps;
   "migrations/2026_05_07_jobPostings_countryCode": typeof migrations_2026_05_07_jobPostings_countryCode;
   "migrations/2026_05_09_backfill_guide_ladder_positions": typeof migrations_2026_05_09_backfill_guide_ladder_positions;
+  "migrations/2026_05_09_canonicalize_guide_titles": typeof migrations_2026_05_09_canonicalize_guide_titles;
   "migrations/2026_05_09_recompute_all_snapshots": typeof migrations_2026_05_09_recompute_all_snapshots;
   "migrations/2026_05_09_seed_ladders": typeof migrations_2026_05_09_seed_ladders;
   "migrations/scoresToPercent": typeof migrations_scoresToPercent;

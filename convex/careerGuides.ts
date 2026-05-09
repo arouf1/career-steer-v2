@@ -1844,13 +1844,17 @@ export const requestGuideFromSearch = internalAction({
           }
           // Either isExistingRung was false, or the slug was hallucinated.
           // Either way: create a new guide attached to the suggested
-          // ladder + rung. attachToLadderIfMissing inside _requestGeneration
-          // handles the case where a guide for this title already exists
-          // on the ladder (idempotent).
+          // ladder + rung. Use the LLM's canonicalTitle (acronyms expanded)
+          // rather than args.title — guarantees on-demand creations are
+          // never titled with a raw acronym (e.g. "CPO" → "Chief Product
+          // Officer", "VP Marketing" → "Vice President of Marketing").
+          // attachToLadderIfMissing inside _requestGeneration handles the
+          // case where a guide for this title already exists on the ladder
+          // (idempotent).
           return await ctx.runMutation(
             internal.careerGuides._requestGeneration,
             {
-              title: args.title,
+              title: output.canonicalTitle,
               clientIp: args.clientIp,
               ladderAttachment: {
                 ladderSlug: output.ladderSlug,

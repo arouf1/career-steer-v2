@@ -26,7 +26,44 @@ You are a career expert. Decide whether the input is a complete, unambiguous car
 
 Input: "${career}"
 
-Accept full, specific job titles ("marine biologist", "primary school teacher", "FP&A manager", "plumber"). Accept common abbreviations of full titles ("SWE" for software engineer, "QA engineer") and return them in their canonical, properly capitalised form.
+Accept full, specific job titles ("marine biologist", "primary school teacher", "plumber") AND common abbreviations or short-form variants of real titles.
+
+CRITICAL — normalizedTitle must always be the FULL, expanded, canonical job title in proper title case. NEVER return an acronym, initialism, or short form as the canonical title. Always expand:
+- "SWE" → "Software Engineer"
+- "PM" → "Product Manager" (default; "Project Manager" only if industry context clearly suggests it)
+- "CPO" → "Chief Product Officer" (default; "Chief People Officer" if HR/people context is explicit; if truly ambiguous, prefer the SaaS / product-industry meaning)
+- "CEO" → "Chief Executive Officer"
+- "CFO" → "Chief Financial Officer"
+- "CTO" → "Chief Technology Officer"
+- "CMO" → "Chief Marketing Officer"
+- "COO" → "Chief Operating Officer"
+- "CHRO" → "Chief Human Resources Officer"
+- "CRO" → "Chief Revenue Officer"
+- "CIO" → "Chief Information Officer"
+- "CDO" → "Chief Data Officer" (or "Chief Design Officer" if design context is explicit)
+- "VP Marketing" → "Vice President of Marketing"
+- "VP Sales" → "Vice President of Sales"
+- "VP Engineering" → "Vice President of Engineering"
+- "VP Product" → "Vice President of Product"
+- "EVP X" → "Executive Vice President of X"
+- "SVP X" → "Senior Vice President of X"
+- "FP&A Manager" → "Financial Planning and Analysis Manager"
+- "QA Engineer" → "Quality Assurance Engineer"
+- "DevOps Engineer" → "DevOps Engineer" (already canonical — no expansion needed for established compound words)
+- "UX Designer" → "User Experience Designer"
+- "UI Designer" → "User Interface Designer"
+- "SDR" → "Sales Development Representative"
+- "BDR" → "Business Development Representative"
+- "AE" → "Account Executive"
+- "CSM" → "Customer Success Manager"
+- "PMM" → "Product Marketing Manager"
+- "SRE" → "Site Reliability Engineer"
+- "ML Engineer" → "Machine Learning Engineer"
+- "AI Engineer" → "AI Engineer" (acronym is the canonical industry term — leave AI; do not expand to "Artificial Intelligence Engineer")
+- "Head of X" stays "Head of X" (already canonical)
+- "Director of X" stays "Director of X" (already canonical)
+
+Use judgement: if an acronym is THE established industry-standard term that would feel awkward expanded (e.g. "AI", "ML", "DevOps", "QA"), keep the established compound but expand any surrounding short form. When in doubt, expand.
 
 Reject if any of these apply:
 - The input is a single ambiguous word that is most commonly a fragment of a longer title rather than a job on its own ("marine" is usually "marine biologist" or "marine engineer"; "data" is usually "data scientist"; "product" is usually "product manager"; "senior" alone has no role).
@@ -38,7 +75,7 @@ If the input could plausibly be the start of several different real careers and 
 
 Return:
 - valid: true only if you are confident it names a single, recognisable career.
-- normalizedTitle: the canonical, capitalised job title if valid, otherwise null.
+- normalizedTitle: the FULL canonical job title (acronyms expanded, proper title case) if valid, otherwise null.
 - reason: one short sentence. If rejecting an ambiguous fragment, hint at what to add (for example: "Try 'marine biologist' or 'marine engineer'.").
 `.trim();
 
