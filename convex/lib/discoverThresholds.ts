@@ -1,18 +1,3 @@
-// Lane assignment cutoffs on currentStateSim (cosine similarity in [0, 1]).
-// Calibrated against Gemini embedding-2-preview's distribution: professional
-// career text rarely scores below ~0.5 cosine even between unrelated roles
-// (shared "professional language" floor), so the bucketing thresholds need
-// to sit well above 0.5 to discriminate meaningfully.
-export const LANE_THRESHOLDS = {
-  /** >= LINEAR_MIN → linear lane ("close to who you are now") */
-  LINEAR_MIN: 0.75,
-  /** >= ADJACENT_MIN and < LINEAR_MIN → adjacent lane */
-  ADJACENT_MIN: 0.6,
-  // < ADJACENT_MIN → transformational lane.
-} as const;
-
-export type LaneKind = "linear" | "adjacent" | "transformational";
-
 /** Universal quality floor on arcSim. Sub-floor candidates never appear. */
 export const ARC_SIM_FLOOR = 0.5;
 

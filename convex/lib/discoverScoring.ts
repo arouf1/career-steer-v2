@@ -1,5 +1,3 @@
-import { LANE_THRESHOLDS, type LaneKind } from "./discoverThresholds";
-
 /** Cosine similarity, clamped to [0, 1]. Returns 0 on zero-vector input. */
 export function cosineSim(a: readonly number[], b: readonly number[]): number {
   if (a.length !== b.length) {
@@ -18,13 +16,6 @@ export function cosineSim(a: readonly number[], b: readonly number[]): number {
   if (normA === 0 || normB === 0) return 0;
   const sim = dot / (Math.sqrt(normA) * Math.sqrt(normB));
   return clamp01(sim);
-}
-
-/** Bucket a currentStateSim score into a lane per LANE_THRESHOLDS. */
-export function assignLane(currentStateSim: number): LaneKind {
-  if (currentStateSim >= LANE_THRESHOLDS.LINEAR_MIN) return "linear";
-  if (currentStateSim >= LANE_THRESHOLDS.ADJACENT_MIN) return "adjacent";
-  return "transformational";
 }
 
 /** Clamp a number to [0, 1]. */

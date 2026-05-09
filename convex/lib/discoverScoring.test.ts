@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   cosineSim,
-  assignLane,
   clamp01,
   compareStages,
   STAGE_RANK,
@@ -27,23 +26,6 @@ describe("cosineSim", () => {
   it("returns 0 if either vector is all zeros (avoid NaN)", () => {
     expect(cosineSim([0, 0, 0], [1, 1, 1])).toBe(0);
     expect(cosineSim([1, 1, 1], [0, 0, 0])).toBe(0);
-  });
-});
-
-describe("assignLane", () => {
-  it("assigns >= 0.75 to linear", () => {
-    expect(assignLane(0.75)).toBe("linear");
-    expect(assignLane(0.95)).toBe("linear");
-  });
-
-  it("assigns 0.6..<0.75 to adjacent", () => {
-    expect(assignLane(0.6)).toBe("adjacent");
-    expect(assignLane(0.7499)).toBe("adjacent");
-  });
-
-  it("assigns < 0.6 to transformational", () => {
-    expect(assignLane(0.5999)).toBe("transformational");
-    expect(assignLane(0)).toBe("transformational");
   });
 });
 
