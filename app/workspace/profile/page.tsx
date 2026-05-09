@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Authenticated,
   AuthLoading,
@@ -12,7 +11,6 @@ import { SignInButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { UploadCard } from "@/components/profile/UploadCard";
 import { ProfileView } from "@/components/profile/ProfileView";
-import { ProfileEditForm } from "@/components/profile/ProfileEditForm";
 import { ReviewCallout } from "@/components/profile/ReviewCallout";
 import { GuidesForYou } from "@/components/profile/GuidesForYou";
 import { LocationStep } from "@/components/profile/LocationStep";
@@ -58,7 +56,6 @@ export default function ProfilePage() {
 function ProfileShell() {
   const profile = useQuery(api.profiles.current);
   const clear = useMutation(api.profiles.clear);
-  const [editing, setEditing] = useState(false);
 
   if (profile === undefined) {
     return <ProfileLoadingSkeleton />;
@@ -75,10 +72,6 @@ function ProfileShell() {
   // back through this gate for this profile.
   if (profile.locationConfirmedAt === undefined) {
     return <LocationStep initialLocation={profile.location ?? null} />;
-  }
-
-  if (editing) {
-    return <ProfileEditForm profile={profile} onDone={() => setEditing(false)} />;
   }
 
   const fieldCount =
@@ -104,11 +97,10 @@ function ProfileShell() {
       {!profile.reviewed && (
         <ReviewCallout
           fieldCount={fieldCount}
-          onEdit={() => setEditing(true)}
           onReupload={handleReupload}
         />
       )}
-      <ProfileView profile={profile} onEdit={() => setEditing(true)} />
+      <ProfileView profile={profile} />
       <GuidesForYou />
     </div>
   );

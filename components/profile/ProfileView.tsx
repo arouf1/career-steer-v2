@@ -1,11 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { DeleteAccountDialog } from "@/components/profile/DeleteAccountDialog";
 
 type Props = {
   profile: Doc<"profiles">;
-  onEdit: () => void;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ function formatYear(dateStr: string | undefined): string {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function ProfileView({ profile, onEdit }: Props) {
+export function ProfileView({ profile }: Props) {
   const name = profile.name ?? null;
   const headline = profile.headline ?? null;
   const summary = profile.summary ?? null;
@@ -129,13 +129,12 @@ export function ProfileView({ profile, onEdit }: Props) {
 
         {/* Quiet meta-link strip */}
         <div className="mt-3 flex items-center gap-4">
-          <button
-            type="button"
-            onClick={onEdit}
+          <Link
+            href="/workspace/profile/edit"
             className="text-[12px] text-mute underline-offset-4 hover:underline hover:text-ink transition-colors"
           >
             Edit
-          </button>
+          </Link>
           <DeleteAccountDialog
             trigger={
               <button

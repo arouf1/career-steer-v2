@@ -1,15 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 type Props = {
   fieldCount: number;
-  onEdit: () => void;
   onReupload: () => void;
 };
 
-export function ReviewCallout({ onEdit, onReupload }: Props) {
+export function ReviewCallout({ onReupload }: Props) {
   const markReviewed = useMutation(api.profiles.markReviewed);
 
   return (
@@ -32,13 +32,12 @@ export function ReviewCallout({ onEdit, onReupload }: Props) {
         >
           Looks right
         </button>
-        <button
-          type="button"
-          onClick={onEdit}
+        <Link
+          href="/workspace/profile/edit"
           className="type-label rounded-pill border border-hairline-strong px-5 py-2.5 text-ink transition-colors hover:border-ink"
         >
           Edit
-        </button>
+        </Link>
         <button
           type="button"
           onClick={onReupload}
