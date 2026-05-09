@@ -131,11 +131,11 @@ export function ConversationTranscript({ messages, className }: Props) {
   }
 
   return (
-    // Fixed height (not max-h) so the ScrollArea Viewport's `size-full`
-    // resolves to a real boundary — required for the internal overflow
-    // to clip and scroll. max-h alone would only cap growth and let the
-    // viewport expand to its content's natural height (no scroll).
-    <ScrollArea className={cn("h-[60vh] w-full", className)}>
+    // h-full + w-full so the ScrollArea fills its parent container's
+    // explicit height (set on the outer card in ConversationDetailClient).
+    // The Radix Viewport's size-full then resolves to that real height,
+    // letting the internal overflow clip and scroll properly.
+    <ScrollArea className={cn("h-full w-full", className)}>
       <div className="flex flex-col gap-3 px-4 py-4">
         {messages.map((message) => (
           <Bubble key={message.id} message={message} />

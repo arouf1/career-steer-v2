@@ -239,13 +239,16 @@ export function ConversationDetailClient({ callId }: Props) {
           )}
 
           {/* Transcript — section label outside, ScrollArea sits inside a
-              hairline rectangular container (no rounded corners per design
-              direction). The container clips the scroll viewport. */}
-          <section id="transcript" className="mt-12 scroll-mt-24">
+              hairline rectangular container with an explicit height so the
+              Radix Viewport's size-full resolves to a real boundary and the
+              transcript actually scrolls instead of growing to content
+              height. mb-16 keeps editorial breathing room before the page
+              footer. */}
+          <section id="transcript" className="mt-12 mb-16 scroll-mt-24">
             <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
               Transcript
             </p>
-            <div className="overflow-hidden border border-hairline bg-paper-raised">
+            <div className="h-[60vh] max-h-[640px] overflow-hidden border border-hairline bg-paper-raised">
               <ConversationTranscript messages={call.messages ?? []} />
             </div>
           </section>
