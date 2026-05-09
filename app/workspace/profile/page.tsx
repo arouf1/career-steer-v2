@@ -17,19 +17,11 @@ import { ReviewCallout } from "@/components/profile/ReviewCallout";
 import { GuidesForYou } from "@/components/profile/GuidesForYou";
 import { LocationStep } from "@/components/profile/LocationStep";
 import { WorkspacePageShell } from "@/components/workspace/WorkspacePageShell";
-import {
-  WorkspaceLoadingHeader,
-  WorkspaceLoadingRows,
-} from "@/components/workspace/WorkspaceLoading";
+import { WorkspaceLoadingProfile } from "@/components/workspace/WorkspaceLoading";
 
-function ProfileLoadingSkeleton() {
-  return (
-    <div className="flex flex-col gap-12">
-      <WorkspaceLoadingHeader />
-      <WorkspaceLoadingRows count={2} />
-    </div>
-  );
-}
+// Re-export under the local name the rest of this file already references,
+// so the swap is contained.
+const ProfileLoadingSkeleton = WorkspaceLoadingProfile;
 
 export default function ProfilePage() {
   return (

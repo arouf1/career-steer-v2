@@ -9,11 +9,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Authenticated, useAction, useQuery } from "convex/react";
+import { Authenticated, AuthLoading, useAction, useQuery } from "convex/react";
 import { ArrowRight, Search, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { JobCardRow } from "@/components/jobs/JobCardRow";
 import { WorkspacePageHeader } from "@/components/workspace/WorkspacePageHeader";
+import {
+  WorkspaceLoadingHeader,
+  WorkspaceLoadingRows,
+} from "@/components/workspace/WorkspaceLoading";
 import {
   LocationCombobox,
   type LocationSelection,
@@ -38,9 +42,17 @@ type SearchSnapshot = {
 
 export function JobSearchClient() {
   return (
-    <Authenticated>
-      <JobSearchClientInner />
-    </Authenticated>
+    <>
+      <AuthLoading>
+        <div className="flex flex-col gap-12">
+          <WorkspaceLoadingHeader />
+          <WorkspaceLoadingRows />
+        </div>
+      </AuthLoading>
+      <Authenticated>
+        <JobSearchClientInner />
+      </Authenticated>
+    </>
   );
 }
 

@@ -46,6 +46,83 @@ export function WorkspaceLoadingRows({ count = 3 }: { count?: number }) {
   );
 }
 
+// Profile-shape skeleton. Mirrors ProfileView's section rhythm exactly so
+// the page doesn't reflow when the Convex query lands. Header (eyebrow +
+// big serif name + lede + edit/delete actions) → Summary section →
+// Experience entries (3 cards) → Education entries (1 card) → Skills
+// pill row.
+export function WorkspaceLoadingProfile() {
+  return (
+    <article className="flex flex-col gap-16" aria-busy="true">
+      {/* Header — matches WorkspacePageHeader output */}
+      <div className="flex flex-col gap-3" aria-hidden>
+        <div className="skeleton-block h-3 w-20" />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-1 flex-col gap-3">
+            <div className="skeleton-block h-10 w-2/3 max-w-md" />
+            <div className="skeleton-block h-4 w-3/4 max-w-xl" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="skeleton-block h-9 w-32 rounded-pill" />
+            <div className="skeleton-block h-9 w-36 rounded-pill" />
+          </div>
+        </div>
+        <div className="mt-1 skeleton-block h-3 w-32" />
+      </div>
+
+      {/* Summary section */}
+      <section aria-hidden>
+        <div className="skeleton-block h-2.5 w-20" />
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="skeleton-block h-3.5 w-full max-w-prose" />
+          <div className="skeleton-block h-3.5 w-11/12 max-w-prose" />
+          <div className="skeleton-block h-3.5 w-4/5 max-w-prose" />
+        </div>
+      </section>
+
+      {/* Experience section — three entries */}
+      <section aria-hidden>
+        <div className="skeleton-block h-2.5 w-24" />
+        <div className="mt-4 flex flex-col gap-8">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex flex-col gap-2">
+              <div className="skeleton-block h-5 w-2/3 max-w-md" />
+              <div className="skeleton-block h-3.5 w-1/2 max-w-sm" />
+              <div className="mt-1 flex flex-col gap-1.5">
+                <div className="skeleton-block h-3 w-full max-w-prose" />
+                <div className="skeleton-block h-3 w-3/4 max-w-prose" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Education section — one entry */}
+      <section aria-hidden>
+        <div className="skeleton-block h-2.5 w-20" />
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="skeleton-block h-5 w-1/2 max-w-md" />
+          <div className="skeleton-block h-3.5 w-1/3 max-w-sm" />
+        </div>
+      </section>
+
+      {/* Skills pill row */}
+      <section aria-hidden>
+        <div className="skeleton-block h-2.5 w-16" />
+        <div className="mt-4 flex flex-wrap gap-2">
+          {[16, 24, 20, 28, 18, 22, 26, 20, 24].map((w, i) => (
+            <div
+              key={i}
+              className="skeleton-block h-7 rounded-pill"
+              style={{ width: `${w * 4}px` }}
+            />
+          ))}
+        </div>
+      </section>
+    </article>
+  );
+}
+
 // Article-shape skeleton for detail pages. Mirrors the masthead → score →
 // lede → section-stack rhythm so the page doesn't reflow when content
 // lands. Honours the same .skeleton-block pulse + fade-in-view utilities

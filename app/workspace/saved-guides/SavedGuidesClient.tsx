@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Authenticated, useQuery } from "convex/react";
+import { Authenticated, AuthLoading, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { SavedGuideCard, type SavedGuide } from "./SavedGuideCard";
 import { WorkspacePageHeader } from "@/components/workspace/WorkspacePageHeader";
@@ -62,9 +62,17 @@ const byScore = (a: SavedGuide, b: SavedGuide) =>
 
 export function SavedGuidesClient() {
   return (
-    <Authenticated>
-      <SavedGuidesClientInner />
-    </Authenticated>
+    <>
+      <AuthLoading>
+        <div className="mb-12">
+          <WorkspaceLoadingHeader />
+        </div>
+        <WorkspaceLoadingRows />
+      </AuthLoading>
+      <Authenticated>
+        <SavedGuidesClientInner />
+      </Authenticated>
+    </>
   );
 }
 
