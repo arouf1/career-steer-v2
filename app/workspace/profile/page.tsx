@@ -18,6 +18,7 @@ import { GuidesForYou } from "@/components/profile/GuidesForYou";
 import { LocationStep } from "@/components/profile/LocationStep";
 import { WorkspacePageShell } from "@/components/workspace/WorkspacePageShell";
 import { WorkspaceLoadingProfile } from "@/components/workspace/WorkspaceLoading";
+import { GetStartedSidebarPill } from "@/components/profile/GetStartedSidebarPill";
 
 // Re-export under the local name the rest of this file already references,
 // so the swap is contained.
@@ -47,6 +48,7 @@ export default function ProfilePage() {
         </div>
       </Unauthenticated>
       <Authenticated>
+        <GetStartedSidebarPill />
         <ProfileShell />
       </Authenticated>
     </WorkspacePageShell>
