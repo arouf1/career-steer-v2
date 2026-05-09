@@ -22,6 +22,11 @@ type Props = {
   className?: string;
 };
 
+// Smart open/close quote characters — no italic needed when Garamond carries
+// the typographic weight at 26px with these marks.
+const LQUOTE = "“";
+const RQUOTE = "”";
+
 export function InterviewDetailPanel({ rubric, meta, className }: Props) {
   // Strip the redundant "Mock interview: " prefix — the masthead label and
   // company anchor already signal surface. Mirrors InterviewRow.
@@ -30,11 +35,11 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
 
   return (
     <div className={cn("flex flex-col", className)}>
-      {/* ── Masthead ────────────────────────────────────────────────────── */}
-      <header>
-        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
-          Mock interview <span aria-hidden>·</span>{" "}
-          {formatDuration(meta.durationSeconds)} <span aria-hidden>·</span>{" "}
+      {/* ── Masthead + Verdict ──────────────────────────────────────────── */}
+      <section id="verdict" className="scroll-mt-24">
+        <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
+          Mock interview <span aria-hidden>{"·"}</span>{" "}
+          {formatDuration(meta.durationSeconds)} <span aria-hidden>{"·"}</span>{" "}
           {formatRelative(meta.createdAt)}
         </p>
 
@@ -44,7 +49,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
           {cleanTitle}
         </h1>
         {companyName && (
-          <p className="mt-2 text-[18px] italic text-mute [font-family:var(--font-serif)]">
+          <p className="mt-2 text-[18px] text-mute [font-family:var(--font-serif)]">
             at {companyName}
           </p>
         )}
@@ -53,84 +58,96 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
           <span className="text-[48px] font-normal leading-none text-ink [font-family:var(--font-serif)]">
             {rubric.overallScore.toFixed(1)}
           </span>
-          <span className="text-[14px] font-medium uppercase tracking-[0.08em] text-mute">
+          <span className="text-[14px] font-medium uppercase tracking-[0.18em] text-mute">
             / 5
           </span>
         </div>
 
-        <p className="mt-4 max-w-[60ch] text-[17px] italic leading-relaxed text-body [font-family:var(--font-serif)]">
+        <p className="mt-4 max-w-[60ch] text-[18px] leading-relaxed text-body [font-family:var(--font-serif)]">
           {rubric.oneLineVerdict}
         </p>
-      </header>
+      </section>
 
       {/* ── Dimensions (stacked, hairline-divided — NEVER a 2x2 grid) ──── */}
-      <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
-        Where the interview landed
-      </p>
-      <div className="flex flex-col">
-        {rubric.dimensions.map((d, i) => (
-          <div
-            key={d.key}
-            className={cn(
-              "py-6",
-              i === 0 ? "" : "border-t border-hairline",
-            )}
-          >
-            <div className="flex items-baseline justify-between gap-4">
-              <h3 className="text-[20px] font-normal leading-snug text-ink [font-family:var(--font-serif)]">
-                {titleCase(d.key)}
-              </h3>
-              <p className="shrink-0 text-[18px] font-normal text-ink [font-family:var(--font-serif)]">
-                {d.score == null ? (
-                  <span className="italic text-mute">—</span>
-                ) : (
-                  <>
-                    {d.score} <span className="text-mute">/ 5</span>
-                  </>
-                )}
-              </p>
+      <section id="dimensions" className="scroll-mt-24">
+        <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
+          Where the interview landed
+        </p>
+        <div className="flex flex-col">
+          {rubric.dimensions.map((d, i) => (
+            <div
+              key={d.key}
+              className={cn(
+                "py-6",
+                i === 0 ? "" : "border-t border-hairline",
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-4">
+                <h3 className="text-[20px] font-normal leading-snug text-ink [font-family:var(--font-serif)]">
+                  {titleCase(d.key)}
+                </h3>
+                <p className="shrink-0 text-[18px] font-normal text-ink [font-family:var(--font-serif)]">
+                  {d.score == null ? (
+                    <span className="text-mute">{"—"}</span>
+                  ) : (
+                    <>
+                      {d.score} <span className="text-mute">/ 5</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              {d.whatWorked && d.whatWorked !== "—" && (
+                <>
+                  <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
+                    What worked
+                  </p>
+                  <p className="mt-1.5 max-w-[60ch] text-[14px] leading-relaxed text-ink">
+                    {d.whatWorked}
+                  </p>
+                </>
+              )}
+              {d.whatToFix && d.whatToFix !== "—" && (
+                <>
+                  <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
+                    To push
+                  </p>
+                  <p className="mt-1.5 max-w-[60ch] text-[14px] leading-relaxed text-mute">
+                    {d.whatToFix}
+                  </p>
+                </>
+              )}
             </div>
-            {d.whatWorked && d.whatWorked !== "—" && (
-              <p className="mt-3 max-w-[60ch] text-[14px] leading-relaxed text-ink">
-                {d.whatWorked}
-              </p>
-            )}
-            {d.whatToFix && d.whatToFix !== "—" && (
-              <p className="mt-2 max-w-[60ch] text-[14px] italic leading-relaxed text-mute">
-                To push: {d.whatToFix}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </section>
 
-      {/* ── Best moment (editorial pull-quote — Garamond italic, no chrome) ─ */}
+      {/* ── Best moment (editorial pull-quote — Garamond normal, no chrome) ─ */}
       {rubric.bestMoment.quote && (
-        <>
+        <section id="best-moment" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
-          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             Best moment
           </p>
-          <blockquote className="max-w-[60ch] text-[24px] italic leading-snug text-ink [font-family:var(--font-serif)]">
-            “{rubric.bestMoment.quote}”
+          <blockquote className="max-w-[60ch] text-[26px] leading-snug text-ink [font-family:var(--font-serif)]">
+            {LQUOTE}{rubric.bestMoment.quote}{RQUOTE}
           </blockquote>
           {rubric.bestMoment.why && (
             <p className="mt-4 max-w-[60ch] text-[14px] leading-relaxed text-mute">
               {rubric.bestMoment.why}
             </p>
           )}
-        </>
+        </section>
       )}
 
       {/* ── Biggest miss ───────────────────────────────────────────────── */}
       {rubric.biggestMiss.quote && (
-        <>
+        <section id="biggest-miss" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
-          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             Biggest miss
           </p>
-          <blockquote className="max-w-[60ch] text-[24px] italic leading-snug text-ink [font-family:var(--font-serif)]">
-            “{rubric.biggestMiss.quote}”
+          <blockquote className="max-w-[60ch] text-[26px] leading-snug text-ink [font-family:var(--font-serif)]">
+            {LQUOTE}{rubric.biggestMiss.quote}{RQUOTE}
           </blockquote>
           {rubric.biggestMiss.why && (
             <p className="mt-4 max-w-[60ch] text-[14px] leading-relaxed text-mute">
@@ -143,14 +160,14 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
               {rubric.biggestMiss.betterAnswerSketch}
             </p>
           )}
-        </>
+        </section>
       )}
 
       {/* ── What to work on (numbered editorial list, no disclosure) ───── */}
       {rubric.nextStepExercises.length > 0 && (
-        <>
+        <section id="next-steps" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
-          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             What to work on
           </p>
           <ol className="flex flex-col">
@@ -186,7 +203,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
               </li>
             ))}
           </ol>
-        </>
+        </section>
       )}
     </div>
   );

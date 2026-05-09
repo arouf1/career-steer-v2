@@ -21,6 +21,11 @@ import {
 import { ConversationTranscript } from "@/components/workspace/conversations/ConversationTranscript";
 import { InterviewDetailPanel } from "@/components/workspace/conversations/InterviewDetailPanel";
 import { DeepDiveDetailPanel } from "@/components/workspace/conversations/DeepDiveDetailPanel";
+import {
+  WikiTableOfContents,
+  MobileTableOfContents,
+} from "@/components/site/TableOfContents";
+import type { SectionLink } from "@/components/site/TableOfContents";
 import type { InterviewRubric } from "@/lib/ai/prompts/interviewer";
 import type { DeepDiveSummary } from "@/lib/ai/prompts/voiceAdviser";
 
@@ -29,6 +34,45 @@ type Surface = "guide" | "compass" | "job" | "interview_job";
 type Props = {
   callId: string;
 };
+
+// ── Section builder ──────────────────────────────────────────────────────────
+// Builds the per-surface TOC sections list, omitting conditional blocks when
+// the underlying data is absent (mirrors the career guide pattern).
+
+function buildSections(
+  surface: Surface,
+  summary: DeepDiveSummary | InterviewRubric | null | undefined,
+): SectionLink[] {
+  if (surface === "interview_job") {
+    const rubric = summary as InterviewRubric | null | undefined;
+    const sections: SectionLink[] = [
+      { id: "verdict", label: "Verdict" },
+      { id: "dimensions", label: "How it landed" },
+    ];
+    if (rubric?.bestMoment?.quote) {
+      sections.push({ id: "best-moment", label: "Best moment" });
+    }
+    if (rubric?.biggestMiss?.quote) {
+      sections.push({ id: "biggest-miss", label: "Biggest miss" });
+    }
+    if (rubric?.nextStepExercises?.length) {
+      sections.push({ id: "next-steps", label: "What to work on" });
+    }
+    sections.push({ id: "transcript", label: "Transcript" });
+    return sections;
+  }
+
+  const s = summary as DeepDiveSummary | null | undefined;
+  const sections: SectionLink[] = [{ id: "summary", label: "Summary" }];
+  if (s?.insights?.length) sections.push({ id: "insights", label: "Insights" });
+  if (s?.keyTopics?.length) sections.push({ id: "topics", label: "Topics covered" });
+  if (s?.actionPoints?.length) sections.push({ id: "actions", label: "Action points" });
+  if (s?.followUpNeeded && s?.followUpSuggestions?.length) {
+    sections.push({ id: "follow-ups", label: "Follow-ups" });
+  }
+  sections.push({ id: "transcript", label: "Transcript" });
+  return sections;
+}
 
 export function ConversationDetailClient({ callId }: Props) {
   const router = useRouter();
@@ -41,8 +85,6 @@ export function ConversationDetailClient({ callId }: Props) {
   const unarchive = useMutation(api.voiceCalls.unarchive);
 
   // ── Loading state ────────────────────────────────────────────────────────
-  // Page width: max-w-3xl (~768px) keeps body lines under ~75ch at standard
-  // text size — matches the editorial reading-flow rule in DESIGN.md.
   if (call === undefined) {
     return (
       <div className="mx-auto flex w-full max-w-3xl items-center gap-2 p-8 text-[13px] text-mute">
@@ -103,15 +145,15 @@ export function ConversationDetailClient({ callId }: Props) {
     companyLogoUrl: callExtras.companyLogoUrl,
   };
 
+  const sections = buildSections(surface, summary);
+
   // ── Render ───────────────────────────────────────────────────────────────
-  // max-w-3xl (~768px) keeps body lines under the 65-75ch editorial rule
-  // from DESIGN.md. Panels render flush onto paper — no wrapping cards.
+  // 12-col grid mirrors the career guide layout: lg:col-span-2 sticky TOC
+  // sidebar + lg:col-span-8 reading column, max-w-6xl container.
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-4 sm:p-6">
-      {/* Header: back link on the left, archived chip + actions on the right.
-          The surface label is no longer rendered here — it now lives on the
-          masthead inside each panel. */}
-      <header className="flex items-center justify-between gap-3">
+    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+      {/* Top bar — back link + actions menu — full width */}
+      <header className="mb-6 flex items-center justify-between gap-3 pt-4 sm:pt-6">
         <Link
           href="/workspace/conversations"
           className="inline-flex items-center gap-1 text-[12px] font-medium text-mute hover:text-ink"
@@ -164,35 +206,50 @@ export function ConversationDetailClient({ callId }: Props) {
         </div>
       </header>
 
-      {/* Surface-aware summary panel — flush on paper, no wrapping card */}
-      {summary != null ? (
-        isInterview ? (
-          <InterviewDetailPanel
-            rubric={summary as InterviewRubric}
-            meta={meta}
-          />
-        ) : (
-          <DeepDiveDetailPanel
-            summary={summary as DeepDiveSummary}
-            meta={meta}
-            surface={surface as "guide" | "compass" | "job"}
-          />
-        )
-      ) : (
-        <div className="py-6">
-          <p className="text-[13px] text-mute">
-            No summary available for this conversation.
-          </p>
-        </div>
-      )}
+      <div className="lg:grid lg:grid-cols-12 lg:gap-12">
+        {/* Desktop TOC sidebar — sticky, hidden below lg */}
+        <aside className="hidden lg:col-span-2 lg:block">
+          <div className="sticky top-24">
+            <WikiTableOfContents sections={sections} />
+          </div>
+        </aside>
 
-      {/* Transcript — flush, with editorial section label, no card chrome */}
-      <section className="mt-12">
-        <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
-          Transcript
-        </p>
-        <ConversationTranscript messages={call.messages ?? []} />
-      </section>
+        {/* Main reading column — lg:col-span-8 keeps body lines editorial-width */}
+        <main className="lg:col-span-8">
+          {/* Surface-aware summary panel — flush on paper, no wrapping card */}
+          {summary != null ? (
+            isInterview ? (
+              <InterviewDetailPanel
+                rubric={summary as InterviewRubric}
+                meta={meta}
+              />
+            ) : (
+              <DeepDiveDetailPanel
+                summary={summary as DeepDiveSummary}
+                meta={meta}
+                surface={surface as "guide" | "compass" | "job"}
+              />
+            )
+          ) : (
+            <div className="py-6">
+              <p className="text-[13px] text-mute">
+                No summary available for this conversation.
+              </p>
+            </div>
+          )}
+
+          {/* Transcript — editorial section label, ScrollArea handled inside component */}
+          <section id="transcript" className="mt-12 scroll-mt-24">
+            <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
+              Transcript
+            </p>
+            <ConversationTranscript messages={call.messages ?? []} />
+          </section>
+        </main>
+      </div>
+
+      {/* Mobile floating section pill — hidden on lg+ (component self-hides) */}
+      <MobileTableOfContents sections={sections} />
     </div>
   );
 }

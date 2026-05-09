@@ -7,6 +7,7 @@
 // grounding-citation links below the body.
 
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,27 +124,19 @@ function Bubble({ message }: { message: Message }) {
 export function ConversationTranscript({ messages, className }: Props) {
   if (messages.length === 0) {
     return (
-      <div
-        className={cn(
-          "flex max-h-[60vh] items-center justify-center overflow-y-auto py-12",
-          className,
-        )}
-      >
+      <div className={cn("flex items-center justify-center py-12", className)}>
         <p className="text-sm text-mute">No transcript captured for this conversation.</p>
       </div>
     );
   }
 
   return (
-    <div
-      className={cn(
-        "flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-4 py-4",
-        className,
-      )}
-    >
-      {messages.map((message) => (
-        <Bubble key={message.id} message={message} />
-      ))}
-    </div>
+    <ScrollArea className={cn("max-h-[60vh] w-full", className)}>
+      <div className="flex flex-col gap-3 px-4 py-4">
+        {messages.map((message) => (
+          <Bubble key={message.id} message={message} />
+        ))}
+      </div>
+    </ScrollArea>
   );
 }

@@ -51,9 +51,9 @@ export function DeepDiveDetailPanel({
 
   return (
     <div className={cn("flex flex-col", className)}>
-      {/* ── Masthead ────────────────────────────────────────────────────── */}
-      <header>
-        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+      {/* ── Masthead + Summary ──────────────────────────────────────────── */}
+      <section id="summary" className="scroll-mt-24">
+        <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
           {SURFACE_LABEL[surface]} <span aria-hidden>·</span>{" "}
           {summary.sentiment} <span aria-hidden>·</span>{" "}
           {formatDuration(meta.durationSeconds)} <span aria-hidden>·</span>{" "}
@@ -65,17 +65,17 @@ export function DeepDiveDetailPanel({
         </h1>
 
         {summary.summary && (
-          <p className="mt-4 max-w-[60ch] text-[17px] italic leading-relaxed text-body [font-family:var(--font-serif)]">
+          <p className="mt-4 max-w-[60ch] text-[18px] leading-relaxed text-body [font-family:var(--font-serif)]">
             {summary.summary}
           </p>
         )}
-      </header>
+      </section>
 
       {/* ── Insights ───────────────────────────────────────────────────── */}
       {summary.insights.length > 0 && (
-        <>
+        <section id="insights" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
-          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             Insights
           </p>
           <ul className="flex flex-col gap-5">
@@ -93,14 +93,14 @@ export function DeepDiveDetailPanel({
               </li>
             ))}
           </ul>
-        </>
+        </section>
       )}
 
       {/* ── Topics covered ─────────────────────────────────────────────── */}
       {summary.keyTopics.length > 0 && (
-        <>
+        <section id="topics" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
-          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             Topics covered
           </p>
           <div className="flex flex-wrap gap-2">
@@ -113,14 +113,14 @@ export function DeepDiveDetailPanel({
               </span>
             ))}
           </div>
-        </>
+        </section>
       )}
 
       {/* ── Action points (numbered editorial list, priority implicit in order) ─ */}
       {orderedActionPoints.length > 0 && (
-        <>
+        <section id="actions" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
-          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             Action points
           </p>
           <ol className="flex flex-col">
@@ -147,14 +147,14 @@ export function DeepDiveDetailPanel({
               </li>
             ))}
           </ol>
-        </>
+        </section>
       )}
 
       {/* ── Suggested follow-ups ───────────────────────────────────────── */}
       {summary.followUpNeeded && summary.followUpSuggestions.length > 0 && (
-        <>
+        <section id="follow-ups" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
-          <p className="mt-12 mb-4 text-[11px] font-medium uppercase tracking-[0.08em] text-mute">
+          <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             Suggested follow-ups
           </p>
           <ul className="flex flex-col gap-5">
@@ -171,7 +171,7 @@ export function DeepDiveDetailPanel({
               </li>
             ))}
           </ul>
-        </>
+        </section>
       )}
     </div>
   );
