@@ -1069,6 +1069,25 @@ export default defineSchema({
     // — DeepDiveSummarySchema). v.any() because it's read-only data and the
     // schema is owned by the prompt module rather than Convex.
     aiSummary: v.optional(v.any()),
+    // In-call coverage marks written by the interviewer via the
+    // markDimensionCovered tool. Idempotent on dimension key — last write
+    // wins per dimension. Used for the live gauge in the dialog and as a
+    // self-grounding signal for the interviewer's "what have I covered"
+    // tally. The post-call rubric grades from transcript, not from this.
+    coverage: v.optional(
+      v.array(
+        v.object({
+          dimension: v.string(),       // matches bundle.rubric.dimensions[].key
+          evidence: v.string(),         // 1-sentence summary the model writes
+          confidence: v.union(
+            v.literal("weak"),
+            v.literal("solid"),
+            v.literal("strong"),
+          ),
+          markedAt: v.number(),
+        }),
+      ),
+    ),
     // Three semantic vectors over the call: full conversation, structured
     // summary, and joined key topics. 1536-dim Gemini embeddings via OpenRouter
     // — same model + dim as career_guide_embeddings so future Discover

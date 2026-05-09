@@ -132,6 +132,98 @@ export const appendMessage = mutation({
   },
 });
 
+// ── Public mutation: mark a rubric dimension as covered ──────────────────
+//
+// Called from the client hook in response to a Gemini Live toolCall for
+// markDimensionCovered. Idempotent on dimension — replaces any prior mark
+// for the same dimension with the new one (last write wins).
+
+export const markDimensionCovered = mutation({
+  args: {
+    sessionId: v.string(),
+    dimension: v.string(),
+    evidence: v.string(),
+    confidence: v.union(
+      v.literal("weak"),
+      v.literal("solid"),
+      v.literal("strong"),
+    ),
+  },
+  returns: v.union(
+    v.object({ ok: v.literal(true) }),
+    v.object({
+      ok: v.literal(false),
+      reason: v.union(
+        v.literal("anonymous"),
+        v.literal("not-found"),
+        v.literal("not-active"),
+      ),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return { ok: false as const, reason: "anonymous" as const };
+
+    const row = await ctx.db
+      .query("voice_calls")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .unique();
+    if (!row || row.userId !== user._id) {
+      return { ok: false as const, reason: "not-found" as const };
+    }
+    if (row.status !== "active") {
+      return { ok: false as const, reason: "not-active" as const };
+    }
+
+    const existing = row.coverage ?? [];
+    const filtered = existing.filter((c) => c.dimension !== args.dimension);
+    const next = [
+      ...filtered,
+      {
+        dimension: args.dimension,
+        evidence: args.evidence,
+        confidence: args.confidence,
+        markedAt: Date.now(),
+      },
+    ];
+
+    await ctx.db.patch(row._id, {
+      coverage: next,
+      updatedAt: Date.now(),
+    });
+    return { ok: true as const };
+  },
+});
+
+// ── Public query: subscribe to coverage marks for the gauge ──────────────
+
+export const getCoverage = query({
+  args: { sessionId: v.string() },
+  returns: v.union(
+    v.null(),
+    v.array(v.object({
+      dimension: v.string(),
+      evidence: v.string(),
+      confidence: v.union(
+        v.literal("weak"),
+        v.literal("solid"),
+        v.literal("strong"),
+      ),
+      markedAt: v.number(),
+    })),
+  ),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return null;
+    const row = await ctx.db
+      .query("voice_calls")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .unique();
+    if (!row || row.userId !== user._id) return null;
+    return row.coverage ?? [];
+  },
+});
+
 // ── Public mutation: finalize a call and schedule post-call analysis ──────
 
 export const finalize = mutation({
