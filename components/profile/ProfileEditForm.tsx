@@ -4,6 +4,7 @@ import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
 import { Plus, Trash2, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useRef, useState, KeyboardEvent } from "react";
 import { api } from "@/convex/_generated/api";
@@ -224,23 +225,50 @@ export function ProfileEditForm({ profile, onDone }: Props) {
         />
       </section>
 
-      {/* ── Actions ───────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 border-t border-hairline pt-6">
-        <button
-          type="button"
-          onClick={handleCancelClick}
-          className="text-[13px] text-mute transition-colors hover:text-ink"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={form.formState.isSubmitting}
-          className="type-label rounded-pill bg-ink px-6 py-3 text-paper transition-colors hover:bg-ink-deep disabled:opacity-50"
-        >
-          {form.formState.isSubmitting ? "Saving…" : "Save and mark reviewed"}
-        </button>
-      </div>
+      {/* ── Floating action bar ────────────────────────────────────────────
+          Appears only when the form is dirty. Centered horizontally at the
+          bottom of the viewport, with safe-area padding for mobile. Fades +
+          slides up on mount; fades + slides down on dismount. Honours
+          prefers-reduced-motion via motion's built-in respect for the
+          media query.
+
+          Container is rounded-pill paper-raised with hairline border + a
+          soft 24px-blur shadow so it reads as floating without clashing
+          with the flat-by-default rest of the page. */}
+      <AnimatePresence>
+        {form.formState.isDirty && (
+          <motion.div
+            key="floating-actions"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.24, ease: [0.2, 0.65, 0.3, 1] }}
+            className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            aria-label="Form actions"
+          >
+            <div className="pointer-events-auto inline-flex items-center gap-2 rounded-pill border border-hairline bg-paper-raised p-1.5 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.18)]">
+              <button
+                type="button"
+                onClick={handleCancelClick}
+                className="rounded-pill px-4 py-2 text-[13px] font-medium text-mute transition-colors hover:bg-paper hover:text-ink"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={form.formState.isSubmitting}
+                className="type-label inline-flex items-center rounded-pill bg-ink px-5 py-2 text-paper transition-colors hover:bg-ink-deep disabled:opacity-50"
+              >
+                {form.formState.isSubmitting ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Spacer so the floating bar never visually overlaps the last
+          form section when the user scrolls to the very bottom. */}
+      <div aria-hidden className="h-20" />
     </form>
   );
 }
