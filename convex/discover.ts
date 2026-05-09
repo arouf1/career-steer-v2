@@ -25,6 +25,7 @@ import {
   SNAPSHOT_MAX_ATTEMPTS,
 } from "./lib/discoverThresholds";
 import { cosineSim, compareStages } from "./lib/discoverScoring";
+import { TIER_RANK, type Tier } from "./lib/ladders";
 import { rerank as openRouterRerank, chatModel } from "../lib/ai/providers";
 
 /**
@@ -813,100 +814,151 @@ async function runPipeline(
     transformational: [],
   };
 
-  // Tracked separately so the judges below see only embedding-admitted
-  // candidates — override-admitted (literal past roles) skip the judge.
-  const embeddingAdmissions: Record<JudgeLane, ScoredCandidate[]> = {
-    earlier: [],
-    linear: [],
-    adjacent: [],
-  };
-
-  for (const c of surviving) {
-    const guideStage = stageByGuide.get(c.guideId as string);
-    const guideSlug = slugByGuide.get(c.guideId as string);
-
-    // Override branch: this guide represents a role the user has held.
-    // "Earlier chapters" should mean exactly that, regardless of embedding
-    // scores. Skips the wholeSim/domainSim/cmp gates entirely AND the LLM
-    // judge below — literal past roles are never adjudicated.
-    if (guideSlug && seededSlugSet.has(guideSlug)) {
-      byLane.earlier.push(c);
-      continue;
-    }
-
-    const cmp = compareStages(userStage, guideStage);
-    if (cmp === "forward" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.linear) {
-      // Provisionally admitted to linear via stage + wholeSim gate. Judge
-      // demotes forward-but-cross-domain candidates (e.g. VP of Marketing
-      // for a Head of ML) to transformational.
-      embeddingAdmissions.linear.push(c);
-    } else if (cmp === "sideways" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.adjacent) {
-      // Provisionally admitted to adjacent via stage + wholeSim gate. Judge
-      // demotes same-stage-but-cross-function candidates (e.g. Restaurant
-      // GM for a Head of ML) to transformational.
-      embeddingAdmissions.adjacent.push(c);
-    } else if (
-      cmp === "earlier" &&
-      c.wholeSim >= LANE_WHOLE_SIM_FLOOR.earlier &&
-      c.domainSim >= LANE_DOMAIN_SIM_FLOOR.earlier
-    ) {
-      // Provisionally admitted to earlier via embedding scores. Judge
-      // demotes cross-domain noise (Actuary, SEO Manager) to transformational.
-      embeddingAdmissions.earlier.push(c);
-    } else {
-      byLane.transformational.push(c);
-    }
-  }
-
-  // Step 5b — adjudicate every non-transformational lane in parallel.
-  // Each judge returns both a verdict and a confidence level:
-  //   - verdict="demote" OR confidence="low" → transformational (clear miss)
-  //   - verdict="keep" + confidence="high"   → lane, no penalty
-  //   - verdict="keep" + confidence="medium" → lane, judgePenalty=1 (sorts
-  //                                            behind every high-confidence
-  //                                            candidate, lands in bridge /
-  //                                            aspirational / extra rather
-  //                                            than strong unless alone).
-  // Conservative by design: each judge defaults to keep + high on LLM
-  // failure or missing output, so a flaky judge never silently empties a
-  // lane or wrongly penalizes positioning. Three Flash-tier calls run in
-  // parallel — adds ~1-2s to canvas regen.
-  const lanesToAdjudicate: JudgeLane[] = ["earlier", "linear", "adjacent"];
-  const verdictsByLane = new Map<JudgeLane, Map<string, JudgeVerdict>>();
-  await Promise.all(
-    lanesToAdjudicate.map(async (lane) => {
-      const candidates = embeddingAdmissions[lane];
-      if (candidates.length === 0) {
-        verdictsByLane.set(lane, new Map());
-        return;
-      }
-      const verdicts = await callJudgeLLM({
-        lane,
-        userHeadline: profileLaning.headline,
-        userExperience: profileLaning.experience,
-        candidates: candidates.map((c) => ({
-          guideId: c.guideId,
-          title: titleByGuide.get(c.guideId as string) ?? "(untitled)",
-        })),
-      });
-      verdictsByLane.set(lane, verdicts);
-    }),
+  // Try the ladder-aware bucketing path first. The user has a "position"
+  // when their seedingGuideSlugs[0] resolves to a guide that's been placed
+  // on a career_ladder. When present, structural lane assignment beats the
+  // embedding+judge guesswork:
+  //   - Linear      = candidates on the user's ladder at a higher tier
+  //   - Earlier     = candidates on the user's ladder at a lower tier
+  //   - Adjacent    = candidates on a DIFFERENT ladder at the user's tier
+  //   - Transformational = everything else (cross-ladder, cross-tier)
+  //
+  // The LLM judge is skipped for ladder-classified candidates — the
+  // structural relationship doesn't need second-guessing. Only the
+  // transformational lane runs through any further filtering, and even
+  // that's just the existing slot pickers (no judge call).
+  const userPosition = await ctx.runQuery(
+    internal.careerLadders.getPositionByProfile,
+    { profileId: args.profileId },
   );
-  for (const lane of lanesToAdjudicate) {
-    const verdicts = verdictsByLane.get(lane) ?? new Map();
-    for (const c of embeddingAdmissions[lane]) {
-      const judgment = verdicts.get(c.guideId as string) ?? {
-        verdict: "keep" as const,
-        confidence: "high" as const,
-      };
-      const isDemoted =
-        judgment.verdict === "demote" || judgment.confidence === "low";
-      if (isDemoted) {
-        byLane.transformational.push(c);
-      } else if (judgment.confidence === "medium") {
-        byLane[lane].push({ ...c, judgePenalty: 1 });
+
+  if (userPosition) {
+    // Pre-load all ladder positions for the surviving candidates in one
+    // batched query. Avoids N round-trips inside the for-loop.
+    const positionRows = await ctx.runQuery(
+      internal.careerLadders._readPositionsForGuides,
+      { guideIds: surviving.map((c) => c.guideId) },
+    );
+    const positionsByGuide = new Map<
+      string,
+      Array<{ ladderId: Id<"career_ladders">; rung: number; tier: Tier }>
+    >();
+    for (const row of positionRows) {
+      positionsByGuide.set(row.guideId as string, row.positions);
+    }
+
+    const userTierRank = TIER_RANK[userPosition.tier];
+
+    for (const c of surviving) {
+      const guideSlug = slugByGuide.get(c.guideId as string);
+
+      // Override branch (preserved): literal past roles → earlier, regardless
+      // of ladder placement.
+      if (guideSlug && seededSlugSet.has(guideSlug)) {
+        byLane.earlier.push(c);
+        continue;
+      }
+
+      const positions = positionsByGuide.get(c.guideId as string) ?? [];
+      const sameLadderPos = positions.find(
+        (p) => p.ladderId === userPosition.ladderId,
+      );
+
+      if (sameLadderPos) {
+        const candTierRank = TIER_RANK[sameLadderPos.tier];
+        if (candTierRank > userTierRank) {
+          byLane.linear.push(c);
+        } else if (candTierRank < userTierRank) {
+          byLane.earlier.push(c);
+        }
+        // candTierRank === userTierRank → same tier on user's own ladder;
+        // skip — it's effectively the user's own role.
+        continue;
+      }
+
+      // Not on user's ladder: check for peer at same tier on another ladder.
+      const peerPos = positions.find((p) => p.tier === userPosition.tier);
+      if (peerPos) {
+        byLane.adjacent.push(c);
       } else {
-        byLane[lane].push(c);
+        byLane.transformational.push(c);
+      }
+    }
+  } else {
+    // Fallback: profile isn't on a known ladder yet (no seededSlugs, or
+    // seeded guide has no ladder position). Use the legacy stage-based
+    // bucketing + LLM judge — same logic as before ladders existed.
+    const embeddingAdmissions: Record<JudgeLane, ScoredCandidate[]> = {
+      earlier: [],
+      linear: [],
+      adjacent: [],
+    };
+
+    for (const c of surviving) {
+      const guideStage = stageByGuide.get(c.guideId as string);
+      const guideSlug = slugByGuide.get(c.guideId as string);
+
+      if (guideSlug && seededSlugSet.has(guideSlug)) {
+        byLane.earlier.push(c);
+        continue;
+      }
+
+      const cmp = compareStages(userStage, guideStage);
+      if (cmp === "forward" && c.wholeSim >= LANE_WHOLE_SIM_FLOOR.linear) {
+        embeddingAdmissions.linear.push(c);
+      } else if (
+        cmp === "sideways" &&
+        c.wholeSim >= LANE_WHOLE_SIM_FLOOR.adjacent
+      ) {
+        embeddingAdmissions.adjacent.push(c);
+      } else if (
+        cmp === "earlier" &&
+        c.wholeSim >= LANE_WHOLE_SIM_FLOOR.earlier &&
+        c.domainSim >= LANE_DOMAIN_SIM_FLOOR.earlier
+      ) {
+        embeddingAdmissions.earlier.push(c);
+      } else {
+        byLane.transformational.push(c);
+      }
+    }
+
+    const lanesToAdjudicate: JudgeLane[] = ["earlier", "linear", "adjacent"];
+    const verdictsByLane = new Map<JudgeLane, Map<string, JudgeVerdict>>();
+    await Promise.all(
+      lanesToAdjudicate.map(async (lane) => {
+        const candidates = embeddingAdmissions[lane];
+        if (candidates.length === 0) {
+          verdictsByLane.set(lane, new Map());
+          return;
+        }
+        const verdicts = await callJudgeLLM({
+          lane,
+          userHeadline: profileLaning.headline,
+          userExperience: profileLaning.experience,
+          candidates: candidates.map((c) => ({
+            guideId: c.guideId,
+            title: titleByGuide.get(c.guideId as string) ?? "(untitled)",
+          })),
+        });
+        verdictsByLane.set(lane, verdicts);
+      }),
+    );
+    for (const lane of lanesToAdjudicate) {
+      const verdicts = verdictsByLane.get(lane) ?? new Map();
+      for (const c of embeddingAdmissions[lane]) {
+        const judgment = verdicts.get(c.guideId as string) ?? {
+          verdict: "keep" as const,
+          confidence: "high" as const,
+        };
+        const isDemoted =
+          judgment.verdict === "demote" || judgment.confidence === "low";
+        if (isDemoted) {
+          byLane.transformational.push(c);
+        } else if (judgment.confidence === "medium") {
+          byLane[lane].push({ ...c, judgePenalty: 1 });
+        } else {
+          byLane[lane].push(c);
+        }
       }
     }
   }

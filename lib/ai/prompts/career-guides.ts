@@ -55,9 +55,32 @@ export const buildDedupPrompt = (
   query: string,
   candidates: { slug: string; title: string }[],
 ): string => `
-You are deciding whether a user's career-guide search query refers to the same role as any of the existing guides listed below. Catch acronym variants, synonyms, common abbreviations, and seniority variants of the same underlying role (for example, "FP&A Manager" and "Financial Planning & Analysis Manager" are the same; "Senior Software Engineer" and "Software Engineer" are also the same role for guide purposes).
+You are deciding whether a user's career-guide search query refers to the same role as any of the existing guides listed below.
 
-Two roles are NOT duplicates if they describe genuinely different work, even when the words overlap (for example, "Lead Vocalist" is not the same as "Engineering Lead").
+DUPLICATE (return isDuplicate=true) — these refer to the same role:
+- Acronym variants of the same role: "FP&A Manager" = "Financial Planning & Analysis Manager"; "SWE" = "Software Engineer".
+- Common synonyms / abbreviations of the same role: "Front-End Developer" = "Frontend Engineer".
+- IC-track seniority of the same role (no change in management scope or function):
+    "Senior Software Engineer" = "Software Engineer";
+    "Staff Designer" = "Designer";
+    "Lead Data Scientist" (IC lead, not a people manager) = "Data Scientist".
+
+NOT a duplicate (return isDuplicate=false) — these are GENUINELY DIFFERENT roles even when they share words:
+- Leadership-tier roles vs the IC role they oversee. The leadership role is its own guide; never collapse it into an IC role.
+    "Head of Product" is NEVER "Product Manager".
+    "Director of Engineering" is NEVER "Software Engineer".
+    "VP Marketing" is NEVER "Marketing Manager".
+    "Chief Financial Officer" is NEVER "Financial Analyst".
+    "Chief Product Officer" is NEVER "Product Manager".
+    "Engineering Manager" is NEVER "Senior Software Engineer" (different track — management vs IC).
+- Different functions that happen to share a word:
+    "Lead Vocalist" is NOT "Engineering Lead".
+    "Account Executive" (sales) is NOT "Account Manager" (post-sale customer success).
+- Different specialities of a broad function:
+    "Frontend Engineer" is NOT "Backend Engineer".
+    "Data Engineer" is NOT "Data Scientist".
+
+Default-direction principle: when in doubt, prefer isDuplicate=false. Creating a new guide is recoverable; collapsing two real careers into one is not.
 
 User query: "${query}"
 
@@ -65,7 +88,7 @@ Existing guides:
 ${candidates.length === 0 ? "(none)" : candidates.map((c, i) => `${i + 1}. "${c.title}" (slug: ${c.slug})`).join("\n")}
 
 Return:
-- isDuplicate: true if the query refers to the same role as any existing guide.
+- isDuplicate: true only if the query refers to the same role as one of the listed guides.
 - matchedSlug: the slug of the matching guide if isDuplicate is true, otherwise null.
 - reason: one short sentence.
 `.trim();

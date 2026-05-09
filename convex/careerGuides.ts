@@ -7,6 +7,7 @@ import {
   internalQuery,
   mutation,
   query,
+  type MutationCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -40,6 +41,12 @@ import type {
   EnrichmentTask,
   GroundedResearch,
 } from "../lib/ai/prompts/career-guides";
+import {
+  LADDER_CLASSIFY_MODEL_ID,
+  LadderLookupSchema,
+  buildLadderLookupPrompt,
+} from "../lib/ai/prompts/career-ladders";
+import type { LadderForPrompt } from "../lib/ai/prompts/career-ladders";
 import { tryConsumeRateLimit } from "./lib/rateLimit";
 import {
   findGuideByExactTitle,
@@ -538,7 +545,32 @@ export const _updateValidation = internalMutation({
 });
 
 export const _requestGeneration = internalMutation({
-  args: { title: v.string(), clientIp: v.string() },
+  args: {
+    title: v.string(),
+    clientIp: v.string(),
+    // Optional ladder attachment from the on-demand dedup classifier
+    // (`requestGuideFromSearch` Tier-2). When present, a row is written to
+    // `career_guide_ladder_positions` so the new guide is immediately part
+    // of the relevant ladder and surfaces in Career Compass walks. Skipped
+    // silently if a position for this guide+ladder already exists (idempotent
+    // on retries).
+    ladderAttachment: v.optional(
+      v.object({
+        ladderSlug: v.string(),
+        rung: v.number(),
+        tier: v.union(
+          v.literal("ic-entry"),
+          v.literal("ic-mid"),
+          v.literal("ic-senior"),
+          v.literal("manager"),
+          v.literal("head"),
+          v.literal("director"),
+          v.literal("vp"),
+          v.literal("c-suite"),
+        ),
+      }),
+    ),
+  },
   handler: async (
     ctx,
     args,
@@ -576,6 +608,18 @@ export const _requestGeneration = internalMutation({
 
     // Reuse existing row unless it failed — failed rows get reset and rerun.
     if (existingByTitle && existingByTitle.contentStatus !== "failed") {
+      // Even on the reuse path, attach to the ladder if requested. This
+      // covers the case where the same title was previously created without
+      // ladder attachment (e.g. via the legacy Tier-4 fallback) and a later
+      // request now has a confident ladder placement for it.
+      if (args.ladderAttachment) {
+        await attachToLadderIfMissing(
+          ctx,
+          existingByTitle._id,
+          args.ladderAttachment,
+          now,
+        );
+      }
       return { slug: existingByTitle.slug };
     }
 
@@ -605,6 +649,10 @@ export const _requestGeneration = internalMutation({
       });
     }
 
+    if (args.ladderAttachment) {
+      await attachToLadderIfMissing(ctx, guideId, args.ladderAttachment, now);
+    }
+
     await ctx.scheduler.runAfter(0, internal.careerGuides.generateContent, {
       guideId,
       title: args.title,
@@ -625,6 +673,50 @@ export const _requestGeneration = internalMutation({
     return { slug: existingByTitle?.slug ?? slug };
   },
 });
+
+// Ladder attachment helper. Used by _requestGeneration when the on-demand
+// dedup classifier (Tier-2 in `requestGuideFromSearch`) returns a confident
+// ladder placement. Idempotent — silently no-ops if a position for this
+// (guide, ladder) already exists.
+async function attachToLadderIfMissing(
+  ctx: MutationCtx,
+  guideId: Id<"career_guides">,
+  attachment: {
+    ladderSlug: string;
+    rung: number;
+    tier:
+      | "ic-entry"
+      | "ic-mid"
+      | "ic-senior"
+      | "manager"
+      | "head"
+      | "director"
+      | "vp"
+      | "c-suite";
+  },
+  now: number,
+): Promise<void> {
+  const ladder = await ctx.db
+    .query("career_ladders")
+    .withIndex("by_slug", (q) => q.eq("slug", attachment.ladderSlug))
+    .unique();
+  if (!ladder) return; // Hallucinated slug; skip rather than crash.
+
+  const existing = await ctx.db
+    .query("career_guide_ladder_positions")
+    .withIndex("by_guide", (q) => q.eq("guideId", guideId))
+    .collect();
+  if (existing.some((p) => p.ladderId === ladder._id)) return;
+
+  await ctx.db.insert("career_guide_ladder_positions", {
+    ladderId: ladder._id,
+    guideId,
+    rung: attachment.rung,
+    tier: attachment.tier,
+    assignedAt: now,
+    assignedBy: "on-demand-llm",
+  });
+}
 
 // Seeding-flavored sibling of _requestGeneration. Identical slug-OCC dedup
 // pattern (so concurrent seeders for the same canonical title resolve to one
@@ -1708,7 +1800,77 @@ export const requestGuideFromSearch = internalAction({
     });
     if (lex) return { slug: lex.slug };
 
-    // Tier-4 LLM dedup against top search candidates.
+    // Tier-2 ladder lookup: ask the LLM to place the query on a known career
+    // ladder. When confident, this is deterministic dedup (existing rung
+    // already has a guide → return it) or attached creation (new rung →
+    // create new guide AND attach it to the ladder so Career Compass walks
+    // pick it up immediately). When uncertain, fall through to Tier-3.
+    //
+    // This is the layer that fixes the "Head of Product → product-manager"
+    // bug from the algorithm audit: leadership-tier titles get placed at
+    // their own rung on the right ladder rather than collapsed into the IC
+    // role they oversee.
+    const ladders: LadderForPrompt[] = await ctx.runQuery(
+      internal.careerLadders._listLaddersForLookup,
+      {},
+    );
+    if (ladders.length > 0) {
+      try {
+        const { output } = await generateText({
+          model: chatModel(LADDER_CLASSIFY_MODEL_ID, { zdr: true }),
+          output: Output.object({ schema: LadderLookupSchema }),
+          prompt: buildLadderLookupPrompt({ query: args.title, ladders }),
+        });
+        if (output.confidence === "high") {
+          // Validate the matched slug actually exists in the ladder data we
+          // sent the LLM. The classifier sometimes hallucinates a plausible
+          // matchedGuideSlug (e.g. "head-of-product" for "Head of Product")
+          // for a guide that doesn't exist yet — trusting it would redirect
+          // the user to a 404. Verify against the LadderForPrompt catalog.
+          const targetLadder = ladders.find(
+            (l) => l.slug === output.ladderSlug,
+          );
+          const matchedSlugIsReal =
+            output.isExistingRung &&
+            output.matchedGuideSlug !== null &&
+            targetLadder?.occupiedRungs.some((r) =>
+              r.guides.some((g) => g.slug === output.matchedGuideSlug),
+            );
+
+          if (matchedSlugIsReal && output.matchedGuideSlug) {
+            // Real dedup — the matched slug is genuinely an existing guide
+            // attached to the suggested ladder.
+            return { slug: output.matchedGuideSlug };
+          }
+          // Either isExistingRung was false, or the slug was hallucinated.
+          // Either way: create a new guide attached to the suggested
+          // ladder + rung. attachToLadderIfMissing inside _requestGeneration
+          // handles the case where a guide for this title already exists
+          // on the ladder (idempotent).
+          return await ctx.runMutation(
+            internal.careerGuides._requestGeneration,
+            {
+              title: args.title,
+              clientIp: args.clientIp,
+              ladderAttachment: {
+                ladderSlug: output.ladderSlug,
+                rung: output.rung,
+                tier: output.tier,
+              },
+            },
+          );
+        }
+        // confidence < "high" — fall through to Tier-3 dedup safety net.
+      } catch (err) {
+        // Ladder lookup is best-effort; fall through.
+        console.error("ladder-lookup:failed", { err });
+      }
+    }
+
+    // Tier-3 LLM dedup safety net: only runs when Tier-2 was uncertain or
+    // the catalog has no ladders defined yet. The prompt is leadership-tier-
+    // aware (see buildDedupPrompt) so even when this path fires it should
+    // not collapse "Head of X" into an IC role.
     const candidates: { slug: string; title: string }[] = await ctx.runQuery(
       internal.careerGuides._searchCandidates,
       { rawQuery: args.title, limit: 10 },
@@ -1729,6 +1891,11 @@ export const requestGuideFromSearch = internalAction({
       }
     }
 
+    // Tier-4 fallback: create a new standalone guide with no ladder
+    // attachment. Reaching here means neither the ladder classifier nor the
+    // dedup LLM could place the query — likely a brand-new role family that
+    // needs a new ladder. Logged for human review (the orphan position is
+    // visible via `career_guide_ladder_positions` being empty for this guide).
     return await ctx.runMutation(internal.careerGuides._requestGeneration, {
       title: args.title,
       clientIp: args.clientIp,

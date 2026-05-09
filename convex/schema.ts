@@ -1546,4 +1546,103 @@ export default defineSchema({
     "citySlug",
     "countryCode",
   ]),
+
+  // Career progression ladders. Each ladder represents a coherent vertical
+  // climb within a profession (Product Management, Software Engineering,
+  // Design, etc.). A career_guide can sit on multiple ladders (e.g. an
+  // X-Manager guide belongs to both its functional ladder AND the cross-
+  // cutting People-Management ladder); membership is recorded in
+  // `career_guide_ladder_positions`.
+  //
+  // Why this exists: the discover canvas previously inferred career
+  // relationships from embedding similarity, which conflates roles that
+  // share professional language but sit at different scopes (Product Manager
+  // vs Sales Engineer). The on-demand guide generator likewise had to guess
+  // whether "Head of Product" deduped to "Product Manager". Ladders encode
+  // that structure as data so both surfaces become deterministic walks
+  // instead of probabilistic guesses.
+  career_ladders: defineTable({
+    slug: v.string(),
+    name: v.string(),
+    family: v.union(
+      v.literal("product"),
+      v.literal("engineering"),
+      v.literal("design"),
+      v.literal("data"),
+      v.literal("marketing"),
+      v.literal("sales"),
+      v.literal("finance"),
+      v.literal("legal"),
+      v.literal("operations"),
+      v.literal("people"),
+      v.literal("customer-success"),
+      v.literal("research"),
+      v.literal("healthcare"),
+      v.literal("education"),
+      v.literal("trades"),
+      v.literal("creative"),
+      v.literal("other"),
+    ),
+    description: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_family", ["family"]),
+
+  // A guide's position on a ladder. One guide can have multiple positions
+  // (cross-cutting roles like Engineering Manager → Engineering ladder AND
+  // People-Management ladder). The `tier` enum is intentionally identical
+  // across ladders so a "find all peers at the same tier on adjacent
+  // ladders" query is a single index scan on `by_tier`.
+  career_guide_ladder_positions: defineTable({
+    ladderId: v.id("career_ladders"),
+    guideId: v.id("career_guides"),
+    rung: v.number(),
+    tier: v.union(
+      v.literal("ic-entry"),
+      v.literal("ic-mid"),
+      v.literal("ic-senior"),
+      v.literal("manager"),
+      v.literal("head"),
+      v.literal("director"),
+      v.literal("vp"),
+      v.literal("c-suite"),
+    ),
+    specialisation: v.optional(v.string()),
+    assignedAt: v.number(),
+    assignedBy: v.union(
+      v.literal("backfill-llm"),
+      v.literal("on-demand-llm"),
+      v.literal("manual"),
+    ),
+  })
+    .index("by_ladder_rung", ["ladderId", "rung"])
+    .index("by_ladder_tier", ["ladderId", "tier"])
+    .index("by_guide", ["guideId"])
+    .index("by_tier", ["tier"]),
+
+  // Low-confidence ladder assignments queued for human review. Written by
+  // the backfill action when the LLM classifier returns
+  // confidence === "low" — the row is held here until a human (or a future
+  // batch curation tool) promotes it to `career_guide_ladder_positions`.
+  // Temporary table; can be dropped once Phase 1 sign-off completes and the
+  // catalog is stable.
+  career_guide_ladder_review: defineTable({
+    guideId: v.id("career_guides"),
+    proposedLadderSlug: v.string(),
+    proposedRung: v.number(),
+    proposedTier: v.union(
+      v.literal("ic-entry"),
+      v.literal("ic-mid"),
+      v.literal("ic-senior"),
+      v.literal("manager"),
+      v.literal("head"),
+      v.literal("director"),
+      v.literal("vp"),
+      v.literal("c-suite"),
+    ),
+    confidence: v.union(v.literal("low")),
+    reasoning: v.string(),
+    queuedAt: v.number(),
+  }).index("by_guide", ["guideId"]),
 });

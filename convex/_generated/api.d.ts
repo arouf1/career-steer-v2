@@ -10,6 +10,7 @@
 
 import type * as careerGuidePersonalizations from "../careerGuidePersonalizations.js";
 import type * as careerGuides from "../careerGuides.js";
+import type * as careerLadders from "../careerLadders.js";
 import type * as careerPaths from "../careerPaths.js";
 import type * as catalogEmail from "../catalogEmail.js";
 import type * as catalogExpansion from "../catalogExpansion.js";
@@ -48,6 +49,7 @@ import type * as lib_imageReference from "../lib/imageReference.js";
 import type * as lib_interviewResearch from "../lib/interviewResearch.js";
 import type * as lib_jobFit from "../lib/jobFit.js";
 import type * as lib_jobImagePrompts from "../lib/jobImagePrompts.js";
+import type * as lib_ladders from "../lib/ladders.js";
 import type * as lib_locationLadder from "../lib/locationLadder.js";
 import type * as lib_normalize from "../lib/normalize.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
@@ -57,6 +59,9 @@ import type * as locations from "../locations.js";
 import type * as matching from "../matching.js";
 import type * as migrations_2026_05_06_jobPostings_gps from "../migrations/2026_05_06_jobPostings_gps.js";
 import type * as migrations_2026_05_07_jobPostings_countryCode from "../migrations/2026_05_07_jobPostings_countryCode.js";
+import type * as migrations_2026_05_09_backfill_guide_ladder_positions from "../migrations/2026_05_09_backfill_guide_ladder_positions.js";
+import type * as migrations_2026_05_09_recompute_all_snapshots from "../migrations/2026_05_09_recompute_all_snapshots.js";
+import type * as migrations_2026_05_09_seed_ladders from "../migrations/2026_05_09_seed_ladders.js";
 import type * as migrations_scoresToPercent from "../migrations/scoresToPercent.js";
 import type * as people from "../people.js";
 import type * as peopleOutreach from "../peopleOutreach.js";
@@ -84,6 +89,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   careerGuidePersonalizations: typeof careerGuidePersonalizations;
   careerGuides: typeof careerGuides;
+  careerLadders: typeof careerLadders;
   careerPaths: typeof careerPaths;
   catalogEmail: typeof catalogEmail;
   catalogExpansion: typeof catalogExpansion;
@@ -122,6 +128,7 @@ declare const fullApi: ApiFromModules<{
   "lib/interviewResearch": typeof lib_interviewResearch;
   "lib/jobFit": typeof lib_jobFit;
   "lib/jobImagePrompts": typeof lib_jobImagePrompts;
+  "lib/ladders": typeof lib_ladders;
   "lib/locationLadder": typeof lib_locationLadder;
   "lib/normalize": typeof lib_normalize;
   "lib/rateLimit": typeof lib_rateLimit;
@@ -131,6 +138,9 @@ declare const fullApi: ApiFromModules<{
   matching: typeof matching;
   "migrations/2026_05_06_jobPostings_gps": typeof migrations_2026_05_06_jobPostings_gps;
   "migrations/2026_05_07_jobPostings_countryCode": typeof migrations_2026_05_07_jobPostings_countryCode;
+  "migrations/2026_05_09_backfill_guide_ladder_positions": typeof migrations_2026_05_09_backfill_guide_ladder_positions;
+  "migrations/2026_05_09_recompute_all_snapshots": typeof migrations_2026_05_09_recompute_all_snapshots;
+  "migrations/2026_05_09_seed_ladders": typeof migrations_2026_05_09_seed_ladders;
   "migrations/scoresToPercent": typeof migrations_scoresToPercent;
   people: typeof people;
   peopleOutreach: typeof peopleOutreach;

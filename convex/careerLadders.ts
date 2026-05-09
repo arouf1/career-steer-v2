@@ -1,0 +1,355 @@
+import { v } from "convex/values";
+import { internalQuery } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { LadderForPrompt } from "../lib/ai/prompts/career-ladders";
+import {
+  tierFromLegacyStage,
+  type LegacyCareerStage,
+  type Tier,
+} from "./lib/ladders";
+
+// Vocabulary mirrors `convex/lib/ladders.ts` and the schema validator at
+// `convex/schema.ts:career_guide_ladder_positions.tier`. Kept inline as a
+// validator union so internalQuery args can be validated at the boundary.
+const tierValidator = v.union(
+  v.literal("ic-entry"),
+  v.literal("ic-mid"),
+  v.literal("ic-senior"),
+  v.literal("manager"),
+  v.literal("head"),
+  v.literal("director"),
+  v.literal("vp"),
+  v.literal("c-suite"),
+);
+
+// ── Ladder lookups ─────────────────────────────────────────────────────────
+
+export const getLadderBySlug = internalQuery({
+  args: { slug: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("career_ladders")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .unique();
+  },
+});
+
+export const listLaddersByFamily = internalQuery({
+  args: {
+    family: v.union(
+      v.literal("product"),
+      v.literal("engineering"),
+      v.literal("design"),
+      v.literal("data"),
+      v.literal("marketing"),
+      v.literal("sales"),
+      v.literal("finance"),
+      v.literal("legal"),
+      v.literal("operations"),
+      v.literal("people"),
+      v.literal("customer-success"),
+      v.literal("research"),
+      v.literal("healthcare"),
+      v.literal("education"),
+      v.literal("trades"),
+      v.literal("creative"),
+      v.literal("other"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("career_ladders")
+      .withIndex("by_family", (q) => q.eq("family", args.family))
+      .take(50);
+  },
+});
+
+// All ladders. Used by the on-demand dedup classifier (Phase 2) to give the
+// LLM the full set of candidate ladders for placement. Bounded to 200 — far
+// above the realistic ladder count (~20 today).
+export const listAllLadders = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("career_ladders").take(200);
+  },
+});
+
+// ── Position lookups ───────────────────────────────────────────────────────
+
+export const getPositionsByGuide = internalQuery({
+  args: { guideId: v.id("career_guides") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_guide", (q) => q.eq("guideId", args.guideId))
+      .take(10);
+  },
+});
+
+// All positions on a ladder, ordered by rung ascending. Bounded to 50 — far
+// above realistic rung count (~7 max per ladder).
+export const listPositionsByLadder = internalQuery({
+  args: { ladderId: v.id("career_ladders") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_ladder_rung", (q) => q.eq("ladderId", args.ladderId))
+      .order("asc")
+      .take(50);
+  },
+});
+
+// Walk up a ladder from a given rung. Returns positions strictly above
+// `fromRung`, ordered by rung ascending (closest first). Drives the discover
+// canvas's Linear lane in Phase 3.
+export const walkUp = internalQuery({
+  args: {
+    ladderId: v.id("career_ladders"),
+    fromRung: v.number(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_ladder_rung", (q) =>
+        q.eq("ladderId", args.ladderId).gt("rung", args.fromRung),
+      )
+      .order("asc")
+      .take(20);
+  },
+});
+
+// Walk down a ladder from a given rung. Returns positions strictly below
+// `fromRung`, ordered by rung descending (closest first). Drives the
+// discover canvas's Earlier lane in Phase 3.
+export const walkDown = internalQuery({
+  args: {
+    ladderId: v.id("career_ladders"),
+    fromRung: v.number(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_ladder_rung", (q) =>
+        q.eq("ladderId", args.ladderId).lt("rung", args.fromRung),
+      )
+      .order("desc")
+      .take(20);
+  },
+});
+
+// Resolve a user profile to a ladder position. Drives the Career Compass
+// lane bucketing in Phase 3.
+//
+// Strategy:
+//   1. Find the user's primary ladder via `seedingGuideSlugs[0]` — the slug
+//      of the canonical guide for one of their past/current roles. The
+//      seeded guide's `career_guide_ladder_positions` row identifies which
+//      ladder they sit on.
+//   2. Determine the user's tier from `profile_enrichments.careerStage`
+//      (mapped to the new tier vocabulary via tierFromLegacyStage).
+//   3. Determine the user's rung within that ladder by finding any existing
+//      guide on the ladder at the matching tier. If no guide on this ladder
+//      has the user's tier yet (catalog gap), fall back to the seeded
+//      guide's own rung.
+//
+// Returns null when the profile isn't on a known ladder — the discover
+// pipeline then falls back to today's embedding-based bucketing.
+export const getPositionByProfile = internalQuery({
+  args: { profileId: v.id("profiles") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      ladderId: v.id("career_ladders"),
+      ladderSlug: v.string(),
+      rung: v.number(),
+      tier: tierValidator,
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const profile = await ctx.db.get(args.profileId);
+    if (!profile) return null;
+
+    const seededSlugs = profile.seedingGuideSlugs ?? [];
+    if (seededSlugs.length === 0) return null;
+
+    // Find the first seeded slug whose guide has a ladder position. Most
+    // profiles have one slug today; some have two (multiple roles seeded).
+    let seededPosition: Doc<"career_guide_ladder_positions"> | null = null;
+    let seededLadder: Doc<"career_ladders"> | null = null;
+    for (const slug of seededSlugs) {
+      const guide = await ctx.db
+        .query("career_guides")
+        .withIndex("by_slug", (q) => q.eq("slug", slug))
+        .first();
+      if (!guide) continue;
+      const pos = await ctx.db
+        .query("career_guide_ladder_positions")
+        .withIndex("by_guide", (q) => q.eq("guideId", guide._id))
+        .first();
+      if (!pos) continue;
+      seededPosition = pos;
+      seededLadder = await ctx.db.get(pos.ladderId);
+      break;
+    }
+    if (!seededPosition || !seededLadder) return null;
+
+    // Determine the user's tier from their enrichment, falling back to the
+    // seeded guide's tier if the enrichment is missing.
+    const enrichment = await ctx.db
+      .query("profile_enrichments")
+      .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
+      .first();
+    const userTier: Tier =
+      tierFromLegacyStage(
+        enrichment?.careerStage as LegacyCareerStage | undefined,
+      ) ?? seededPosition.tier;
+
+    // Find the rung on this ladder that matches the user's tier. If none
+    // exists yet (catalog gap on this ladder for this tier), fall back to
+    // the seeded guide's rung — the bucketer will then walk up/down
+    // relative to that rung, accepting that the user is reading a slightly
+    // off altitude until a guide is created at their actual rung.
+    const allPositionsOnLadder = await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_ladder_tier", (q) =>
+        q.eq("ladderId", seededLadder._id).eq("tier", userTier),
+      )
+      .first();
+
+    const userRung = allPositionsOnLadder
+      ? allPositionsOnLadder.rung
+      : seededPosition.rung;
+
+    return {
+      ladderId: seededLadder._id,
+      ladderSlug: seededLadder.slug,
+      rung: userRung,
+      tier: userTier,
+    };
+  },
+});
+
+// Batched position lookup for the discover snapshot pipeline. Returns a map
+// from guideId → all positions for that guide. One round-trip instead of N.
+export const _readPositionsForGuides = internalQuery({
+  args: { guideIds: v.array(v.id("career_guides")) },
+  returns: v.array(
+    v.object({
+      guideId: v.id("career_guides"),
+      positions: v.array(
+        v.object({
+          ladderId: v.id("career_ladders"),
+          rung: v.number(),
+          tier: tierValidator,
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    return await Promise.all(
+      args.guideIds.map(async (guideId) => {
+        const positions = await ctx.db
+          .query("career_guide_ladder_positions")
+          .withIndex("by_guide", (q) => q.eq("guideId", guideId))
+          .take(10);
+        return {
+          guideId,
+          positions: positions.map((p) => ({
+            ladderId: p.ladderId,
+            rung: p.rung,
+            tier: p.tier,
+          })),
+        };
+      }),
+    );
+  },
+});
+
+// All ladders + their occupied rungs, formatted for the on-demand dedup
+// prompt (`buildLadderLookupPrompt`). Mirrors the migration's
+// `_loadLaddersForPrompt` — kept in this canonical file because the
+// on-demand path is hot, while the migration helper is one-shot. Two
+// lookups for the same shape is acceptable; consolidating would force the
+// migration to import from this file, which is fine but adds a coupling.
+export const _listLaddersForLookup = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      slug: v.string(),
+      name: v.string(),
+      family: v.string(),
+      description: v.string(),
+      occupiedRungs: v.array(
+        v.object({
+          rung: v.number(),
+          tier: v.string(),
+          guides: v.array(
+            v.object({ title: v.string(), slug: v.string() }),
+          ),
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx) => {
+    const ladders = await ctx.db.query("career_ladders").take(200);
+    const out: LadderForPrompt[] = [];
+    for (const ladder of ladders) {
+      const positions = await ctx.db
+        .query("career_guide_ladder_positions")
+        .withIndex("by_ladder_rung", (q) => q.eq("ladderId", ladder._id))
+        .order("asc")
+        .take(50);
+
+      const byRung = new Map<
+        number,
+        { tier: string; guides: { title: string; slug: string }[] }
+      >();
+      for (const pos of positions) {
+        const guide = await ctx.db.get(pos.guideId);
+        if (!guide) continue;
+        const entry = byRung.get(pos.rung);
+        if (entry) {
+          entry.guides.push({ title: guide.title, slug: guide.slug });
+        } else {
+          byRung.set(pos.rung, {
+            tier: pos.tier,
+            guides: [{ title: guide.title, slug: guide.slug }],
+          });
+        }
+      }
+
+      const occupiedRungs: LadderForPrompt["occupiedRungs"] = [];
+      for (const [rung, { tier, guides }] of byRung.entries()) {
+        occupiedRungs.push({ rung, tier, guides });
+      }
+
+      out.push({
+        slug: ladder.slug,
+        name: ladder.name,
+        family: ladder.family,
+        description: ladder.description,
+        occupiedRungs,
+      });
+    }
+    return out;
+  },
+});
+
+// All positions at a given tier on OTHER ladders. Drives the discover
+// canvas's Adjacent lane in Phase 3 — for a Senior PM (Product ladder,
+// `ic-senior` tier), this returns Senior Engineering Manager, Senior
+// Designer, Senior Data Scientist, etc. (peers on other ladders at the same
+// altitude).
+export const peersAtTier = internalQuery({
+  args: {
+    tier: tierValidator,
+    excludeLadderId: v.id("career_ladders"),
+  },
+  handler: async (ctx, args) => {
+    const all = await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_tier", (q) => q.eq("tier", args.tier))
+      .take(100);
+    return all.filter((p) => p.ladderId !== args.excludeLadderId);
+  },
+});
