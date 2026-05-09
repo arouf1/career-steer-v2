@@ -137,6 +137,11 @@ export function CareerGuidesByLadder({
   );
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const anchorRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  // While a click-driven smooth scroll is in flight, the IntersectionObserver
+  // would otherwise see intermediate sections crossing the rootMargin and
+  // flip activeSlug back and forth. The lock suppresses observer updates
+  // until the scroll settles, then auto-releases.
+  const scrollLockRef = useRef<number | null>(null);
 
   // Scroll-spy: mark a section "active" when the top of its header
   // crosses ~30% of the viewport. IntersectionObserver with rootMargin
@@ -146,6 +151,7 @@ export function CareerGuidesByLadder({
     if (sections.length === 0) return;
     const observer = new IntersectionObserver(
       (entries) => {
+        if (scrollLockRef.current !== null) return;
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
@@ -171,6 +177,23 @@ export function CareerGuidesByLadder({
     });
   }, [activeSlug]);
 
+  const jumpToSection = (slug: string) => {
+    const target = sectionRefs.current.get(slug);
+    if (!target) return;
+    // Optimistic: set active immediately so the pill style updates
+    // without waiting for the scroll-spy.
+    setActiveSlug(slug);
+    // Lock the observer while the smooth-scroll is in flight.
+    if (scrollLockRef.current !== null) {
+      window.clearTimeout(scrollLockRef.current);
+    }
+    scrollLockRef.current = window.setTimeout(() => {
+      scrollLockRef.current = null;
+    }, 800);
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    history.replaceState(null, "", `#ladder-${slug}`);
+  };
+
   if (sections.length === 0) return null;
 
   return (
@@ -193,13 +216,7 @@ export function CareerGuidesByLadder({
                   href={`#ladder-${s.ladder.slug}`}
                   onClick={(e) => {
                     e.preventDefault();
-                    const target = sectionRefs.current.get(s.ladder.slug);
-                    if (!target) return;
-                    target.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                    history.replaceState(null, "", `#ladder-${s.ladder.slug}`);
+                    jumpToSection(s.ladder.slug);
                   }}
                   className={`inline-block whitespace-nowrap rounded-pill px-3 py-1.5 text-[12px] tracking-wide transition-colors ${
                     isActive
