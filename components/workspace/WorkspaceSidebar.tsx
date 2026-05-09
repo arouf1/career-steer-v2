@@ -7,6 +7,7 @@ import {
   Briefcase,
   Bookmark,
   BookOpen,
+  History,
   ArrowUpRight,
 } from "lucide-react";
 import {
@@ -26,6 +27,7 @@ const items = [
   { title: "Profile", url: "/workspace/profile", icon: User, external: false },
   { title: "Career Compass", url: "/workspace/career-compass", icon: Compass, external: false },
   { title: "Jobs", url: "/workspace/jobs", icon: Briefcase, external: false },
+  { title: "Calls", url: "/workspace/calls", icon: History, external: false },
   { title: "Saved guides", url: "/workspace/saved-guides", icon: Bookmark, external: false },
   { title: "Career guides", url: "/career-guides", icon: BookOpen, external: true },
 ] as const;
