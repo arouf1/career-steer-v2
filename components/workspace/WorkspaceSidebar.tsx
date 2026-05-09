@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import {
   User,
   Compass,
   Briefcase,
   Bookmark,
   BookOpen,
-  ArrowUpRight,
+  MessagesSquare,
 } from "lucide-react";
 import {
   Sidebar,
@@ -17,21 +18,43 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarGroup,
   SidebarGroupContent,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
 const items = [
-  { title: "Profile", url: "/workspace/profile", icon: User, external: false },
-  { title: "Career Compass", url: "/workspace/career-compass", icon: Compass, external: false },
-  { title: "Jobs", url: "/workspace/jobs", icon: Briefcase, external: false },
-  { title: "Saved guides", url: "/workspace/saved-guides", icon: Bookmark, external: false },
-  { title: "Career guides", url: "/career-guides", icon: BookOpen, external: true },
+  { title: "Profile", url: "/workspace/profile", icon: User },
+  {
+    title: "Career guides",
+    url: "/workspace/career-guides",
+    icon: BookOpen,
+    children: [
+      {
+        title: "Saved guides",
+        url: "/workspace/saved-guides",
+        icon: Bookmark,
+      },
+    ],
+  },
+  { title: "Career Compass", url: "/workspace/career-compass", icon: Compass },
+  { title: "Jobs", url: "/workspace/jobs", icon: Briefcase },
+  {
+    title: "Conversations",
+    url: "/workspace/conversations",
+    icon: MessagesSquare,
+  },
 ] as const;
 
 export function WorkspaceSidebar() {
   const pathname = usePathname();
+
+  const isOn = (url: string) =>
+    pathname === url || pathname.startsWith(url + "/");
+
   return (
     <Sidebar collapsible="icon">
       {/* h-14 spacer aligns nav items with the topbar baseline. The trigger
@@ -45,9 +68,7 @@ export function WorkspaceSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
-                const active =
-                  !item.external &&
-                  (pathname === item.url || pathname.startsWith(item.url + "/"));
+                const active = isOn(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -58,11 +79,37 @@ export function WorkspaceSidebar() {
                       <Link href={item.url}>
                         <item.icon />
                         <span>{item.title}</span>
-                        {item.external && (
-                          <ArrowUpRight className="ml-auto size-3.5 opacity-60" />
-                        )}
                       </Link>
                     </SidebarMenuButton>
+                    {"children" in item && item.children.length > 0 && (
+                      <SidebarMenuSub>
+                        {item.children.map((child) => (
+                          <SidebarMenuSubItem key={child.title}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={isOn(child.url)}
+                              // Mirror the parent SidebarMenuButton's at-rest
+                              // muted state + text-only active lift. Default
+                              // sub-button renders full-strength text and an
+                              // accent-coloured icon at rest, which reads as
+                              // "selected" against the muted parent rows.
+                              className={cn(
+                                "text-[13px]",
+                                "text-sidebar-foreground/70 [&>svg]:text-sidebar-foreground/70",
+                                "hover:text-sidebar-foreground hover:[&>svg]:text-sidebar-foreground",
+                                "data-[active=true]:bg-transparent data-[active=true]:font-medium",
+                                "data-[active=true]:text-sidebar-accent-foreground data-[active=true]:[&>svg]:text-sidebar-accent-foreground",
+                              )}
+                            >
+                              <Link href={child.url}>
+                                <child.icon />
+                                <span>{child.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    )}
                   </SidebarMenuItem>
                 );
               })}

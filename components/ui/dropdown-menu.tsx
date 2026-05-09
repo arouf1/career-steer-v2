@@ -42,7 +42,14 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          // Brand-tuned defaults: cream paper background, hairline border,
+          // ink foreground, soft shadow. Matches the editorial popover
+          // pattern used by UserPopover + DiscoverCanvas controls. The
+          // shadcn-default bg-popover / text-popover-foreground tokens
+          // render off-brand (or transparent) per project memory; we
+          // bypass them at the primitive level so every dropdown
+          // inherits the brand treatment without per-call-site overrides.
+          "z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border border-hairline bg-paper p-1 text-ink shadow-[0_4px_24px_-12px_rgba(0,0,0,0.15)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}
@@ -74,7 +81,12 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive!",
+        // Brand-tuned defaults: tonal layering on focus (paper-raised, not
+        // shadcn's bg-accent), ink foreground, mute icon. Destructive
+        // variant uses a soft warm clay-red for the text (oklch warm
+        // family — picked to match DESIGN.md's "state-error" sidecar
+        // mention without introducing a new global token).
+        "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] outline-hidden select-none text-ink focus:bg-paper-raised focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-[oklch(45%_0.18_25)] data-[variant=destructive]:focus:bg-[oklch(45%_0.18_25/0.08)] data-[variant=destructive]:focus:text-[oklch(45%_0.18_25)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-mute",
         className
       )}
       {...props}

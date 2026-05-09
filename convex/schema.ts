@@ -1013,6 +1013,7 @@ export default defineSchema({
         v.literal("guide"),
         v.literal("compass"),
         v.literal("job"),
+        v.literal("interview_job"),
       ),
     ),
     // Set when surface === "guide". Optional so non-guide calls can omit it
@@ -1055,6 +1056,12 @@ export default defineSchema({
         content: v.string(),
         timestamp: v.number(),
         transcriptConfidence: v.optional(v.number()),
+        groundingCitations: v.optional(
+          v.array(v.object({
+            url: v.string(),
+            title: v.optional(v.string()),
+          })),
+        ),
       }),
     ),
     totalDurationSeconds: v.number(),
@@ -1062,6 +1069,29 @@ export default defineSchema({
     // — DeepDiveSummarySchema). v.any() because it's read-only data and the
     // schema is owned by the prompt module rather than Convex.
     aiSummary: v.optional(v.any()),
+    // In-call coverage marks written by the interviewer via the
+    // markDimensionCovered tool. Idempotent on dimension key — last write
+    // wins per dimension. Used for the live gauge in the dialog and as a
+    // self-grounding signal for the interviewer's "what have I covered"
+    // tally. The post-call rubric grades from transcript, not from this.
+    coverage: v.optional(
+      v.array(
+        v.object({
+          dimension: v.string(),       // matches bundle.rubric.dimensions[].key
+          evidence: v.string(),         // 1-sentence summary the model writes
+          confidence: v.union(
+            v.literal("weak"),
+            v.literal("solid"),
+            v.literal("strong"),
+          ),
+          markedAt: v.number(),
+        }),
+      ),
+    ),
+    // Soft-delete marker for the calls history page. Absent = active row;
+    // unix-ms timestamp = archived at that moment. Reversible via
+    // voiceCalls.unarchive. We never hard-delete in this round.
+    archivedAt: v.optional(v.number()),
     // Three semantic vectors over the call: full conversation, structured
     // summary, and joined key topics. 1536-dim Gemini embeddings via OpenRouter
     // — same model + dim as career_guide_embeddings so future Discover
@@ -1077,7 +1107,44 @@ export default defineSchema({
     .index("by_guide", ["guideId"])
     .index("by_jobPosting", ["jobPostingId"])
     .index("by_session", ["sessionId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    // Composite for the calls history list. Lets us hit either the active
+    // view (archivedAt eq undefined) or the archived view (archivedAt eq
+    // <any>) cheaply, sorted by creation desc within each.
+    .index("by_user_archived_created", ["userId", "archivedAt", "createdAt"])
+    // Vector index for semantic search over the call's structured summary.
+    // summaryEmbedding is populated by voiceCallsNode.processCallAnalysis
+    // for guide/compass/job; this PR also extends interviewSimNode.
+    // processInterviewAnalysis to populate it for interview_job rows.
+    .vectorIndex("by_summaryVector", {
+      vectorField: "summaryEmbedding",
+      dimensions: 1536,
+      filterFields: ["userId", "surface", "archivedAt"],
+    }),
+
+  // Transient status doc the InterviewSimDialog subscribes to during the
+  // research → mint phase. Created by interviewSimNode.mintInterviewSession,
+  // patched as research progresses, then read once during Phase 1 of the
+  // dialog. Old rows accumulate harmlessly until a future cleanup cron.
+  interview_prep_status: defineTable({
+    prepSessionId: v.string(),
+    userId: v.id("users"),
+    jobPostingId: v.id("job_postings"),
+    status: v.union(
+      v.literal("researching"),
+      v.literal("synthesizing"),
+      v.literal("minting_token"),
+      v.literal("ready"),
+      v.literal("failed"),
+    ),
+    detail: v.optional(v.string()),       // e.g. company name for the human-readable line
+    voiceCallId: v.optional(v.id("voice_calls")),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_prepSessionId", ["prepSessionId"])
+    .index("by_userId_created", ["userId", "createdAt"]),
 
   // ── Job postings cache ─────────────────────────────────────────────────
   // Foundation tables for the SearchAPI Google Jobs cache. Sub-project 1
@@ -1303,6 +1370,16 @@ export default defineSchema({
         ),
       ),
     ),
+    recentNews: v.optional(v.object({
+      bullets: v.array(v.object({
+        headline: v.string(),
+        summary: v.string(),
+        sourceUrl: v.string(),
+        publisher: v.optional(v.string()),
+        publishedAt: v.optional(v.number()),
+      })),
+      fetchedAt: v.number(),
+    })),
   })
     .index("by_companyId", ["companyId"])
     .index("by_status", ["status"]),
@@ -1326,6 +1403,37 @@ export default defineSchema({
     lastResearchedAt: v.optional(v.number()),
     costCents: v.optional(v.number()),
     interview: v.optional(v.string()),
+    interviewBundle: v.optional(v.object({
+      rounds: v.array(v.object({
+        name: v.string(),
+        durationMinutes: v.optional(v.number()),
+        focus: v.string(),
+        interviewerArchetype: v.string(),
+      })),
+      signatureQuestions: v.array(v.object({
+        question: v.string(),
+        rationale: v.string(),
+      })),
+      rubric: v.object({
+        rigor: v.number(),
+        rigorRationale: v.string(),
+        interviewerArchetype: v.string(),
+        dimensions: v.array(v.object({
+          key: v.string(),
+          anchorBelow: v.string(),
+          anchorAt: v.string(),
+          anchorAbove: v.string(),
+        })),
+      }),
+      prestigeSignals: v.object({
+        employeeBand: v.optional(v.string()),
+        fundingOrPublic: v.optional(v.string()),
+        brandMentions: v.optional(v.number()),
+        glassdoorDifficulty: v.optional(v.number()),
+      }),
+      generatedAt: v.number(),
+      modelUsed: v.string(),
+    })),
     compensation: v.optional(v.string()),
     citations: v.optional(
       v.record(

@@ -16,6 +16,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -27,7 +28,146 @@ const messageValidator = v.object({
   content: v.string(),
   timestamp: v.number(),
   transcriptConfidence: v.optional(v.number()),
+  groundingCitations: v.optional(
+    v.array(v.object({
+      url: v.string(),
+      title: v.optional(v.string()),
+    })),
+  ),
 });
+
+// ── Trimmed list-row shape ─────────────────────────────────────────────────
+//
+// Shared between listForUser (returns) and _hydrateForList (returns) so the
+// mapping logic lives in exactly one place. No transcript, no embedding bytes
+// are included — only what the history page needs to render a card.
+
+const callListRowValidator = v.object({
+  _id: v.id("voice_calls"),
+  surface: v.optional(
+    v.union(
+      v.literal("guide"),
+      v.literal("compass"),
+      v.literal("job"),
+      v.literal("interview_job"),
+    ),
+  ),
+  guideId: v.optional(v.id("career_guides")),
+  jobPostingId: v.optional(v.id("job_postings")),
+  canvasSnapshotId: v.optional(v.id("discover_canvases")),
+  title: v.string(),
+  status: v.union(
+    v.literal("active"),
+    v.literal("completed"),
+    v.literal("interrupted"),
+    v.literal("error"),
+  ),
+  totalDurationSeconds: v.number(),
+  messagesCount: v.number(),
+  aiSummary: v.optional(v.any()),
+  archivedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  // Joined company info — present only on rows whose jobPostingId resolved to
+  // a company. Optional so existing consumers (and rows without a posting)
+  // remain compatible.
+  companyName: v.optional(v.string()),
+  companyLogoUrl: v.optional(v.string()),
+});
+
+type CallCompanyInfo = { name?: string; logoUrl?: string };
+
+type CallListRow = {
+  _id: Id<"voice_calls">;
+  surface?: "guide" | "compass" | "job" | "interview_job";
+  guideId?: Id<"career_guides">;
+  jobPostingId?: Id<"job_postings">;
+  canvasSnapshotId?: Id<"discover_canvases">;
+  title: string;
+  status: "active" | "completed" | "interrupted" | "error";
+  totalDurationSeconds: number;
+  messagesCount: number;
+  aiSummary?: unknown;
+  archivedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+  companyName?: string;
+  companyLogoUrl?: string;
+};
+
+function trimToListRow(
+  row: Doc<"voice_calls">,
+  company?: CallCompanyInfo,
+): CallListRow {
+  return {
+    _id: row._id,
+    surface: row.surface,
+    guideId: row.guideId,
+    jobPostingId: row.jobPostingId,
+    canvasSnapshotId: row.canvasSnapshotId,
+    title: row.title,
+    status: row.status,
+    totalDurationSeconds: row.totalDurationSeconds,
+    messagesCount: row.messages.length,
+    aiSummary: row.aiSummary,
+    archivedAt: row.archivedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    companyName: company?.name,
+    companyLogoUrl: company?.logoUrl,
+  };
+}
+
+// Resolve { jobPostingId → { companyName, companyLogoUrl } } in two batched
+// fetches: postings → companyIds → companies. Bounded at 50 rows per call
+// (page size 20, plus search over-fetch headroom). Returns an empty Map when
+// no rows have a jobPostingId, skipping the round-trips entirely.
+async function buildCompanyMapForRows(
+  ctx: QueryCtx,
+  rows: ReadonlyArray<Doc<"voice_calls">>,
+): Promise<Map<Id<"job_postings">, CallCompanyInfo>> {
+  const postingIds = Array.from(
+    new Set(
+      rows
+        .map((r) => r.jobPostingId)
+        .filter((id): id is Id<"job_postings"> => id !== undefined),
+    ),
+  ).slice(0, 50);
+
+  if (postingIds.length === 0) {
+    return new Map();
+  }
+
+  const postings = await Promise.all(postingIds.map((id) => ctx.db.get(id)));
+
+  const companyIdByPosting = new Map<Id<"job_postings">, Id<"companies">>();
+  const uniqueCompanyIds = new Set<Id<"companies">>();
+  for (const p of postings) {
+    if (!p) continue;
+    companyIdByPosting.set(p._id, p.companyId);
+    uniqueCompanyIds.add(p.companyId);
+  }
+
+  const companyIds = Array.from(uniqueCompanyIds);
+  const companies = await Promise.all(companyIds.map((id) => ctx.db.get(id)));
+  const companyById = new Map<Id<"companies">, Doc<"companies">>();
+  for (const c of companies) {
+    if (c) companyById.set(c._id, c);
+  }
+
+  const result = new Map<Id<"job_postings">, CallCompanyInfo>();
+  for (const [postingId, companyId] of companyIdByPosting) {
+    const company = companyById.get(companyId);
+    if (!company) continue;
+    result.set(postingId, {
+      name: company.nameRaw,
+      // Coerce the schema-level v.union(string, null) down to undefined so
+      // the optional-field validator on the row payload is satisfied.
+      logoUrl: company.logoUrl ?? undefined,
+    });
+  }
+  return result;
+}
 
 // ── Auth helper (mirrors peopleOutreach.ts / careerGuidePersonalizations.ts) ─
 
@@ -126,6 +266,98 @@ export const appendMessage = mutation({
   },
 });
 
+// ── Public mutation: mark a rubric dimension as covered ──────────────────
+//
+// Called from the client hook in response to a Gemini Live toolCall for
+// markDimensionCovered. Idempotent on dimension — replaces any prior mark
+// for the same dimension with the new one (last write wins).
+
+export const markDimensionCovered = mutation({
+  args: {
+    sessionId: v.string(),
+    dimension: v.string(),
+    evidence: v.string(),
+    confidence: v.union(
+      v.literal("weak"),
+      v.literal("solid"),
+      v.literal("strong"),
+    ),
+  },
+  returns: v.union(
+    v.object({ ok: v.literal(true) }),
+    v.object({
+      ok: v.literal(false),
+      reason: v.union(
+        v.literal("anonymous"),
+        v.literal("not-found"),
+        v.literal("not-active"),
+      ),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return { ok: false as const, reason: "anonymous" as const };
+
+    const row = await ctx.db
+      .query("voice_calls")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .unique();
+    if (!row || row.userId !== user._id) {
+      return { ok: false as const, reason: "not-found" as const };
+    }
+    if (row.status !== "active") {
+      return { ok: false as const, reason: "not-active" as const };
+    }
+
+    const existing = row.coverage ?? [];
+    const filtered = existing.filter((c) => c.dimension !== args.dimension);
+    const next = [
+      ...filtered,
+      {
+        dimension: args.dimension,
+        evidence: args.evidence,
+        confidence: args.confidence,
+        markedAt: Date.now(),
+      },
+    ];
+
+    await ctx.db.patch(row._id, {
+      coverage: next,
+      updatedAt: Date.now(),
+    });
+    return { ok: true as const };
+  },
+});
+
+// ── Public query: subscribe to coverage marks for the gauge ──────────────
+
+export const getCoverage = query({
+  args: { sessionId: v.string() },
+  returns: v.union(
+    v.null(),
+    v.array(v.object({
+      dimension: v.string(),
+      evidence: v.string(),
+      confidence: v.union(
+        v.literal("weak"),
+        v.literal("solid"),
+        v.literal("strong"),
+      ),
+      markedAt: v.number(),
+    })),
+  ),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return null;
+    const row = await ctx.db
+      .query("voice_calls")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .unique();
+    if (!row || row.userId !== user._id) return null;
+    return row.coverage ?? [];
+  },
+});
+
 // ── Public mutation: finalize a call and schedule post-call analysis ──────
 
 export const finalize = mutation({
@@ -174,11 +406,24 @@ export const finalize = mutation({
     // at least one round-trip — silent / errored / 0-message calls aren't
     // worth the OpenRouter spend, and the AI summary would be junk anyway.
     if (args.status === "completed" && row.messages.length >= 2) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.voiceCallsNode.processCallAnalysis,
-        { callId: row._id },
-      );
+      // Surface-aware dispatch. Interview rows need a different rubric
+      // (verbatim-quote enforcement, calibrated against the bundle); other
+      // surfaces continue to use the deep-dive summary pipeline.
+      if (row.surface === "interview_job") {
+        if (row.messages.length >= 4) {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.interviewSimNode.processInterviewAnalysis,
+            { callId: row._id },
+          );
+        }
+      } else {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.voiceCallsNode.processCallAnalysis,
+          { callId: row._id },
+        );
+      }
     }
 
     return { ok: true as const, callId: row._id };
@@ -196,11 +441,12 @@ export const getActiveSessionForUser = query({
       sessionId: v.string(),
       // Resolved discriminator: "guide" for legacy rows that pre-date the
       // discriminator landing, "compass" for ambient calls, "job" for
-      // per-posting calls.
+      // per-posting calls, "interview_job" for interview-simulation calls.
       surface: v.union(
         v.literal("guide"),
         v.literal("compass"),
         v.literal("job"),
+        v.literal("interview_job"),
       ),
       guideId: v.optional(v.id("career_guides")),
       canvasSnapshotId: v.optional(v.id("discover_canvases")),
@@ -238,6 +484,40 @@ export const getActiveSessionForUser = query({
   },
 });
 
+// ── Public query: subscribe to a single call (auth-gated to owner) ────────
+//
+// For interview_job + job surfaces (the surfaces that carry a jobPostingId),
+// resolve posting → company in two extra ctx.db.get reads and bundle
+// companyName + companyLogoUrl onto the returned row so the detail-page
+// masthead can render the company anchor without a second roundtrip. The
+// return validator stays v.any() so the wire shape is unchanged.
+
+export const getCallById = query({
+  args: { callId: v.id("voice_calls") },
+  returns: v.union(v.null(), v.any()),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return null;
+    const row = await ctx.db.get(args.callId);
+    if (!row || row.userId !== user._id) return null;
+
+    // Skip the join when there's no posting to resolve (guide / compass).
+    if (!row.jobPostingId) return row;
+
+    const posting = await ctx.db.get(row.jobPostingId);
+    if (!posting) return row;
+
+    const company = await ctx.db.get(posting.companyId);
+    if (!company) return row;
+
+    return {
+      ...row,
+      companyName: company.nameRaw,
+      companyLogoUrl: company.logoUrl ?? undefined,
+    };
+  },
+});
+
 // ── Internal queries called from the Node action ─────────────────────────
 
 export const _getCallById = internalQuery({
@@ -253,6 +533,7 @@ export const _getCallById = internalQuery({
         v.literal("guide"),
         v.literal("compass"),
         v.literal("job"),
+        v.literal("interview_job"),
       ),
       guideId: v.optional(v.id("career_guides")),
       canvasSnapshotId: v.optional(v.id("discover_canvases")),
@@ -365,6 +646,265 @@ export const _gatherSessionContext = internalQuery({
       .unique();
 
     return { user, guide, profile, enrichment, branches, personalization };
+  },
+});
+
+// ── Public query: paginated list of calls for the current user ───────────
+//
+// Powers the /workspace/calls history page. Surface filter applied
+// in-memory on the materialised page (cheap at small N); archive filter is a
+// true index range via by_user_archived_created. Trimmed shape returned per
+// row — no transcript or embedding bytes shipped to the client list.
+
+export const listForUser = query({
+  args: {
+    surfaces: v.optional(
+      v.array(
+        v.union(
+          v.literal("guide"),
+          v.literal("compass"),
+          v.literal("job"),
+          v.literal("interview_job"),
+        ),
+      ),
+    ),
+    includeArchived: v.optional(v.boolean()),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.object({
+    page: v.array(callListRowValidator),
+    isDone: v.boolean(),
+    // PaginationResult.continueCursor is always string (never null) — the
+    // empty string "" signals "no more pages" in the Convex pagination protocol.
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    const includeArchived = args.includeArchived ?? false;
+
+    // Two-arm query: includeArchived means "archived view" (any archivedAt);
+    // !includeArchived means "active only" (archivedAt undefined). Both arms
+    // hit by_user_archived_created. Active arm uses the eq(undefined) bound to
+    // pull only rows where archivedAt is absent.
+    const builder = ctx.db
+      .query("voice_calls")
+      .withIndex("by_user_archived_created", (q) =>
+        includeArchived
+          ? q.eq("userId", user._id)
+          : q.eq("userId", user._id).eq("archivedAt", undefined),
+      )
+      .order("desc");
+
+    const result = await builder.paginate(args.paginationOpts);
+
+    // In-memory surface filter on the materialised page (cheap at <500 rows;
+    // if volume grows add a by_user_surface_created composite index). For the
+    // archived view, also drop active rows here since the index arm only
+    // constrains on userId when includeArchived is true.
+    const surfacesSet =
+      args.surfaces && args.surfaces.length > 0
+        ? new Set(args.surfaces)
+        : null;
+
+    const filteredRows = result.page.filter((row) => {
+      if (includeArchived && row.archivedAt === undefined) return false;
+      if (
+        surfacesSet &&
+        (!row.surface ||
+          !surfacesSet.has(
+            row.surface as "guide" | "compass" | "job" | "interview_job",
+          ))
+      )
+        return false;
+      return true;
+    });
+
+    // Resolve company info for the filtered rows in two batched fetches.
+    const companyByPosting = await buildCompanyMapForRows(ctx, filteredRows);
+
+    const filtered = filteredRows.map((row) =>
+      trimToListRow(
+        row,
+        row.jobPostingId ? companyByPosting.get(row.jobPostingId) : undefined,
+      ),
+    );
+
+    return {
+      page: filtered,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// ── Public mutations: soft delete (archive) + restore ────────────────────
+
+export const archive = mutation({
+  args: { callId: v.id("voice_calls") },
+  returns: v.object({ ok: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return { ok: false };
+    const row = await ctx.db.get(args.callId);
+    if (!row || row.userId !== user._id) return { ok: false };
+    if (row.archivedAt !== undefined) return { ok: true }; // idempotent
+    await ctx.db.patch(args.callId, {
+      archivedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+export const unarchive = mutation({
+  args: { callId: v.id("voice_calls") },
+  returns: v.object({ ok: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await resolveAuthedUser(ctx);
+    if (!user) return { ok: false };
+    const row = await ctx.db.get(args.callId);
+    if (!row || row.userId !== user._id) return { ok: false };
+    if (row.archivedAt === undefined) return { ok: true }; // idempotent
+    await ctx.db.patch(args.callId, {
+      archivedAt: undefined,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+// ── Internal query: project a set of call ids to the list-row shape ──────
+//
+// Used by voiceCallsSearch.searchByText to convert vector-search hits into
+// list rows. Auth is the caller's responsibility (the action already resolved
+// the user before handing ids here).
+
+export const _hydrateForList = internalQuery({
+  args: { ids: v.array(v.id("voice_calls")) },
+  returns: v.array(callListRowValidator),
+  handler: async (ctx, args) => {
+    const rows = (await Promise.all(args.ids.map((id) => ctx.db.get(id))))
+      .filter((r): r is Doc<"voice_calls"> => r !== null);
+    const companyByPosting = await buildCompanyMapForRows(ctx, rows);
+    return rows.map((r) =>
+      trimToListRow(
+        r,
+        r.jobPostingId ? companyByPosting.get(r.jobPostingId) : undefined,
+      ),
+    );
+  },
+});
+
+// ── Internal: literal substring search over title + company name ─────────
+//
+// Vector search excels at conceptual queries ("system design at a payments
+// company") but is weak on short proper-noun queries (a company name, a role
+// keyword) — and any row whose summaryEmbedding hasn't been backfilled is
+// invisible to the vector index entirely. This pass is the fallback: scan
+// the user's calls via by_user_archived_created and pick rows whose title
+// OR companyName contains the query (case-insensitive). Cheap; bounded by
+// page size; complements rather than replaces semantic search.
+//
+// Returns trimmed rows in the same shape as listForUser / _hydrateForList
+// so the caller (searchByText action) can merge results without reshaping.
+
+export const _literalSearchForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+    query: v.string(),
+    surfaces: v.optional(
+      v.array(
+        v.union(
+          v.literal("guide"),
+          v.literal("compass"),
+          v.literal("job"),
+          v.literal("interview_job"),
+        ),
+      ),
+    ),
+    includeArchived: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(callListRowValidator),
+  handler: async (ctx, args) => {
+    const needle = args.query.trim().toLowerCase();
+    if (needle.length === 0) return [];
+
+    const includeArchived = args.includeArchived ?? false;
+    const limit = Math.max(1, Math.min(args.limit ?? 20, 50));
+
+    const rows: Doc<"voice_calls">[] = [];
+    // Scan reverse-chronological so freshest matches come first; cap the
+    // outer scan at a generous multiple of limit to bound cost.
+    const scanCap = Math.min(limit * 10, 500);
+    let scanned = 0;
+    for await (const row of ctx.db
+      .query("voice_calls")
+      .withIndex("by_user_archived_created", (q) =>
+        includeArchived
+          ? q.eq("userId", args.userId)
+          : q.eq("userId", args.userId).eq("archivedAt", undefined),
+      )
+      .order("desc")) {
+      scanned += 1;
+      if (scanned > scanCap) break;
+      // Defensive: if we asked for active-only via the index, double-check
+      // archivedAt; if includeArchived, we want only archived rows.
+      if (includeArchived && row.archivedAt === undefined) continue;
+      rows.push(row);
+      if (rows.length >= scanCap) break;
+    }
+
+    const companyByPosting = await buildCompanyMapForRows(ctx, rows);
+
+    const surfacesSet =
+      args.surfaces && args.surfaces.length > 0
+        ? new Set(args.surfaces)
+        : null;
+
+    const matches: Doc<"voice_calls">[] = [];
+    for (const row of rows) {
+      if (surfacesSet && (!row.surface || !surfacesSet.has(row.surface))) continue;
+      const titleHit = row.title?.toLowerCase().includes(needle);
+      const company = row.jobPostingId
+        ? companyByPosting.get(row.jobPostingId)
+        : undefined;
+      const companyHit = company?.name?.toLowerCase().includes(needle) ?? false;
+      if (!titleHit && !companyHit) continue;
+      matches.push(row);
+      if (matches.length >= limit) break;
+    }
+
+    return matches.map((r) =>
+      trimToListRow(
+        r,
+        r.jobPostingId ? companyByPosting.get(r.jobPostingId) : undefined,
+      ),
+    );
+  },
+});
+
+// ── Internal helper: resolve userId from tokenIdentifier ─────────────────
+//
+// Actions cannot call resolveAuthedUser (which is typed for QueryCtx /
+// MutationCtx only). They resolve the identity themselves via ctx.auth, then
+// call this query to get the Convex userId in one round trip.
+
+export const _userByTokenIdentifier = internalQuery({
+  args: { tokenIdentifier: v.string() },
+  returns: v.union(v.null(), v.object({ _id: v.id("users") })),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", args.tokenIdentifier),
+      )
+      .unique();
+    return user ? { _id: user._id } : null;
   },
 });
 

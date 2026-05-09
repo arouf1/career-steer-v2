@@ -66,11 +66,14 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-// Brandfetch-CDN URL fallback when the company row hasn't been enriched yet.
-// Same path the v2 brandfetchLogoUrl helper builds; constructed client-side
-// here to avoid threading a server helper into a client component.
-function brandfetchCdnFallback(domain: string): string {
-  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}/w/256/h/256/icon`;
+// Brandfetch CDN URL — canonical pattern is `cdn.brandfetch.io/{domain}?c=`.
+// The CDN also cross-checks Referer against the allowed-origins list set on
+// the client ID in the Brandfetch dashboard. Returns null when the env var
+// is unset so the caller falls through to initials.
+function brandfetchCdnFallback(domain: string): string | null {
+  const clientId = process.env.NEXT_PUBLIC_BRANDFETCH_CLIENT_ID;
+  if (!clientId) return null;
+  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}?c=${encodeURIComponent(clientId)}`;
 }
 
 function FitTag({ tier }: { tier: FitTier }) {
@@ -116,7 +119,7 @@ function CompanyMark({
     !imgError && logoUrl
       ? logoUrl
       : !imgError && domain
-        ? brandfetchCdnFallback(domain)
+        ? brandfetchCdnFallback(domain) ?? null
         : null;
 
   if (candidateUrl) {

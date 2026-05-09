@@ -7,10 +7,11 @@
 import { fetchQuery } from "convex/nextjs";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Briefcase, Building2, MapPin } from "lucide-react";
+import { Briefcase, MapPin } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { SiteNav } from "@/components/site/SiteNav";
 import { JobsFiltersBar } from "@/components/jobs/JobsFiltersBar";
+import { CompanyMark } from "@/components/jobs/CompanyMark";
 
 const PAGE_SIZE = 24;
 
@@ -49,20 +50,6 @@ function formatAddedAgo(timestamp: number, now: number): string {
   return `${years}y ago`;
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0))
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function brandfetchCdnFallback(domain: string): string {
-  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}/w/256/h/256/icon`;
-}
-
 function PublicJobRow({
   item,
   addedAgo,
@@ -81,33 +68,17 @@ function PublicJobRow({
   addedAgo: string;
 }) {
   const href = `/jobs/listing/${item.citySlug}/${item.companySlug}/${item.titleSlug}/${item.jobPostingId}`;
-  const logoSrc =
-    item.companyLogoUrl ??
-    (item.companyDomain ? brandfetchCdnFallback(item.companyDomain) : null);
 
   return (
     <Link
       href={href}
       className="group flex items-center gap-4 border-b border-hairline px-4 py-6 transition-colors duration-300 hover:bg-ink/[0.02] sm:gap-8 sm:px-8 sm:py-8"
     >
-      {logoSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={logoSrc}
-          alt=""
-          width={44}
-          height={44}
-          className="size-11 shrink-0 rounded-surface bg-paper object-contain p-1"
-        />
-      ) : item.companyName.length > 0 ? (
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-surface bg-paper-raised text-sm font-medium text-ink/70">
-          {getInitials(item.companyName)}
-        </div>
-      ) : (
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-surface bg-paper-raised text-ink/40">
-          <Building2 className="size-5" strokeWidth={1.5} />
-        </div>
-      )}
+      <CompanyMark
+        companyName={item.companyName.length > 0 ? item.companyName : null}
+        logoUrl={item.companyLogoUrl}
+        domain={item.companyDomain}
+      />
 
       <div className="min-w-0 flex-1">
         <p className="type-label uppercase text-mute">{item.companyName}</p>

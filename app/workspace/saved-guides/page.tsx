@@ -2,6 +2,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { SavedGuidesClient } from "./SavedGuidesClient";
+import { WorkspacePageShell } from "@/components/workspace/WorkspacePageShell";
 
 export const metadata = {
   title: "Saved guides",
@@ -12,8 +13,8 @@ export default async function SavedGuidesPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <WorkspacePageShell>
       <SavedGuidesClient />
-    </div>
+    </WorkspacePageShell>
   );
 }

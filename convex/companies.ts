@@ -64,10 +64,12 @@ export const _enrichBrand = internalAction({
       const hit = await searchBrand(company.nameRaw);
       if (hit) {
         domain = hit.domain;
+        const clientId = process.env.BRANDFETCH_CLIENT_ID;
+        if (!clientId) throw new Error("BRANDFETCH_CLIENT_ID is not set");
         // Prefer the explicit `icon` Brandfetch returns; fall back to the
         // CDN URL builder so every domain gets a logo (lettermark fallback
         // happens at the CDN layer when the company has no real logo).
-        logoUrl = hit.icon ?? brandfetchLogoUrl(hit.domain);
+        logoUrl = hit.icon ?? brandfetchLogoUrl(hit.domain, clientId);
       }
     } catch (err) {
       console.error("companies._enrichBrand:failed", {

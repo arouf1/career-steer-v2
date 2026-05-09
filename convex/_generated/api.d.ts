@@ -26,6 +26,8 @@ import type * as googleIndexingQueue from "../googleIndexingQueue.js";
 import type * as guideBranches from "../guideBranches.js";
 import type * as guideEmbeddings from "../guideEmbeddings.js";
 import type * as http from "../http.js";
+import type * as interviewSim from "../interviewSim.js";
+import type * as interviewSimNode from "../interviewSimNode.js";
 import type * as jobPostingEmbeddings from "../jobPostingEmbeddings.js";
 import type * as jobPostings from "../jobPostings.js";
 import type * as jobPostingsContent from "../jobPostingsContent.js";
@@ -43,6 +45,7 @@ import type * as lib_env from "../lib/env.js";
 import type * as lib_haversine from "../lib/haversine.js";
 import type * as lib_imagePrompts from "../lib/imagePrompts.js";
 import type * as lib_imageReference from "../lib/imageReference.js";
+import type * as lib_interviewResearch from "../lib/interviewResearch.js";
 import type * as lib_jobFit from "../lib/jobFit.js";
 import type * as lib_jobImagePrompts from "../lib/jobImagePrompts.js";
 import type * as lib_locationLadder from "../lib/locationLadder.js";
@@ -54,6 +57,7 @@ import type * as locations from "../locations.js";
 import type * as matching from "../matching.js";
 import type * as migrations_2026_05_06_jobPostings_gps from "../migrations/2026_05_06_jobPostings_gps.js";
 import type * as migrations_2026_05_07_jobPostings_countryCode from "../migrations/2026_05_07_jobPostings_countryCode.js";
+import type * as migrations_scoresToPercent from "../migrations/scoresToPercent.js";
 import type * as people from "../people.js";
 import type * as peopleOutreach from "../peopleOutreach.js";
 import type * as podcasts from "../podcasts.js";
@@ -69,6 +73,7 @@ import type * as usersAccount from "../usersAccount.js";
 import type * as voiceCallContext from "../voiceCallContext.js";
 import type * as voiceCalls from "../voiceCalls.js";
 import type * as voiceCallsNode from "../voiceCallsNode.js";
+import type * as voiceCallsSearch from "../voiceCallsSearch.js";
 
 import type {
   ApiFromModules,
@@ -95,6 +100,8 @@ declare const fullApi: ApiFromModules<{
   guideBranches: typeof guideBranches;
   guideEmbeddings: typeof guideEmbeddings;
   http: typeof http;
+  interviewSim: typeof interviewSim;
+  interviewSimNode: typeof interviewSimNode;
   jobPostingEmbeddings: typeof jobPostingEmbeddings;
   jobPostings: typeof jobPostings;
   jobPostingsContent: typeof jobPostingsContent;
@@ -112,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   "lib/haversine": typeof lib_haversine;
   "lib/imagePrompts": typeof lib_imagePrompts;
   "lib/imageReference": typeof lib_imageReference;
+  "lib/interviewResearch": typeof lib_interviewResearch;
   "lib/jobFit": typeof lib_jobFit;
   "lib/jobImagePrompts": typeof lib_jobImagePrompts;
   "lib/locationLadder": typeof lib_locationLadder;
@@ -123,6 +131,7 @@ declare const fullApi: ApiFromModules<{
   matching: typeof matching;
   "migrations/2026_05_06_jobPostings_gps": typeof migrations_2026_05_06_jobPostings_gps;
   "migrations/2026_05_07_jobPostings_countryCode": typeof migrations_2026_05_07_jobPostings_countryCode;
+  "migrations/scoresToPercent": typeof migrations_scoresToPercent;
   people: typeof people;
   peopleOutreach: typeof peopleOutreach;
   podcasts: typeof podcasts;
@@ -138,6 +147,7 @@ declare const fullApi: ApiFromModules<{
   voiceCallContext: typeof voiceCallContext;
   voiceCalls: typeof voiceCalls;
   voiceCallsNode: typeof voiceCallsNode;
+  voiceCallsSearch: typeof voiceCallsSearch;
 }>;
 
 /**

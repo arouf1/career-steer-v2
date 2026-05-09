@@ -33,6 +33,7 @@ import {
 } from "@/components/career-guides/FieldCitation";
 import { HeroImageLive } from "./HeroImageLive";
 import { JobVoiceCallTile } from "./voice/JobVoiceCallTile";
+import { InterviewSimCallTile } from "./voice/interview/InterviewSimCallTile";
 
 type Posting = Doc<"job_postings">;
 
@@ -555,6 +556,14 @@ function JobByline({
               listingPath={listingPath}
               variant="byline-inline"
             />
+            <MetaSeparator />
+            <InterviewSimCallTile
+              jobPostingId={posting._id}
+              callTitle={callTitle}
+              companyName={company.nameRaw}
+              listingPath={listingPath}
+              variant="byline-inline"
+            />
           </>
         )}
       </div>
@@ -679,12 +688,21 @@ function JobSidebar({
       )}
 
       {!isArchived && (
-        <JobVoiceCallTile
-          jobPostingId={posting._id}
-          callTitle={callTitle}
-          listingPath={listingPath}
-          variant="aside"
-        />
+        <>
+          <JobVoiceCallTile
+            jobPostingId={posting._id}
+            callTitle={callTitle}
+            listingPath={listingPath}
+            variant="aside"
+          />
+          <InterviewSimCallTile
+            jobPostingId={posting._id}
+            callTitle={callTitle}
+            companyName={company.nameRaw}
+            listingPath={listingPath}
+            variant="aside"
+          />
+        </>
       )}
 
       {ext?.salary && (

@@ -13,6 +13,7 @@ import { Authenticated, useAction, useQuery } from "convex/react";
 import { ArrowRight, Search, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { JobCardRow } from "@/components/jobs/JobCardRow";
+import { WorkspacePageHeader } from "@/components/workspace/WorkspacePageHeader";
 import {
   LocationCombobox,
   type LocationSelection,
@@ -431,19 +432,20 @@ function JobSearchClientInner() {
 
   return (
     <div className="flex flex-col gap-12 sm:gap-16">
-      <header className="flex max-w-2xl flex-col gap-5 pt-2">
-        <span className="type-label uppercase text-mute">Discover roles</span>
-        <h1 className="type-display text-balance text-ink [font-size:clamp(2.25rem,5vw,3.5rem)]">
-          Find what&apos;s
-          <br className="hidden sm:inline" />{" "}
-          <span className="text-ink-soft">out there for you.</span>
-        </h1>
-        <p className="text-balance text-[15px] leading-relaxed text-ink/60">
-          {profile?.headline
+      <WorkspacePageHeader
+        eyebrow="Discover roles"
+        title={
+          <>
+            Find what&apos;s{" "}
+            <span className="text-ink-soft">out there for you.</span>
+          </>
+        }
+        lede={
+          profile?.headline
             ? "Search across the web and we'll order results by how well they fit your background. Save anything that catches your eye."
-            : "Search across the web for roles that match what you're looking for. Build out your profile to get personalised ordering."}
-        </p>
-      </header>
+            : "Search across the web for roles that match what you're looking for. Build out your profile to get personalised ordering."
+        }
+      />
 
       <form onSubmit={onSubmit} className="flex flex-col gap-6">
         <div>
@@ -646,7 +648,7 @@ function ResultsRegion(props: {
 
   if (rawResults.length === 0) {
     return (
-      <div className="py-12 text-center">
+      <div className="fade-in-view py-12 text-center">
         <p className="text-[15px] text-ink/55">
           No matching roles found. Try broadening your search or changing the
           location.
@@ -660,7 +662,7 @@ function ResultsRegion(props: {
   const visibleCount = visible.length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="fade-in-view flex flex-col gap-6">
       {meta?.correctedQuery && (
         <p className="text-[14px] text-ink/80">
           Showing results for{" "}

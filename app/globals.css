@@ -134,6 +134,51 @@ body {
     font-size: 0.875rem;
     line-height: 1.5;
   }
+
+  /* Used on workspace content containers to soften the swap from skeleton
+     to populated state. Single keyframe, simple opacity ramp — calm beats
+     clever. Disabled under prefers-reduced-motion via the @media query
+     below; never animates on subsequent re-renders because keyframe
+     animations only fire on mount. */
+  .fade-in-view {
+    animation: fade-in-view 320ms ease-out both;
+  }
+  @keyframes fade-in-view {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fade-in-view {
+      animation: none;
+    }
+  }
+
+  /* Skeleton placeholder — pulsing tonal block. Tinted toward ink rather
+     than chrome grey so it sits on warm paper without clashing. */
+  .skeleton-block {
+    background-color: oklch(22% 0.015 70 / 0.06);
+    border-radius: var(--radius-surface);
+    animation: skeleton-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-block {
+      animation: none;
+      opacity: 0.7;
+    }
+  }
 }
 
 :root {
