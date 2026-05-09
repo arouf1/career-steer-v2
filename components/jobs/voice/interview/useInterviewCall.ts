@@ -82,6 +82,8 @@ export type UseInterviewCallReturn = {
   toggleMute: () => void;
   isMuted: boolean;
   callId: Id<"voice_calls"> | null;
+  /** The Gemini session ID — used by the coverage gauge to subscribe to markDimensionCovered marks. */
+  sessionId: string | null;
   prepSessionId: string | null;
 };
 
@@ -106,6 +108,7 @@ export function useInterviewCall(
   // These are exposed as reactive return values AND read in async closures —
   // keep both a ref (for stable closure access) and a matching state.
   const [callId, setCallId] = useState<Id<"voice_calls"> | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [prepSessionId, setPrepSessionId] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -248,6 +251,7 @@ export function useInterviewCall(
         }
       }
       sessionIdRef.current = null;
+      setSessionId(null);
       callIdRef.current = null;
       setCallId(null);
       startedAtRef.current = null;
@@ -405,6 +409,7 @@ export function useInterviewCall(
     }
 
     sessionIdRef.current = mintResult.sessionId;
+    setSessionId(mintResult.sessionId);
     callIdRef.current = mintResult.callId ?? null;
     setCallId(mintResult.callId ?? null);
     startedAtRef.current = Date.now();
@@ -566,6 +571,7 @@ export function useInterviewCall(
     toggleMute,
     isMuted,
     callId,
+    sessionId,
     prepSessionId,
   };
 }

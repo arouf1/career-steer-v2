@@ -10,6 +10,7 @@ import { VoiceCallTranscription } from "@/components/career-guides/voice-call/Vo
 import { VoiceCallStatus } from "@/components/career-guides/voice-call/VoiceCallStatus";
 import { VoiceCallControls } from "@/components/career-guides/voice-call/VoiceCallControls";
 import { useCallTimer } from "@/components/career-guides/voice-call/useCallTimer";
+import { InterviewCoverageGauge } from "./InterviewCoverageGauge";
 
 type Props = {
   jobPostingId: Id<"job_postings">;
@@ -96,6 +97,14 @@ export function InterviewLiveCall({
         guideTitle={callTitle}
         duration={timer.duration}
         formatDuration={timer.formatDuration}
+      />
+
+      <InterviewCoverageGauge
+        sessionId={call.sessionId ?? null}
+        // Hardcoded to match the synthesis prompt's "exactly 4 dimensions"
+        // constraint (lib/ai/prompts/interviewer.ts buildSynthesisPrompt).
+        // If the dimension set ever evolves there, update this list.
+        dimensions={["structure", "depth", "role-fit", "company-fit"]}
       />
 
       {!showTranscription ? (
