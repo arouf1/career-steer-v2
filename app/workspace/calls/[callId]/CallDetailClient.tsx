@@ -44,7 +44,7 @@ export function CallDetailClient({ callId }: Props) {
   // ── Loading state ────────────────────────────────────────────────────────
   if (call === undefined) {
     return (
-      <div className="mx-auto flex w-full max-w-4xl items-center gap-2 p-8 text-[13px] text-muted-foreground">
+      <div className="mx-auto flex w-full max-w-4xl items-center gap-2 p-8 text-[13px] text-mute">
         <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} aria-hidden />
         Loading call…
       </div>
@@ -55,14 +55,14 @@ export function CallDetailClient({ callId }: Props) {
   if (call === null) {
     return (
       <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-3 p-12 text-center">
-        <p className="text-[14px] text-foreground">Call not found.</p>
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-[14px] text-ink">Call not found.</p>
+        <p className="text-[12px] text-mute">
           It may have been archived from a different account, or the link is
           wrong.
         </p>
         <Link
           href="/workspace/calls"
-          className="mt-2 rounded-full border border-border bg-background px-4 py-2 text-[13px] font-medium text-foreground hover:bg-muted"
+          className="mt-2 rounded-full border border-hairline bg-paper px-4 py-2 text-[13px] font-medium text-ink hover:bg-paper-raised"
         >
           Back to calls
         </Link>
@@ -100,7 +100,7 @@ export function CallDetailClient({ callId }: Props) {
       <header className="flex items-center justify-between gap-3">
         <Link
           href="/workspace/calls"
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 text-[12px] font-medium text-mute hover:text-ink"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
           All calls
@@ -110,7 +110,7 @@ export function CallDetailClient({ callId }: Props) {
           <CallSurfaceChip surface={surface} size="md" />
 
           {isArchived && (
-            <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="inline-flex items-center rounded-full border border-hairline bg-paper-raised px-2 py-0.5 text-[10px] font-medium text-mute">
               Archived
             </span>
           )}
@@ -120,7 +120,7 @@ export function CallDetailClient({ callId }: Props) {
               <button
                 type="button"
                 aria-label="Call actions"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-mute hover:bg-paper-raised hover:text-ink"
               >
                 <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} aria-hidden />
               </button>
@@ -158,18 +158,18 @@ export function CallDetailClient({ callId }: Props) {
           <InterviewDetailPanel
             rubric={summary as InterviewRubric}
             meta={meta}
-            className="rounded-xl border border-border bg-background"
+            className="rounded-xl border border-hairline bg-paper"
           />
         ) : (
           <DeepDiveDetailPanel
             summary={summary as DeepDiveSummary}
             meta={meta}
-            className="rounded-xl border border-border bg-background"
+            className="rounded-xl border border-hairline bg-paper"
           />
         )
       ) : (
-        <div className="rounded-xl border border-border bg-background p-6">
-          <p className="text-[13px] text-muted-foreground">
+        <div className="rounded-xl border border-hairline bg-paper p-6">
+          <p className="text-[13px] text-mute">
             No summary available for this call.
           </p>
         </div>
@@ -177,10 +177,10 @@ export function CallDetailClient({ callId }: Props) {
 
       {/* Transcript — always rendered below the summary panel */}
       <section>
-        <h2 className="mb-2 text-[13px] font-medium text-foreground">
+        <h2 className="mb-2 text-[13px] font-medium text-ink">
           Transcript
         </h2>
-        <div className="rounded-xl border border-border bg-background p-4">
+        <div className="rounded-xl border border-hairline bg-paper p-4">
           <CallTranscript messages={call.messages ?? []} />
         </div>
       </section>
