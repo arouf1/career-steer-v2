@@ -131,7 +131,11 @@ export function ConversationTranscript({ messages, className }: Props) {
   }
 
   return (
-    <ScrollArea className={cn("max-h-[60vh] w-full", className)}>
+    // Fixed height (not max-h) so the ScrollArea Viewport's `size-full`
+    // resolves to a real boundary — required for the internal overflow
+    // to clip and scroll. max-h alone would only cap growth and let the
+    // viewport expand to its content's natural height (no scroll).
+    <ScrollArea className={cn("h-[60vh] w-full", className)}>
       <div className="flex flex-col gap-3 px-4 py-4">
         {messages.map((message) => (
           <Bubble key={message.id} message={message} />

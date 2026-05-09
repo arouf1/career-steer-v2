@@ -239,13 +239,13 @@ export function ConversationDetailClient({ callId }: Props) {
           )}
 
           {/* Transcript — section label outside, ScrollArea sits inside a
-              hairline card so the bubble panel reads as a contained artifact
-              rather than floating against the page paper. */}
+              hairline rectangular container (no rounded corners per design
+              direction). The container clips the scroll viewport. */}
           <section id="transcript" className="mt-12 scroll-mt-24">
             <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
               Transcript
             </p>
-            <div className="overflow-hidden rounded-card border border-hairline bg-paper-raised">
+            <div className="overflow-hidden border border-hairline bg-paper-raised">
               <ConversationTranscript messages={call.messages ?? []} />
             </div>
           </section>

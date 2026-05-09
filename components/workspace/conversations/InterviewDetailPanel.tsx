@@ -28,33 +28,51 @@ const LQUOTE = "“";
 const RQUOTE = "”";
 
 export function InterviewDetailPanel({ rubric, meta, className }: Props) {
-  // Strip the redundant "Mock interview: " prefix — the masthead label and
-  // company anchor already signal surface. Mirrors InterviewRow.
+  // Strip the redundant "Mock interview: " prefix and the trailing
+  // " at COMPANY" suffix so the h1 is just the role. The company moves
+  // to its own byline row above the title (logo + name).
   const cleanTitle = meta.title.replace(/^Mock interview:\s*/i, "");
   const companyName = meta.companyName?.trim();
+  const roleOnly = companyName
+    ? cleanTitle.replace(
+        new RegExp(`\\s+at\\s+${escapeRegExp(companyName)}\\s*$`, "i"),
+        "",
+      )
+    : cleanTitle;
 
   return (
     <div className={cn("flex flex-col", className)}>
-      {/* ── Masthead + Verdict ──────────────────────────────────────────── */}
-      <section id="verdict" className="scroll-mt-24">
+      {/* ── Masthead + Verdict — career-guide hero pattern ──────────────── */}
+      <section
+        id="verdict"
+        className="scroll-mt-24 border-b border-hairline pb-12"
+      >
         <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
           Mock interview <span aria-hidden>{"·"}</span>{" "}
           {formatDuration(meta.durationSeconds)} <span aria-hidden>{"·"}</span>{" "}
           {formatRelative(meta.createdAt)}
         </p>
 
-        <CompanyAnchor name={companyName} logoUrl={meta.companyLogoUrl} className="mt-6" />
-
-        <h1 className="mt-5 text-[36px] font-normal leading-tight text-ink [font-family:var(--font-serif)]">
-          {cleanTitle}
-        </h1>
-        {companyName && (
-          <p className="mt-2 text-[18px] text-mute [font-family:var(--font-serif)]">
-            at {companyName}
-          </p>
+        {/* Byline: logo + company name as a "publisher" badge above the
+            headline. Logo small (32px) so it complements the title rather
+            than competing with it. */}
+        {(companyName || meta.companyLogoUrl) && (
+          <div className="mt-6 flex items-center gap-3">
+            <CompanyAnchor
+              name={companyName}
+              logoUrl={meta.companyLogoUrl}
+            />
+            {companyName && (
+              <p className="text-[14px] text-mute">{companyName}</p>
+            )}
+          </div>
         )}
 
-        <div className="mt-8 flex items-baseline gap-2">
+        <h1 className="mt-6 text-balance text-5xl leading-[1.02] tracking-tight text-ink [font-family:var(--font-serif)] sm:text-6xl">
+          {roleOnly}
+        </h1>
+
+        <div className="mt-7 flex items-baseline gap-2">
           <span className="text-[48px] font-normal leading-none text-ink [font-family:var(--font-serif)]">
             {rubric.overallScore.toFixed(1)}
           </span>
@@ -63,7 +81,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
           </span>
         </div>
 
-        <p className="mt-4 max-w-[60ch] text-[18px] leading-relaxed text-body [font-family:var(--font-serif)]">
+        <p className="mt-7 max-w-2xl text-balance text-[19px] leading-[1.55] text-ink/70 sm:text-[20px]">
           {rubric.oneLineVerdict}
         </p>
       </section>
@@ -240,10 +258,11 @@ function formatRelative(ms: number): string {
   });
 }
 
-// CompanyAnchor — circular logo (56px) or initial mark, no border. Mirrors
-// InterviewRow.CompanyAnchor at a larger size for the masthead. Brandfetch
-// CDN URLs aren't whitelisted in next.config.ts remotePatterns and we don't
-// want to widen that surface for one image, so use raw <img>.
+// CompanyAnchor — circular byline-scale logo (32px) or initial mark, no
+// border. Sits above the masthead h1 as a "publisher" badge alongside the
+// company name. Brandfetch CDN URLs aren't whitelisted in
+// next.config.ts remotePatterns and we don't want to widen that surface
+// for one image, so use raw <img>.
 function CompanyAnchor({
   name,
   logoUrl,
@@ -257,7 +276,7 @@ function CompanyAnchor({
     return (
       <div
         className={cn(
-          "h-14 w-14 overflow-hidden rounded-full bg-paper-raised",
+          "h-8 w-8 shrink-0 overflow-hidden rounded-full bg-paper-raised",
           className,
         )}
       >
@@ -265,9 +284,9 @@ function CompanyAnchor({
         <img
           src={logoUrl}
           alt={name ? `${name} logo` : ""}
-          width={56}
-          height={56}
-          className="h-full w-full object-contain p-1"
+          width={32}
+          height={32}
+          className="h-full w-full object-contain"
         />
       </div>
     );
@@ -277,7 +296,7 @@ function CompanyAnchor({
   return (
     <div
       className={cn(
-        "flex h-14 w-14 items-center justify-center rounded-full bg-paper-raised text-[22px] font-normal text-ink [font-family:var(--font-serif)]",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-paper-raised text-[14px] font-normal text-ink [font-family:var(--font-serif)]",
         className,
       )}
       aria-label={`${name} logo placeholder`}
@@ -285,4 +304,10 @@ function CompanyAnchor({
       {initial}
     </div>
   );
+}
+
+// Escape a string for safe inclusion in a regex literal — used to strip
+// the "at COMPANY" suffix from the title without partial matches.
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
