@@ -18,9 +18,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CallTranscript } from "@/components/workspace/calls/CallTranscript";
-import { InterviewDetailPanel } from "@/components/workspace/calls/InterviewDetailPanel";
-import { DeepDiveDetailPanel } from "@/components/workspace/calls/DeepDiveDetailPanel";
+import { ConversationTranscript } from "@/components/workspace/conversations/ConversationTranscript";
+import { InterviewDetailPanel } from "@/components/workspace/conversations/InterviewDetailPanel";
+import { DeepDiveDetailPanel } from "@/components/workspace/conversations/DeepDiveDetailPanel";
 import type { InterviewRubric } from "@/lib/ai/prompts/interviewer";
 import type { DeepDiveSummary } from "@/lib/ai/prompts/voiceAdviser";
 
@@ -37,7 +37,7 @@ type Props = {
   callId: string;
 };
 
-export function CallDetailClient({ callId }: Props) {
+export function ConversationDetailClient({ callId }: Props) {
   const router = useRouter();
 
   const call = useQuery(api.voiceCalls.getCallById, {
@@ -52,7 +52,7 @@ export function CallDetailClient({ callId }: Props) {
     return (
       <div className="mx-auto flex w-full max-w-4xl items-center gap-2 p-8 text-[13px] text-mute">
         <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} aria-hidden />
-        Loading call…
+        Loading conversation…
       </div>
     );
   }
@@ -61,16 +61,16 @@ export function CallDetailClient({ callId }: Props) {
   if (call === null) {
     return (
       <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-3 p-12 text-center">
-        <p className="text-[14px] text-ink">Call not found.</p>
+        <p className="text-[14px] text-ink">Conversation not found.</p>
         <p className="text-[12px] text-mute">
           It may have been archived from a different account, or the link is
           wrong.
         </p>
         <Link
-          href="/workspace/calls"
+          href="/workspace/conversations"
           className="mt-2 rounded-full border border-hairline bg-paper px-4 py-2 text-[13px] font-medium text-ink hover:bg-paper-raised"
         >
-          Back to calls
+          All conversations
         </Link>
       </div>
     );
@@ -88,7 +88,7 @@ export function CallDetailClient({ callId }: Props) {
       await archive({ callId: call._id as Id<"voice_calls"> });
       // Drop user back to the list after archive so the row disappears from
       // the default (active-only) view — avoids visual confusion.
-      router.push("/workspace/calls");
+      router.push("/workspace/conversations");
     }
   };
 
@@ -105,11 +105,11 @@ export function CallDetailClient({ callId }: Props) {
       {/* Header: back link + surface chip + archived badge + actions */}
       <header className="flex items-center justify-between gap-3">
         <Link
-          href="/workspace/calls"
+          href="/workspace/conversations"
           className="inline-flex items-center gap-1 text-[12px] font-medium text-mute hover:text-ink"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-          All calls
+          All conversations
         </Link>
 
         <div className="flex items-center gap-3">
@@ -127,7 +127,7 @@ export function CallDetailClient({ callId }: Props) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Call actions"
+                aria-label="Conversation actions"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-mute hover:bg-paper-raised hover:text-ink"
               >
                 <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} aria-hidden />
@@ -178,7 +178,7 @@ export function CallDetailClient({ callId }: Props) {
       ) : (
         <div className="rounded-xl border border-hairline bg-paper p-6">
           <p className="text-[13px] text-mute">
-            No summary available for this call.
+            No summary available for this conversation.
           </p>
         </div>
       )}
@@ -189,7 +189,7 @@ export function CallDetailClient({ callId }: Props) {
           Transcript
         </h2>
         <div className="rounded-xl border border-hairline bg-paper p-4">
-          <CallTranscript messages={call.messages ?? []} />
+          <ConversationTranscript messages={call.messages ?? []} />
         </div>
       </section>
     </div>

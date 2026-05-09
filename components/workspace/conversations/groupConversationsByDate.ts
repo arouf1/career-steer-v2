@@ -1,7 +1,7 @@
-// components/workspace/calls/groupCallsByDate.ts
+// components/workspace/conversations/groupConversationsByDate.ts
 //
-// Pure helper that buckets a chronologically-ordered list of call rows into
-// the four editorial sections rendered on /workspace/calls:
+// Pure helper that buckets a chronologically-ordered list of conversation rows
+// into the four editorial sections rendered on /workspace/conversations:
 // Today / Yesterday / This week / Earlier.
 //
 // Boundary rules:
@@ -22,12 +22,12 @@ export const GROUP_LABEL: Record<GroupKey, string> = {
   earlier: "Earlier",
 };
 
-export type GroupedCalls<T> = Array<{ key: GroupKey; rows: T[] }>;
+export type GroupedConversations<T> = Array<{ key: GroupKey; rows: T[] }>;
 
-export function groupCallsByDate<T extends { createdAt: number }>(
+export function groupConversationsByDate<T extends { createdAt: number }>(
   rows: T[],
   now: number = Date.now(),
-): GroupedCalls<T> {
+): GroupedConversations<T> {
   // Normalise to local-time midnight today so the buckets respect the user's
   // wall-clock day, not UTC.
   const startOfToday = new Date(now);

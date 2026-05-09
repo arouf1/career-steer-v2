@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, MessageSquareQuote, Sparkles } from "lucide-react";
+import { ChevronDown, MessageSquareQuote, Star } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { InterviewRubric } from "@/lib/ai/prompts/interviewer";
@@ -65,7 +65,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
       </section>
 
       {rubric.bestMoment.quote && (
-        <Card icon={Sparkles} title="Best moment">
+        <Card icon={Star} title="Best moment">
           <blockquote className="rounded-card bg-paper-raised p-3 font-mono text-[12px] text-ink">
             &ldquo;{rubric.bestMoment.quote}&rdquo;
           </blockquote>
@@ -105,7 +105,7 @@ function Card({
   title,
   children,
 }: {
-  icon: typeof Sparkles;
+  icon: typeof Star;
   title: string;
   children: React.ReactNode;
 }) {

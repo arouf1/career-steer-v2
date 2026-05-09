@@ -1,4 +1,4 @@
-// components/workspace/calls/DeepDiveRow.tsx
+// components/workspace/conversations/DeepDiveRow.tsx
 //
 // Row component for non-interview surfaces ("guide", "compass", "job"). The
 // surface signal is carried by a Figtree label-cased eyebrow above an EB
@@ -62,9 +62,9 @@ export function DeepDiveRow({ call, onArchive, onUnarchive }: Props) {
       )}
     >
       <Link
-        href={`/workspace/calls/${call._id}`}
+        href={`/workspace/conversations/${call._id}`}
         className="absolute inset-0 z-0 rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
-        aria-label={`Open call: ${cleanTitle}`}
+        aria-label={`Open conversation: ${cleanTitle}`}
       />
 
       <div className="relative z-10 flex items-start gap-4">

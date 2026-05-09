@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Loader2, Target, X } from "lucide-react";
 import type { InterviewRubric } from "@/lib/ai/prompts/interviewer";
-import { InterviewDetailPanel } from "@/components/workspace/calls/InterviewDetailPanel";
+import { InterviewDetailPanel } from "@/components/workspace/conversations/InterviewDetailPanel";
 
 type Props = {
   callId: Id<"voice_calls">;

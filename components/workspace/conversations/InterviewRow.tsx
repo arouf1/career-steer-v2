@@ -1,4 +1,4 @@
-// components/workspace/calls/InterviewRow.tsx
+// components/workspace/conversations/InterviewRow.tsx
 //
 // Row component for "interview_job" surface — the only surface that has a
 // company anchor (logo + name) and an overall score. Editorial tone:
@@ -54,7 +54,7 @@ export function InterviewRow({ call, onArchive, onUnarchive }: Props) {
       )}
     >
       <Link
-        href={`/workspace/calls/${call._id}`}
+        href={`/workspace/conversations/${call._id}`}
         className="absolute inset-0 z-0 rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
         aria-label={`Open mock interview: ${cleanTitle}`}
       />
@@ -151,7 +151,7 @@ function CompanyAnchor({
     return (
       <div
         className={cn(
-          "h-8 w-8 overflow-hidden rounded-control border border-hairline bg-paper-raised",
+          "h-8 w-8 overflow-hidden rounded-full bg-paper-raised",
           className,
         )}
       >
@@ -170,7 +170,7 @@ function CompanyAnchor({
   return (
     <div
       className={cn(
-        "flex h-8 w-8 items-center justify-center rounded-control border border-hairline bg-paper-raised text-[13px] font-medium text-ink",
+        "flex h-8 w-8 items-center justify-center rounded-full bg-paper-raised text-[14px] font-medium text-ink",
         className,
       )}
       aria-label={name ? `${name} logo placeholder` : "Company logo placeholder"}

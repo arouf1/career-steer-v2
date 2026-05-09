@@ -1,6 +1,6 @@
-// app/workspace/calls/CallsListClient.tsx
+// app/workspace/conversations/ConversationsListClient.tsx
 //
-// Client component for the /workspace/calls history page.
+// Client component for the /workspace/conversations history page.
 // Owns: surface filter pills, archive toggle, debounced semantic search,
 // paginated browse query, archive/unarchive mutations, and all empty/loading/error states.
 //
@@ -12,15 +12,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAction, usePaginatedQuery, useMutation } from "convex/react";
-import { History, Loader2, Sparkles } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { CallSearchInput } from "@/components/workspace/calls/CallSearchInput";
-import { InterviewRow } from "@/components/workspace/calls/InterviewRow";
-import { DeepDiveRow } from "@/components/workspace/calls/DeepDiveRow";
-import { CallSection } from "@/components/workspace/calls/CallSection";
-import { groupCallsByDate } from "@/components/workspace/calls/groupCallsByDate";
+import { InterviewRow } from "@/components/workspace/conversations/InterviewRow";
+import { DeepDiveRow } from "@/components/workspace/conversations/DeepDiveRow";
+import { ConversationSection } from "@/components/workspace/conversations/ConversationSection";
+import { groupConversationsByDate } from "@/components/workspace/conversations/groupConversationsByDate";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +38,8 @@ const SURFACE_LABEL: Record<Surface, string> = {
 };
 
 const SEARCH_DEBOUNCE_MS = 350;
+// LocalStorage keys intentionally unchanged — changing them would silently
+// reset users' filter preferences with no benefit.
 const STORAGE_FILTER_KEY = "calls.surfaces.v1";
 const STORAGE_ARCHIVED_KEY = "calls.includeArchived.v1";
 
@@ -89,7 +90,7 @@ function readIncludeArchived(): boolean {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function CallsListClient() {
+export function ConversationsListClient() {
   // ── Filter state ──────────────────────────────────────────────────────────
   const [surfaces, setSurfaces] = useState<Set<Surface>>(readSurfaces);
   const [includeArchived, setIncludeArchived] = useState<boolean>(readIncludeArchived);
@@ -111,8 +112,10 @@ export function CallsListClient() {
   }, [includeArchived]);
 
   // ── Search state ──────────────────────────────────────────────────────────
+  // Simplified to a single searchQuery — a non-empty value always runs semantic
+  // search; empty falls back to the paginated browse. No mode toggle needed.
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchMode, setSearchMode] = useState<"off" | "text">("off");
+  const [queryFocused, setQueryFocused] = useState(false);
   const [searchResults, setSearchResults] = useState<ListRow[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -126,11 +129,14 @@ export function CallsListClient() {
     [surfaces, includeArchived],
   );
 
+  // Derived: whether we're currently in search mode.
+  const usingSearch = searchQuery.trim().length > 0;
+
   // "skip" sentinel tells usePaginatedQuery not to subscribe while we're in
   // semantic-search mode — avoids a wasted subscription running in parallel.
   const paginated = usePaginatedQuery(
     api.voiceCalls.listForUser,
-    searchMode === "off" ? listArgs : "skip",
+    usingSearch ? "skip" : listArgs,
     { initialNumItems: 20 },
   );
 
@@ -167,10 +173,10 @@ export function CallsListClient() {
     [search, surfaces, includeArchived],
   );
 
-  // Debounce: re-run search 350ms after query / filter / mode changes.
-  // Switching mode off clears results immediately (no debounce needed).
+  // Debounce: re-run search 350ms after query / filter changes.
+  // When query is cleared, results are wiped immediately (no debounce needed).
   useEffect(() => {
-    if (searchMode !== "text") {
+    if (!usingSearch) {
       setSearchResults(null);
       setSearchError(null);
       setSearchLoading(false);
@@ -185,7 +191,7 @@ export function CallsListClient() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, searchMode, surfaces, includeArchived]);
+  }, [searchQuery, surfaces, includeArchived]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const archiveMutation = useMutation(api.voiceCalls.archive);
@@ -215,7 +221,6 @@ export function CallsListClient() {
   }, []);
 
   // ── Derived render values ─────────────────────────────────────────────────
-  const usingSearch = searchMode === "text" && searchQuery.trim().length > 0;
   const rows: ListRow[] = usingSearch
     ? (searchResults ?? [])
     : (paginated.results as ListRow[]);
@@ -229,34 +234,58 @@ export function CallsListClient() {
   // the editorial section headers can render between them. Search mode skips
   // the grouping — vector-search results are ranked by relevance, not time.
   const grouped = useMemo(
-    () => (usingSearch ? null : groupCallsByDate(rows)),
+    () => (usingSearch ? null : groupConversationsByDate(rows)),
     [rows, usingSearch],
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
-      {/* Header */}
+      {/* Header — editorial, no icon (sidebar already carries it) */}
       <header className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <History className="h-5 w-5 text-mute" strokeWidth={1.75} aria-hidden />
-          <h1 className="text-[24px] font-medium text-ink [font-family:var(--font-serif)]">
-            Calls
-          </h1>
-        </div>
-        <p className="text-[13px] text-mute">
-          Every mock interview and deep-dive call you&apos;ve had. Search by topic or filter by type.
+        <h1 className="[font-family:var(--font-serif)] text-[28px] font-normal leading-tight text-ink">
+          Conversations
+        </h1>
+        <p className="max-w-[60ch] text-[14px] leading-relaxed text-mute">
+          Every mock interview and deep-dive conversation you&apos;ve had. Search by topic or filter by type.
         </p>
       </header>
 
-      {/* Search input */}
-      <CallSearchInput
-        value={searchQuery}
-        onChange={setSearchQuery}
-        mode={searchMode}
-        onModeChange={setSearchMode}
-        placeholder="Search by topic, role, company…"
-      />
+      {/* Search input — editorial underline pattern (matches jobs page) */}
+      <div>
+        <span className="type-label mb-3 block uppercase text-mute">Search</span>
+        <div
+          className={
+            queryFocused
+              ? "relative flex items-center gap-3 border-b border-ink/40 transition-colors duration-300"
+              : "relative flex items-center gap-3 border-b border-hairline-strong transition-colors duration-300"
+          }
+        >
+          <Search className="size-4 shrink-0 text-mute" strokeWidth={1.75} aria-hidden />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setQueryFocused(true)}
+            onBlur={() => setQueryFocused(false)}
+            placeholder="Search by topic, role, company…"
+            aria-label="Search conversations"
+            className="flex-1 bg-transparent py-3 text-[15px] text-ink placeholder:text-mute focus:outline-none"
+            maxLength={200}
+            autoComplete="off"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              className="-mr-2 grid size-10 place-items-center rounded-pill text-mute transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
+            >
+              <X className="size-4" strokeWidth={1.75} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Surface filter pills + archived toggle */}
       <div className="flex flex-wrap items-center gap-2">
@@ -325,7 +354,7 @@ export function CallsListClient() {
         <div className="flex flex-col">
           {grouped?.map(({ key, rows: groupRows }) => (
             <div key={key}>
-              <CallSection groupKey={key} />
+              <ConversationSection groupKey={key} />
               <div className="flex flex-col divide-y divide-hairline">
                 {groupRows.map((call) => (
                   <RowDispatch
@@ -361,8 +390,7 @@ export function CallsListClient() {
       {/* Semantic search hint footer */}
       {usingSearch && !searchLoading && (
         <p className="text-center text-[11px] text-mute">
-          <Sparkles className="inline h-3 w-3 text-mute" strokeWidth={1.75} aria-hidden />{" "}
-          Semantic search — results ranked by topic similarity
+          Showing matches by topic similarity.
         </p>
       )}
     </div>
@@ -444,7 +472,7 @@ function EmptyState({
   if (usingSearch) {
     return (
       <div className="flex flex-col items-center gap-2 p-12 text-center">
-        <p className="text-[14px] text-ink">No calls match your search.</p>
+        <p className="text-[14px] text-ink">No conversations match your search.</p>
         <p className="text-[12px] text-mute">
           Try a different topic or clear the search.
         </p>
@@ -455,7 +483,7 @@ function EmptyState({
   if (hasFilters) {
     return (
       <div className="flex flex-col items-center gap-2 p-12 text-center">
-        <p className="text-[14px] text-ink">No calls match these filters.</p>
+        <p className="text-[14px] text-ink">No conversations match these filters.</p>
         <p className="text-[12px] text-mute">
           Try clearing the surface filter or the archived toggle.
         </p>
@@ -465,7 +493,7 @@ function EmptyState({
 
   return (
     <div className="flex flex-col items-center gap-3 p-12 text-center">
-      <p className="text-[14px] text-ink">No calls yet.</p>
+      <p className="text-[14px] text-ink">No conversations yet.</p>
       <p className="max-w-sm text-[12px] text-mute">
         Start a deep dive from any career guide, or run a mock interview from a
         saved job.

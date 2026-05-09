@@ -1,6 +1,6 @@
-// components/workspace/calls/CallTranscript.tsx
+// components/workspace/conversations/ConversationTranscript.tsx
 //
-// Scrollable chat-bubble panel for a voice call transcript.
+// Scrollable chat-bubble panel for a voice conversation transcript.
 // User messages: right-aligned, bg-ink / text-paper.
 // Assistant messages: left-aligned, bg-paper-raised / text-ink.
 // Each bubble shows the message body, a small time footer, and optional
@@ -120,7 +120,7 @@ function Bubble({ message }: { message: Message }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function CallTranscript({ messages, className }: Props) {
+export function ConversationTranscript({ messages, className }: Props) {
   if (messages.length === 0) {
     return (
       <div
@@ -129,7 +129,7 @@ export function CallTranscript({ messages, className }: Props) {
           className,
         )}
       >
-        <p className="text-sm text-mute">No transcript captured for this call.</p>
+        <p className="text-sm text-mute">No transcript captured for this conversation.</p>
       </div>
     );
   }
