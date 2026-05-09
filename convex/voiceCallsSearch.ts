@@ -1,16 +1,24 @@
 /**
- * Semantic search over voice_calls for the /workspace/calls history page.
+ * Hybrid search over voice_calls for the /workspace/conversations history page.
  *
- * Embeds the user query with the same model used at write time (Gemini
- * Embedding 2 via OpenRouter, task hint "sentence similarity"), runs
- * vectorSearch against by_summaryVector filtered by userId, then
- * post-filters for archivedAt / surface in code and zips the vector score
- * into the returned list rows.
+ * Two passes, literal-first:
  *
- * Note on vectorSearch filter API: VectorFilterBuilder only exposes `eq` and
- * `or` — there is no `and` combinator. We filter by userId in the vector
- * search (most selective) and apply archivedAt / surface post-hoc after
- * hydration, which is cheap at the page sizes this feature targets.
+ *   1. Literal substring match against title + companyName via
+ *      _literalSearchForUser. Cheap, instant, deterministic. Catches short
+ *      proper-noun queries ("OpenAI", "Stripe") that semantic similarity
+ *      handles poorly, AND surfaces rows whose summaryEmbedding hasn't been
+ *      backfilled (which would otherwise be invisible to vector search).
+ *      Literal hits get searchScore = 1.0.
+ *
+ *   2. Semantic vector search against by_summaryVector. Only runs when the
+ *      literal pass leaves slots unfilled — saves an embed call when the
+ *      common case (a company/role keyword) saturates results from the
+ *      cheap pass.
+ *
+ * Vector pass detail: VectorFilterBuilder only exposes `eq` and `or` (no
+ * `and`), so we filter by userId in the index and apply archivedAt / surface
+ * post-hoc after hydration. Over-fetch by 4x (capped at 256) to absorb the
+ * post-filter drop-off.
  */
 
 import { action } from "./_generated/server";
@@ -106,32 +114,73 @@ export const searchByText = action({
     const trimmed = args.query.trim();
     if (trimmed.length === 0) return [];
 
+    const limit = Math.max(1, Math.min(args.limit ?? 20, 50));
+    const includeArchived = args.includeArchived ?? false;
+
+    // ── Pass 1: literal title/company substring match ─────────────────
+    // Always runs. Cheap. Deterministic. Catches short proper-noun queries
+    // and any rows that lack summaryEmbedding (legacy data pre-backfill).
+    const literalRows: Array<{
+      _id: Id<"voice_calls">;
+      surface?: "guide" | "compass" | "job" | "interview_job";
+      guideId?: Id<"career_guides">;
+      jobPostingId?: Id<"job_postings">;
+      canvasSnapshotId?: Id<"discover_canvases">;
+      title: string;
+      status: "active" | "completed" | "interrupted" | "error";
+      totalDurationSeconds: number;
+      messagesCount: number;
+      aiSummary?: unknown;
+      archivedAt?: number;
+      createdAt: number;
+      updatedAt: number;
+      companyName?: string;
+      companyLogoUrl?: string;
+    }> = await ctx.runQuery(internal.voiceCalls._literalSearchForUser, {
+      userId: user._id,
+      query: trimmed,
+      surfaces: args.surfaces,
+      includeArchived,
+      limit,
+    });
+
+    const result: CallListRowWithScore[] = literalRows.map((row) => ({
+      ...row,
+      searchScore: 1, // literal hits get top rank, ahead of any vector match
+    }));
+
+    // Short-circuit: if literal saturates the limit, skip the vector pass
+    // entirely (no embed cost, no extra round trip).
+    if (result.length >= limit) return result.slice(0, limit);
+
+    // ── Pass 2: semantic vector search to fill remaining slots ────────
+    const seenIds = new Set<Id<"voice_calls">>(result.map((r) => r._id));
+    const remaining = limit - result.length;
+
     // Embed query with the same task hint used at write time.
     const vector = await embed({
       text: trimmed,
       taskHint: "sentence similarity",
     });
 
-    const limit = Math.max(1, Math.min(args.limit ?? 20, 50));
-    const includeArchived = args.includeArchived ?? false;
-
-    // Filter by userId only in the vector search. VectorFilterBuilder only
-    // supports `eq` and `or` (no `and`), so archivedAt and surface filtering
-    // is handled in code after hydration.
     const hits: Array<{ _id: Id<"voice_calls">; _score: number }> =
       await ctx.vectorSearch("voice_calls", "by_summaryVector", {
         vector,
-        // Over-fetch to account for post-filter drop-off from archived/surface
-        // filtering. Capped at the API max of 256.
-        limit: Math.min(limit * 4, 256),
+        // Over-fetch to absorb post-filter drop-off from archived/surface
+        // gates and from literal-match dedup. Capped at the API max of 256.
+        limit: Math.min(remaining * 4, 256),
         filter: (q) => q.eq("userId", user._id),
       });
 
-    if (hits.length === 0) return [];
+    if (hits.length === 0) return result;
 
-    // Hydrate matched ids to trimmed rows via the shared internalQuery.
-    // _hydrateForList performs the company-info join internally, so the
-    // companyName / companyLogoUrl fields come back already populated.
+    // Drop hits already returned by the literal pass before hydrating —
+    // saves a few db.get calls.
+    const newHitIds = hits
+      .map((h) => h._id)
+      .filter((id) => !seenIds.has(id));
+    if (newHitIds.length === 0) return result;
+
     const rows: Array<{
       _id: Id<"voice_calls">;
       surface?: "guide" | "compass" | "job" | "interview_job";
@@ -149,7 +198,7 @@ export const searchByText = action({
       companyName?: string;
       companyLogoUrl?: string;
     }> = await ctx.runQuery(internal.voiceCalls._hydrateForList, {
-      ids: hits.map((h) => h._id),
+      ids: newHitIds,
     });
 
     const scoreById = new Map<Id<"voice_calls">, number>(
@@ -161,9 +210,9 @@ export const searchByText = action({
         ? new Set(args.surfaces)
         : null;
 
-    const result: CallListRowWithScore[] = [];
     for (const row of rows) {
-      // Post-filter: archived semantics
+      // Post-filter: archived semantics (literal pass handled this in
+      // _literalSearchForUser; vector pass needs it applied here)
       if (includeArchived && row.archivedAt === undefined) continue;
       if (!includeArchived && row.archivedAt !== undefined) continue;
       // Post-filter: surface
@@ -173,7 +222,6 @@ export const searchByText = action({
         ...row,
         searchScore: scoreById.get(row._id) ?? 0,
       });
-
       if (result.length >= limit) break;
     }
 

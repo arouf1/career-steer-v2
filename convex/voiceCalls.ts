@@ -799,6 +799,95 @@ export const _hydrateForList = internalQuery({
   },
 });
 
+// ── Internal: literal substring search over title + company name ─────────
+//
+// Vector search excels at conceptual queries ("system design at a payments
+// company") but is weak on short proper-noun queries (a company name, a role
+// keyword) — and any row whose summaryEmbedding hasn't been backfilled is
+// invisible to the vector index entirely. This pass is the fallback: scan
+// the user's calls via by_user_archived_created and pick rows whose title
+// OR companyName contains the query (case-insensitive). Cheap; bounded by
+// page size; complements rather than replaces semantic search.
+//
+// Returns trimmed rows in the same shape as listForUser / _hydrateForList
+// so the caller (searchByText action) can merge results without reshaping.
+
+export const _literalSearchForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+    query: v.string(),
+    surfaces: v.optional(
+      v.array(
+        v.union(
+          v.literal("guide"),
+          v.literal("compass"),
+          v.literal("job"),
+          v.literal("interview_job"),
+        ),
+      ),
+    ),
+    includeArchived: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(callListRowValidator),
+  handler: async (ctx, args) => {
+    const needle = args.query.trim().toLowerCase();
+    if (needle.length === 0) return [];
+
+    const includeArchived = args.includeArchived ?? false;
+    const limit = Math.max(1, Math.min(args.limit ?? 20, 50));
+
+    const rows: Doc<"voice_calls">[] = [];
+    // Scan reverse-chronological so freshest matches come first; cap the
+    // outer scan at a generous multiple of limit to bound cost.
+    const scanCap = Math.min(limit * 10, 500);
+    let scanned = 0;
+    for await (const row of ctx.db
+      .query("voice_calls")
+      .withIndex("by_user_archived_created", (q) =>
+        includeArchived
+          ? q.eq("userId", args.userId)
+          : q.eq("userId", args.userId).eq("archivedAt", undefined),
+      )
+      .order("desc")) {
+      scanned += 1;
+      if (scanned > scanCap) break;
+      // Defensive: if we asked for active-only via the index, double-check
+      // archivedAt; if includeArchived, we want only archived rows.
+      if (includeArchived && row.archivedAt === undefined) continue;
+      rows.push(row);
+      if (rows.length >= scanCap) break;
+    }
+
+    const companyByPosting = await buildCompanyMapForRows(ctx, rows);
+
+    const surfacesSet =
+      args.surfaces && args.surfaces.length > 0
+        ? new Set(args.surfaces)
+        : null;
+
+    const matches: Doc<"voice_calls">[] = [];
+    for (const row of rows) {
+      if (surfacesSet && (!row.surface || !surfacesSet.has(row.surface))) continue;
+      const titleHit = row.title?.toLowerCase().includes(needle);
+      const company = row.jobPostingId
+        ? companyByPosting.get(row.jobPostingId)
+        : undefined;
+      const companyHit = company?.name?.toLowerCase().includes(needle) ?? false;
+      if (!titleHit && !companyHit) continue;
+      matches.push(row);
+      if (matches.length >= limit) break;
+    }
+
+    return matches.map((r) =>
+      trimToListRow(
+        r,
+        r.jobPostingId ? companyByPosting.get(r.jobPostingId) : undefined,
+      ),
+    );
+  },
+});
+
 // ── Internal helper: resolve userId from tokenIdentifier ─────────────────
 //
 // Actions cannot call resolveAuthedUser (which is typed for QueryCtx /
