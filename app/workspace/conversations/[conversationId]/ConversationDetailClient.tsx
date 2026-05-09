@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Archive,
   ArchiveRestore,
-  Loader2,
   MoreHorizontal,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -19,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ConversationTranscript } from "@/components/workspace/conversations/ConversationTranscript";
+import { WorkspaceLoadingArticle } from "@/components/workspace/WorkspaceLoading";
 import { InterviewDetailPanel } from "@/components/workspace/conversations/InterviewDetailPanel";
 import { DeepDiveDetailPanel } from "@/components/workspace/conversations/DeepDiveDetailPanel";
 import {
@@ -85,13 +85,12 @@ export function ConversationDetailClient({ callId }: Props) {
   const unarchive = useMutation(api.voiceCalls.unarchive);
 
   // ── Loading state ────────────────────────────────────────────────────────
+  // Article-shape skeleton matches the eventual layout (TOC sidebar +
+  // masthead + section stack) so the page rhythm doesn't shift when the
+  // Convex query resolves. Honours prefers-reduced-motion via the shared
+  // .skeleton-block utility.
   if (call === undefined) {
-    return (
-      <div className="mx-auto flex w-full max-w-3xl items-center gap-2 p-8 text-[13px] text-mute">
-        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} aria-hidden />
-        Loading conversation…
-      </div>
-    );
+    return <WorkspaceLoadingArticle />;
   }
 
   // ── 404 / not-owned fallback ─────────────────────────────────────────────
