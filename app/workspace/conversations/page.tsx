@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { ConversationsListClient } from "./ConversationsListClient";
+import { WorkspacePageShell } from "@/components/workspace/WorkspacePageShell";
 
 export const metadata: Metadata = {
   title: "Conversations",
@@ -17,5 +18,9 @@ export const metadata: Metadata = {
 export default async function ConversationsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
-  return <ConversationsListClient />;
+  return (
+    <WorkspacePageShell>
+      <ConversationsListClient />
+    </WorkspacePageShell>
+  );
 }

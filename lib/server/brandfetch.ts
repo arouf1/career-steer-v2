@@ -94,10 +94,13 @@ export async function searchBrand(
   return pickBestHit(hits, opts.takeFirstClaimed ?? true);
 }
 
-// Build a Brandfetch CDN logo URL from a domain. The CDN is unauthenticated
-// and stable — same URL pattern Brandfetch's own site uses for embeds.
-// Falling back to a lettermark when no logo exists keeps every URL
-// non-blank, which is what we want for hiringOrganization.logo in JSON-LD.
-export function brandfetchLogoUrl(domain: string): string {
-  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}/w/256/h/256/icon`;
+// Build a Brandfetch CDN logo URL. Canonical pattern per Brandfetch's
+// current docs: `cdn.brandfetch.io/{domain}?c={clientId}`. The CDN also
+// cross-checks the request Referer against the allowed-origins list
+// registered to the client ID — so the URL succeeding in production
+// requires the deploy domain (and `localhost:3000` for dev) to be added
+// in the Brandfetch dashboard. The client ID itself is non-sensitive
+// by Brandfetch's design (meant to ship in <img src>).
+export function brandfetchLogoUrl(domain: string, clientId: string): string {
+  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}?c=${encodeURIComponent(clientId)}`;
 }

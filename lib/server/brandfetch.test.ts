@@ -94,15 +94,15 @@ describe("pickBestHit", () => {
 });
 
 describe("brandfetchLogoUrl", () => {
-  it("uses the stable Brandfetch CDN URL pattern", () => {
-    expect(brandfetchLogoUrl("acme.com")).toBe(
-      "https://cdn.brandfetch.io/acme.com/w/256/h/256/icon",
+  it("uses the bare CDN pattern with `c` query param", () => {
+    expect(brandfetchLogoUrl("acme.com", "abc123")).toBe(
+      "https://cdn.brandfetch.io/acme.com?c=abc123",
     );
   });
 
-  it("URL-encodes domains containing reserved characters", () => {
-    expect(brandfetchLogoUrl("a/b.com")).toBe(
-      "https://cdn.brandfetch.io/a%2Fb.com/w/256/h/256/icon",
+  it("URL-encodes domains and client IDs containing reserved characters", () => {
+    expect(brandfetchLogoUrl("a/b.com", "id+with/slash")).toBe(
+      "https://cdn.brandfetch.io/a%2Fb.com?c=id%2Bwith%2Fslash",
     );
   });
 });

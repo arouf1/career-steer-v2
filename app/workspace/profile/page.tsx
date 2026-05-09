@@ -16,15 +16,29 @@ import { ProfileEditForm } from "@/components/profile/ProfileEditForm";
 import { ReviewCallout } from "@/components/profile/ReviewCallout";
 import { GuidesForYou } from "@/components/profile/GuidesForYou";
 import { LocationStep } from "@/components/profile/LocationStep";
+import { WorkspacePageShell } from "@/components/workspace/WorkspacePageShell";
+import {
+  WorkspaceLoadingHeader,
+  WorkspaceLoadingRows,
+} from "@/components/workspace/WorkspaceLoading";
+
+function ProfileLoadingSkeleton() {
+  return (
+    <div className="flex flex-col gap-12">
+      <WorkspaceLoadingHeader />
+      <WorkspaceLoadingRows count={2} />
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-12 md:py-20">
+    <WorkspacePageShell>
       <AuthLoading>
-        <p className="type-body text-mute">Loading…</p>
+        <ProfileLoadingSkeleton />
       </AuthLoading>
       <Unauthenticated>
-        <div className="flex flex-col gap-6">
+        <div className="fade-in-view flex flex-col gap-6">
           <h1 className="type-headline text-ink">Sign in to start.</h1>
           <p className="type-body text-body max-w-prose">
             Your profile is the foundation. Sign in and we&rsquo;ll get you
@@ -43,7 +57,7 @@ export default function ProfilePage() {
       <Authenticated>
         <ProfileShell />
       </Authenticated>
-    </main>
+    </WorkspacePageShell>
   );
 }
 
@@ -53,7 +67,7 @@ function ProfileShell() {
   const [editing, setEditing] = useState(false);
 
   if (profile === undefined) {
-    return <p className="type-body text-mute">Loading…</p>;
+    return <ProfileLoadingSkeleton />;
   }
 
   if (profile === null) {
@@ -92,7 +106,7 @@ function ProfileShell() {
   }
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="fade-in-view flex flex-col gap-10">
       {!profile.reviewed && (
         <ReviewCallout
           fieldCount={fieldCount}

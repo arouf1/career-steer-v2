@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAction, usePaginatedQuery, useMutation } from "convex/react";
-import { Loader2, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -20,6 +20,8 @@ import { InterviewRow } from "@/components/workspace/conversations/InterviewRow"
 import { DeepDiveRow } from "@/components/workspace/conversations/DeepDiveRow";
 import { ConversationSection } from "@/components/workspace/conversations/ConversationSection";
 import { groupConversationsByDate } from "@/components/workspace/conversations/groupConversationsByDate";
+import { WorkspacePageHeader } from "@/components/workspace/WorkspacePageHeader";
+import { WorkspaceLoadingRows } from "@/components/workspace/WorkspaceLoading";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -240,16 +242,12 @@ export function ConversationsListClient() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
-      {/* Header — editorial, no icon (sidebar already carries it) */}
-      <header className="flex flex-col gap-2">
-        <h1 className="[font-family:var(--font-serif)] text-[28px] font-normal leading-tight text-ink">
-          Conversations
-        </h1>
-        <p className="max-w-[60ch] text-[14px] leading-relaxed text-mute">
-          Every mock interview and deep-dive conversation you&apos;ve had. Search by topic or filter by type.
-        </p>
-      </header>
+    <div className="flex flex-col gap-8">
+      <WorkspacePageHeader
+        eyebrow="Conversations"
+        title="Every back-and-forth, kept."
+        lede="Mock interviews and deep-dive conversations you've had. Search by topic or filter by type."
+      />
 
       {/* Search input — editorial underline pattern (matches jobs page) */}
       <div>
@@ -328,19 +326,18 @@ export function ConversationsListClient() {
 
       {/* List / loading / empty */}
       {isLoading ? (
-        <div className="flex items-center gap-2 p-8 text-[13px] text-mute">
-          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} aria-hidden />
-          Loading…
-        </div>
+        <WorkspaceLoadingRows />
       ) : rows.length === 0 ? (
-        <EmptyState
-          usingSearch={usingSearch}
-          hasFilters={surfaces.size > 0 || includeArchived}
-        />
+        <div className="fade-in-view">
+          <EmptyState
+            usingSearch={usingSearch}
+            hasFilters={surfaces.size > 0 || includeArchived}
+          />
+        </div>
       ) : usingSearch ? (
         // Search mode: flat list, no date sections (results are ranked by
         // semantic relevance — chronological grouping would scramble the rank).
-        <div className="flex flex-col divide-y divide-hairline">
+        <div className="fade-in-view flex flex-col divide-y divide-hairline">
           {rows.map((call) => (
             <RowDispatch
               key={call._id}
@@ -351,7 +348,7 @@ export function ConversationsListClient() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col">
+        <div className="fade-in-view flex flex-col">
           {grouped?.map(({ key, rows: groupRows }) => (
             <div key={key}>
               <ConversationSection groupKey={key} />

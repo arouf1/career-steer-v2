@@ -54,6 +54,18 @@ Career Steer must not look or feel like:
 4. **Honest before hopeful.** Name the hard thing first — the gap, the mismatch, the thing the resume isn't saying — then point at what to do. Hopeful-without-honest is the failure mode of every career site.
 5. **Made, not generated.** Every surface — including empty, loading, and error states — should feel deliberate enough that "AI made that" isn't the first thought. The product uses AI; it does not *look* like AI. Iconography is restricted to lucide; emoji are never used in UI.
 
+## Workspace surface rules
+
+The signed-in `/workspace/*` area is a working surface, not a marketing surface. Pages there must read as one product, not five separately-built screens. Three rules carry that:
+
+1. **Every workspace page uses the shared shell.** `<WorkspacePageShell>` owns max-width (`max-w-6xl`), horizontal padding (`px-6 sm:px-8`), and vertical rhythm (`py-8 sm:py-10`). No page picks its own width or padding. The deliberate exception is Career Compass — a full-bleed canvas, not a working page.
+
+2. **Every workspace page uses the shared header.** `<WorkspacePageHeader>` carries the editorial vocabulary: **eyebrow** (uppercase page name, `type-label text-mute`) → **headline** (`type-headline` clamped to 1.875–2.25rem, *never* `type-display` — that tier is hero/marketing only and is one-per-page in the public surface) → **lede** (15px, `text-ink/60`) → optional **actions** slot. The two-tone soft-span pattern (`text-ink-soft` on the de-emphasised half) applies here too.
+
+3. **Every workspace page uses the shared loading vocabulary.** `<WorkspaceLoadingHeader>` + `<WorkspaceLoadingRows>` (hairline-divided tonal-pulsing skeletons) hold the page rhythm while data lands. Populated content fades in via `.fade-in-view` (320ms opacity ramp, disabled under `prefers-reduced-motion`). No spinner glyphs on initial page load — search-in-progress is its own pattern.
+
+If a workspace page reaches for `type-display`, picks its own max-width, or shows a `Loader2` spinner during initial load, it's off-system. Fix it on the page, don't fork the rule.
+
 ## Accessibility & Inclusion
 
 - Default to **WCAG 2.2 AA**.
