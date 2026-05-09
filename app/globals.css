@@ -80,6 +80,13 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* No page-level horizontal scroll, ever. Browser anchor navigation,
+     scrollIntoView with implicit inline:"nearest", and stray sub-pixel
+     overflow can all kick the body sideways otherwise. The product never
+     uses horizontal page scroll — content that genuinely scrolls
+     horizontally (Career Compass canvas, the ladder anchor strip) lives
+     inside its own overflow-x container. */
+  overflow-x: hidden;
 }
 
 ::selection {

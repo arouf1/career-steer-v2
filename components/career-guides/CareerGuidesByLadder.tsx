@@ -194,7 +194,16 @@ export function CareerGuidesByLadder({
     scrollLockRef.current = window.setTimeout(() => {
       scrollLockRef.current = null;
     }, 800);
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Manual window.scrollTo instead of element.scrollIntoView — the
+    // latter defaults inline:"nearest" which still scrolls horizontally
+    // when an element is even 1px wider than the viewport. window.scrollTo
+    // is vertical-only and cannot shift the page sideways.
+    const rect = target.getBoundingClientRect();
+    const SCROLL_MARGIN_TOP = 96;
+    window.scrollTo({
+      top: window.scrollY + rect.top - SCROLL_MARGIN_TOP,
+      behavior: "smooth",
+    });
     history.replaceState(null, "", `#ladder-${slug}`);
   };
 
