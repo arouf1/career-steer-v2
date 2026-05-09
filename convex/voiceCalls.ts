@@ -589,12 +589,14 @@ export const listForUser = query({
   returns: v.object({
     page: v.array(callListRowValidator),
     isDone: v.boolean(),
-    continueCursor: v.union(v.string(), v.null()),
+    // PaginationResult.continueCursor is always string (never null) — the
+    // empty string "" signals "no more pages" in the Convex pagination protocol.
+    continueCursor: v.string(),
   }),
   handler: async (ctx, args) => {
     const user = await resolveAuthedUser(ctx);
     if (!user) {
-      return { page: [], isDone: true, continueCursor: null };
+      return { page: [], isDone: true, continueCursor: "" };
     }
 
     const includeArchived = args.includeArchived ?? false;
