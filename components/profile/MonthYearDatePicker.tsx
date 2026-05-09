@@ -84,6 +84,24 @@ export function MonthYearDatePicker({
     setOpen(false);
   };
 
+  // Precision-toggle handler that ALSO re-serializes the existing value
+  // so the form sees a real value change. e.g. "2021-01" -> "2021" when
+  // toggling to year-only; "2021" -> "2021-01" when toggling back. Without
+  // this, the picker just changed local display state and RHF never saw
+  // a diff, so toggling on a populated entry didn't surface the floating
+  // Save bar even though the persisted value SHOULD have changed.
+  const changePrecision = (next: Precision) => {
+    if (next === precision) return;
+    setPrecision(next);
+    if (parsed.date) {
+      const normalised =
+        next === "year"
+          ? new Date(parsed.date.getFullYear(), 0, 1)
+          : new Date(parsed.date.getFullYear(), parsed.date.getMonth(), 1);
+      onChange(serialize(normalised, next));
+    }
+  };
+
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {!lockPrecision && (
@@ -94,7 +112,7 @@ export function MonthYearDatePicker({
         >
           <button
             type="button"
-            onClick={() => setPrecision("month")}
+            onClick={() => changePrecision("month")}
             aria-pressed={effectivePrecision === "month"}
             className={cn(
               "rounded-pill px-3 py-1 font-medium transition-colors",
@@ -107,7 +125,7 @@ export function MonthYearDatePicker({
           </button>
           <button
             type="button"
-            onClick={() => setPrecision("year")}
+            onClick={() => changePrecision("year")}
             aria-pressed={effectivePrecision === "year"}
             className={cn(
               "rounded-pill px-3 py-1 font-medium transition-colors",
