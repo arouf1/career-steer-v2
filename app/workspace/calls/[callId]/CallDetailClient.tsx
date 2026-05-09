@@ -18,7 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CallSurfaceChip } from "@/components/workspace/calls/CallSurfaceChip";
 import { CallTranscript } from "@/components/workspace/calls/CallTranscript";
 import { InterviewDetailPanel } from "@/components/workspace/calls/InterviewDetailPanel";
 import { DeepDiveDetailPanel } from "@/components/workspace/calls/DeepDiveDetailPanel";
@@ -26,6 +25,13 @@ import type { InterviewRubric } from "@/lib/ai/prompts/interviewer";
 import type { DeepDiveSummary } from "@/lib/ai/prompts/voiceAdviser";
 
 type Surface = "guide" | "compass" | "job" | "interview_job";
+
+const SURFACE_LABEL: Record<Surface, string> = {
+  guide: "Career deep dive",
+  compass: "Compass",
+  job: "Job deep dive",
+  interview_job: "Mock interview",
+};
 
 type Props = {
   callId: string;
@@ -106,8 +112,10 @@ export function CallDetailClient({ callId }: Props) {
           All calls
         </Link>
 
-        <div className="flex items-center gap-2">
-          <CallSurfaceChip surface={surface} size="md" />
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-mute">
+            {SURFACE_LABEL[surface]}
+          </span>
 
           {isArchived && (
             <span className="inline-flex items-center rounded-full border border-hairline bg-paper-raised px-2 py-0.5 text-[10px] font-medium text-mute">

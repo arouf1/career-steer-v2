@@ -21,7 +21,8 @@ import { embed } from "../lib/ai/providers";
 
 // Trimmed list-row + score shape. Mirrors callListRowValidator from
 // voiceCalls.ts but extended with searchScore. Kept inline so this file
-// is self-contained.
+// is self-contained. companyName / companyLogoUrl come from the join
+// performed inside _hydrateForList.
 const callListRowWithScoreValidator = v.object({
   _id: v.id("voice_calls"),
   surface: v.optional(
@@ -48,6 +49,8 @@ const callListRowWithScoreValidator = v.object({
   archivedAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
+  companyName: v.optional(v.string()),
+  companyLogoUrl: v.optional(v.string()),
   searchScore: v.number(),
 });
 
@@ -65,6 +68,8 @@ type CallListRowWithScore = {
   archivedAt?: number;
   createdAt: number;
   updatedAt: number;
+  companyName?: string;
+  companyLogoUrl?: string;
   searchScore: number;
 };
 
@@ -125,6 +130,8 @@ export const searchByText = action({
     if (hits.length === 0) return [];
 
     // Hydrate matched ids to trimmed rows via the shared internalQuery.
+    // _hydrateForList performs the company-info join internally, so the
+    // companyName / companyLogoUrl fields come back already populated.
     const rows: Array<{
       _id: Id<"voice_calls">;
       surface?: "guide" | "compass" | "job" | "interview_job";
@@ -139,6 +146,8 @@ export const searchByText = action({
       archivedAt?: number;
       createdAt: number;
       updatedAt: number;
+      companyName?: string;
+      companyLogoUrl?: string;
     }> = await ctx.runQuery(internal.voiceCalls._hydrateForList, {
       ids: hits.map((h) => h._id),
     });

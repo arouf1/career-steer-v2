@@ -16,8 +16,11 @@ import { History, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { CallListRow } from "@/components/workspace/calls/CallListRow";
 import { CallSearchInput } from "@/components/workspace/calls/CallSearchInput";
+import { InterviewRow } from "@/components/workspace/calls/InterviewRow";
+import { DeepDiveRow } from "@/components/workspace/calls/DeepDiveRow";
+import { CallSection } from "@/components/workspace/calls/CallSection";
+import { groupCallsByDate } from "@/components/workspace/calls/groupCallsByDate";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -51,6 +54,8 @@ type ListRow = {
   aiSummary?: unknown;
   messagesCount: number;
   searchScore?: number;
+  companyName?: string;
+  companyLogoUrl?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -220,6 +225,14 @@ export function CallsListClient() {
   const isLoadingMore = paginated.status === "LoadingMore";
   const canLoadMore = !usingSearch && paginated.status === "CanLoadMore";
 
+  // Browse mode: bucket rows into Today / Yesterday / This week / Earlier so
+  // the editorial section headers can render between them. Search mode skips
+  // the grouping — vector-search results are ranked by relevance, not time.
+  const grouped = useMemo(
+    () => (usingSearch ? null : groupCallsByDate(rows)),
+    [rows, usingSearch],
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
@@ -295,18 +308,37 @@ export function CallsListClient() {
           usingSearch={usingSearch}
           hasFilters={surfaces.size > 0 || includeArchived}
         />
-      ) : (
-        <ul className="flex flex-col divide-y divide-hairline">
+      ) : usingSearch ? (
+        // Search mode: flat list, no date sections (results are ranked by
+        // semantic relevance — chronological grouping would scramble the rank).
+        <div className="flex flex-col divide-y divide-hairline">
           {rows.map((call) => (
-            <li key={call._id}>
-              <CallListRow
-                call={call}
-                onArchive={() => void handleArchive(call._id)}
-                onUnarchive={() => void handleUnarchive(call._id)}
-              />
-            </li>
+            <RowDispatch
+              key={call._id}
+              call={call}
+              onArchive={() => void handleArchive(call._id)}
+              onUnarchive={() => void handleUnarchive(call._id)}
+            />
           ))}
-        </ul>
+        </div>
+      ) : (
+        <div className="flex flex-col">
+          {grouped?.map(({ key, rows: groupRows }) => (
+            <div key={key}>
+              <CallSection groupKey={key} />
+              <div className="flex flex-col divide-y divide-hairline">
+                {groupRows.map((call) => (
+                  <RowDispatch
+                    key={call._id}
+                    call={call}
+                    onArchive={() => void handleArchive(call._id)}
+                    onUnarchive={() => void handleUnarchive(call._id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Load more (browse mode only) */}
@@ -334,6 +366,37 @@ export function CallsListClient() {
         </p>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RowDispatch — picks InterviewRow vs DeepDiveRow based on surface
+// ---------------------------------------------------------------------------
+
+function RowDispatch({
+  call,
+  onArchive,
+  onUnarchive,
+}: {
+  call: ListRow;
+  onArchive: () => void;
+  onUnarchive: () => void;
+}) {
+  if (call.surface === "interview_job") {
+    return (
+      <InterviewRow
+        call={call}
+        onArchive={onArchive}
+        onUnarchive={onUnarchive}
+      />
+    );
+  }
+  return (
+    <DeepDiveRow
+      call={call}
+      onArchive={onArchive}
+      onUnarchive={onUnarchive}
+    />
   );
 }
 

@@ -68,7 +68,14 @@ const callListRowValidator = v.object({
   archivedAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
+  // Joined company info — present only on rows whose jobPostingId resolved to
+  // a company. Optional so existing consumers (and rows without a posting)
+  // remain compatible.
+  companyName: v.optional(v.string()),
+  companyLogoUrl: v.optional(v.string()),
 });
+
+type CallCompanyInfo = { name?: string; logoUrl?: string };
 
 type CallListRow = {
   _id: Id<"voice_calls">;
@@ -84,9 +91,14 @@ type CallListRow = {
   archivedAt?: number;
   createdAt: number;
   updatedAt: number;
+  companyName?: string;
+  companyLogoUrl?: string;
 };
 
-function trimToListRow(row: Doc<"voice_calls">): CallListRow {
+function trimToListRow(
+  row: Doc<"voice_calls">,
+  company?: CallCompanyInfo,
+): CallListRow {
   return {
     _id: row._id,
     surface: row.surface,
@@ -101,7 +113,60 @@ function trimToListRow(row: Doc<"voice_calls">): CallListRow {
     archivedAt: row.archivedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    companyName: company?.name,
+    companyLogoUrl: company?.logoUrl,
   };
+}
+
+// Resolve { jobPostingId → { companyName, companyLogoUrl } } in two batched
+// fetches: postings → companyIds → companies. Bounded at 50 rows per call
+// (page size 20, plus search over-fetch headroom). Returns an empty Map when
+// no rows have a jobPostingId, skipping the round-trips entirely.
+async function buildCompanyMapForRows(
+  ctx: QueryCtx,
+  rows: ReadonlyArray<Doc<"voice_calls">>,
+): Promise<Map<Id<"job_postings">, CallCompanyInfo>> {
+  const postingIds = Array.from(
+    new Set(
+      rows
+        .map((r) => r.jobPostingId)
+        .filter((id): id is Id<"job_postings"> => id !== undefined),
+    ),
+  ).slice(0, 50);
+
+  if (postingIds.length === 0) {
+    return new Map();
+  }
+
+  const postings = await Promise.all(postingIds.map((id) => ctx.db.get(id)));
+
+  const companyIdByPosting = new Map<Id<"job_postings">, Id<"companies">>();
+  const uniqueCompanyIds = new Set<Id<"companies">>();
+  for (const p of postings) {
+    if (!p) continue;
+    companyIdByPosting.set(p._id, p.companyId);
+    uniqueCompanyIds.add(p.companyId);
+  }
+
+  const companyIds = Array.from(uniqueCompanyIds);
+  const companies = await Promise.all(companyIds.map((id) => ctx.db.get(id)));
+  const companyById = new Map<Id<"companies">, Doc<"companies">>();
+  for (const c of companies) {
+    if (c) companyById.set(c._id, c);
+  }
+
+  const result = new Map<Id<"job_postings">, CallCompanyInfo>();
+  for (const [postingId, companyId] of companyIdByPosting) {
+    const company = companyById.get(companyId);
+    if (!company) continue;
+    result.set(postingId, {
+      name: company.nameRaw,
+      // Coerce the schema-level v.union(string, null) down to undefined so
+      // the optional-field validator on the row payload is satisfied.
+      logoUrl: company.logoUrl ?? undefined,
+    });
+  }
+  return result;
 }
 
 // ── Auth helper (mirrors peopleOutreach.ts / careerGuidePersonalizations.ts) ─
@@ -625,14 +690,28 @@ export const listForUser = query({
         ? new Set(args.surfaces)
         : null;
 
-    const filtered = result.page
-      .filter((row) => {
-        if (includeArchived && row.archivedAt === undefined) return false;
-        if (surfacesSet && (!row.surface || !surfacesSet.has(row.surface as "guide" | "compass" | "job" | "interview_job")))
-          return false;
-        return true;
-      })
-      .map(trimToListRow);
+    const filteredRows = result.page.filter((row) => {
+      if (includeArchived && row.archivedAt === undefined) return false;
+      if (
+        surfacesSet &&
+        (!row.surface ||
+          !surfacesSet.has(
+            row.surface as "guide" | "compass" | "job" | "interview_job",
+          ))
+      )
+        return false;
+      return true;
+    });
+
+    // Resolve company info for the filtered rows in two batched fetches.
+    const companyByPosting = await buildCompanyMapForRows(ctx, filteredRows);
+
+    const filtered = filteredRows.map((row) =>
+      trimToListRow(
+        row,
+        row.jobPostingId ? companyByPosting.get(row.jobPostingId) : undefined,
+      ),
+    );
 
     return {
       page: filtered,
@@ -688,10 +767,15 @@ export const _hydrateForList = internalQuery({
   args: { ids: v.array(v.id("voice_calls")) },
   returns: v.array(callListRowValidator),
   handler: async (ctx, args) => {
-    const rows = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
-    return rows
-      .filter((r): r is Doc<"voice_calls"> => r !== null)
-      .map(trimToListRow);
+    const rows = (await Promise.all(args.ids.map((id) => ctx.db.get(id))))
+      .filter((r): r is Doc<"voice_calls"> => r !== null);
+    const companyByPosting = await buildCompanyMapForRows(ctx, rows);
+    return rows.map((r) =>
+      trimToListRow(
+        r,
+        r.jobPostingId ? companyByPosting.get(r.jobPostingId) : undefined,
+      ),
+    );
   },
 });
 
