@@ -59,13 +59,17 @@ export function InterviewRow({ call, onArchive, onUnarchive }: Props) {
         aria-label={`Open mock interview: ${cleanTitle}`}
       />
 
+      {/* All visible non-interactive children get pointer-events-none so
+          clicks pass through to the absolute-fill Link underneath. The
+          DropdownMenu trigger below opts back in via pointer-events-auto
+          so it stays clickable. */}
       <CompanyAnchor
         name={call.companyName}
         logoUrl={call.companyLogoUrl}
-        className="relative z-10 shrink-0"
+        className="pointer-events-none relative z-10 shrink-0"
       />
 
-      <div className="relative z-10 min-w-0 flex-1">
+      <div className="pointer-events-none relative z-10 min-w-0 flex-1">
         <h3 className="text-[15px] font-medium leading-snug text-ink">
           {cleanTitle}
         </h3>
@@ -86,7 +90,7 @@ export function InterviewRow({ call, onArchive, onUnarchive }: Props) {
       </div>
 
       {score !== null && (
-        <div className="relative z-10 flex shrink-0 items-baseline gap-1 pt-0.5">
+        <div className="pointer-events-none relative z-10 flex shrink-0 items-baseline gap-1 pt-0.5">
           <span className="text-[26px] font-normal leading-none text-ink [font-family:var(--font-serif)]">
             {score.toFixed(1)}
           </span>
@@ -96,7 +100,7 @@ export function InterviewRow({ call, onArchive, onUnarchive }: Props) {
         </div>
       )}
 
-      <div className="relative z-10 shrink-0 self-start opacity-40 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      <div className="pointer-events-auto relative z-10 shrink-0 self-start opacity-40 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

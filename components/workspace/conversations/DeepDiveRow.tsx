@@ -67,9 +67,12 @@ export function DeepDiveRow({ call, onArchive, onUnarchive }: Props) {
         aria-label={`Open conversation: ${cleanTitle}`}
       />
 
+      {/* Title column gets pointer-events-none so clicks pass through to
+          the absolute-fill Link underneath; the action menu opts back in
+          via pointer-events-auto so it stays clickable. */}
       <div className="relative z-10 flex items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-mute">
+        <div className="pointer-events-none min-w-0 flex-1">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             {eyebrow}
           </p>
           <h3 className="mt-1 text-[18px] font-normal leading-tight text-ink [font-family:var(--font-serif)]">
@@ -87,7 +90,7 @@ export function DeepDiveRow({ call, onArchive, onUnarchive }: Props) {
           </div>
         </div>
 
-        <div className="shrink-0 opacity-40 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <div className="pointer-events-auto shrink-0 opacity-40 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
