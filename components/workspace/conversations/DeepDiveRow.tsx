@@ -67,11 +67,13 @@ export function DeepDiveRow({ call, onArchive, onUnarchive }: Props) {
         aria-label={`Open conversation: ${cleanTitle}`}
       />
 
-      {/* Title column gets pointer-events-none so clicks pass through to
-          the absolute-fill Link underneath; the action menu opts back in
-          via pointer-events-auto so it stays clickable. */}
-      <div className="relative z-10 flex items-start gap-4">
-        <div className="pointer-events-none min-w-0 flex-1">
+      {/* Outer flex wrapper sits at z-10 above the absolute-fill Link, so
+          it must be pointer-events-none too — otherwise clicks land on
+          the wrapper before reaching the children's per-element handling.
+          The action menu opts back in via pointer-events-auto so it
+          stays clickable. */}
+      <div className="pointer-events-none relative z-10 flex items-start gap-4">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
             {eyebrow}
           </p>
