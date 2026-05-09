@@ -33,7 +33,10 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn(
-        "group/calendar bg-background p-3 [--cell-size:--spacing(8)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
+        // Brand-tuned: bg-paper (cream), warm padding, no chrome. Stays
+        // transparent inside Popover/Card surfaces (those carry their own
+        // bg-paper) so we don't double-stack.
+        "group/calendar bg-paper p-3 text-ink [--cell-size:--spacing(9)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className
@@ -57,12 +60,12 @@ function Calendar({
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "size-(--cell-size) p-0 text-mute hover:bg-paper-raised hover:text-ink select-none aria-disabled:opacity-30",
           defaultClassNames.button_previous
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "size-(--cell-size) p-0 text-mute hover:bg-paper-raised hover:text-ink select-none aria-disabled:opacity-30",
           defaultClassNames.button_next
         ),
         month_caption: cn(
@@ -70,28 +73,32 @@ function Calendar({
           defaultClassNames.month_caption
         ),
         dropdowns: cn(
-          "flex h-(--cell-size) w-full items-center justify-center gap-1.5 text-sm font-medium",
+          "flex h-(--cell-size) w-full items-center justify-center gap-1.5 text-[13px] font-medium text-ink",
           defaultClassNames.dropdowns
         ),
         dropdown_root: cn(
-          "relative rounded-md border border-input shadow-xs has-focus:border-ring has-focus:ring-[3px] has-focus:ring-ring/50",
+          // Flat-by-default per DESIGN.md — drop the shadow, use hairline
+          // border and ink focus instead of the ring stack.
+          "relative rounded-control border border-hairline bg-paper has-focus:border-ink",
           defaultClassNames.dropdown_root
         ),
         dropdown: cn(
-          "absolute inset-0 bg-popover opacity-0",
+          "absolute inset-0 bg-paper opacity-0",
           defaultClassNames.dropdown
         ),
         caption_label: cn(
-          "font-medium select-none",
+          "font-medium text-ink select-none",
           captionLayout === "label"
             ? "text-sm"
-            : "flex h-8 items-center gap-1 rounded-md pr-1 pl-2 text-sm [&>svg]:size-3.5 [&>svg]:text-muted-foreground",
+            : "flex h-8 items-center gap-1 rounded-control pr-1 pl-2 text-[13px] [&>svg]:size-3.5 [&>svg]:text-mute",
           defaultClassNames.caption_label
         ),
         table: "w-full border-collapse",
         weekdays: cn("flex", defaultClassNames.weekdays),
         weekday: cn(
-          "flex-1 rounded-md text-[0.8rem] font-normal text-muted-foreground select-none",
+          // Editorial label treatment — canonical eyebrow (10px uppercase
+          // tracking-[0.18em]) instead of the generic muted caption.
+          "flex-1 select-none text-[10px] font-medium uppercase tracking-[0.18em] text-mute",
           defaultClassNames.weekday
         ),
         week: cn("mt-2 flex w-full", defaultClassNames.week),
@@ -100,32 +107,35 @@ function Calendar({
           defaultClassNames.week_number_header
         ),
         week_number: cn(
-          "text-[0.8rem] text-muted-foreground select-none",
+          "text-[10px] text-mute select-none",
           defaultClassNames.week_number
         ),
         day: cn(
-          "group/day relative aspect-square h-full w-full p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-md",
+          "group/day relative aspect-square h-full w-full p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-pill",
           props.showWeekNumber
-            ? "[&:nth-child(2)[data-selected=true]_button]:rounded-l-md"
-            : "[&:first-child[data-selected=true]_button]:rounded-l-md",
+            ? "[&:nth-child(2)[data-selected=true]_button]:rounded-l-pill"
+            : "[&:first-child[data-selected=true]_button]:rounded-l-pill",
           defaultClassNames.day
         ),
         range_start: cn(
-          "rounded-l-md bg-accent",
+          "rounded-l-pill bg-paper-raised",
           defaultClassNames.range_start
         ),
-        range_middle: cn("rounded-none", defaultClassNames.range_middle),
-        range_end: cn("rounded-r-md bg-accent", defaultClassNames.range_end),
+        range_middle: cn("rounded-none bg-paper-raised", defaultClassNames.range_middle),
+        range_end: cn("rounded-r-pill bg-paper-raised", defaultClassNames.range_end),
         today: cn(
-          "rounded-md bg-accent text-accent-foreground data-[selected=true]:rounded-none",
+          // Today reads as a quiet underline accent rather than a filled
+          // chip — keeps the hierarchy: only the SELECTED day fills with
+          // ink. Today is just a marker.
+          "relative text-ink font-medium after:pointer-events-none after:absolute after:inset-x-3 after:bottom-1 after:h-px after:bg-ink/40 data-[selected=true]:after:hidden",
           defaultClassNames.today
         ),
         outside: cn(
-          "text-muted-foreground aria-selected:text-muted-foreground",
+          "text-mute/50 aria-selected:text-mute/50",
           defaultClassNames.outside
         ),
         disabled: cn(
-          "text-muted-foreground opacity-50",
+          "text-mute/40",
           defaultClassNames.disabled
         ),
         hidden: cn("invisible", defaultClassNames.hidden),
@@ -208,7 +218,19 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 leading-none font-normal group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50 data-[range-end=true]:rounded-md data-[range-end=true]:rounded-r-md data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-start=true]:rounded-md data-[range-start=true]:rounded-l-md data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground dark:hover:text-accent-foreground [&>span]:text-xs [&>span]:opacity-70",
+        // Brand-tuned day button:
+        // - default: ghost cell (text-ink, hover swaps to paper-raised)
+        // - today: handled at the parent .today className (underline accent)
+        // - selected: filled ink pill (bg-ink + text-paper rounded-pill)
+        // - range pieces: paper-raised middle, ink ends — quiet tonal range
+        // - focus: hairline ink ring instead of the heavy 3px ring stack
+        "flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 leading-none font-normal text-ink rounded-pill transition-colors hover:bg-paper-raised " +
+          "group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-1 group-data-[focused=true]/day:ring-ink/30 " +
+          "data-[range-start=true]:rounded-l-pill data-[range-start=true]:bg-ink data-[range-start=true]:text-paper data-[range-start=true]:hover:bg-ink-deep " +
+          "data-[range-end=true]:rounded-r-pill data-[range-end=true]:bg-ink data-[range-end=true]:text-paper data-[range-end=true]:hover:bg-ink-deep " +
+          "data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-paper-raised data-[range-middle=true]:text-ink " +
+          "data-[selected-single=true]:bg-ink data-[selected-single=true]:text-paper data-[selected-single=true]:hover:bg-ink-deep " +
+          "[&>span]:text-xs [&>span]:opacity-70",
         defaultClassNames.day,
         className
       )}
