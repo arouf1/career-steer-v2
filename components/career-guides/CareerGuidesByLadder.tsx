@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowUp } from "lucide-react";
 import type { GuideWithUrl } from "@/convex/careerGuides";
 import { type Tier, TIER_RANK } from "@/convex/lib/ladders";
 import { CareerGuideCard } from "./CareerGuideCard";
@@ -429,6 +430,30 @@ export function CareerGuidesByLadder({
           display: none;
         }
       `}</style>
+
+      {/* Back-to-top floater — appears when the page is scrolled below
+          the fold, click to smoothly scroll back to the top. Fixed
+          bottom-right, paper background + 1px hairline border (no
+          shadows at rest per DESIGN.md), ink ArrowUp icon. */}
+      <AnimatePresence>
+        {showBackToTop && (
+          <motion.button
+            key="back-to-top"
+            type="button"
+            onClick={() =>
+              window.scrollTo({ top: 0, behavior: "smooth" })
+            }
+            aria-label="Back to top"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.2, ease }}
+            className="fixed bottom-6 right-6 z-30 grid h-11 w-11 place-items-center rounded-full border border-hairline-strong bg-paper text-ink transition-colors hover:border-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/10 focus-visible:ring-offset-2 sm:bottom-8 sm:right-8"
+          >
+            <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
