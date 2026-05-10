@@ -75,22 +75,40 @@ const brainstormSchema = z.object({
     ),
 });
 
+// Field ordering is load-bearing for Gemini structured output, the model
+// fills fields in declaration order. `reasoning` first forces a written
+// chain of thought before `canonicalTitle` is committed; otherwise the
+// model echoes the candidate into `canonicalTitle` and only afterwards
+// "decides" in `reasoning` that a different name is the standard one.
 const legitimacyJudgeSchema = z.object({
+  reasoning: z
+    .string()
+    .describe(
+      "Think step by step in plain text, 2-4 sentences. (1) State whether " +
+        "the candidate title matches the canonical industry term in the Exa " +
+        "evidence, or whether a more standard form exists. (2) If a " +
+        "correction is needed, name the EXACT corrected Title Case form " +
+        "here. (3) Confirm the role passes the 4-point rubric.",
+    ),
   isLegitimate: z
     .boolean()
     .describe("True only if all 4 rubric rules pass."),
   canonicalTitle: z
     .string()
     .describe(
-      "The corrected canonical Title Case form of this role. May equal the " +
-        "candidate or be a corrected variant from the Exa evidence.",
+      "The exact canonical Title Case form chosen in your reasoning. If " +
+        "your reasoning concluded the candidate is already canonical, " +
+        "repeat the candidate verbatim. If your reasoning identified a " +
+        "corrected form (reordering, prefix removal, alternate industry " +
+        "term), output THAT corrected form here. Never output the original " +
+        "candidate if your reasoning named a different name.",
     ),
   confidence: z
     .number()
-    .describe("0.0-1.0 confidence the rubric is satisfied."),
-  reasoning: z
-    .string()
-    .describe("1-2 sentence rationale, plain text, for logs."),
+    .describe(
+      "0.0-1.0 confidence that the rubric is satisfied AND that " +
+        "canonicalTitle matches the canonical form named in reasoning.",
+    ),
 });
 
 type LegitimacyVerdict = z.infer<typeof legitimacyJudgeSchema>;
@@ -252,6 +270,39 @@ export const runExpansion = internalAction({
             : "exa_or_judge_failed",
         );
         continue;
+      }
+
+      // Canary: if the judge's reasoning describes a rename but its
+      // canonicalTitle still equals the candidate, the prompt's binding
+      // rule failed. Log loudly so we notice; do not block, the worst case
+      // is we publish under the candidate name, same as the pre-fix bug.
+      if (
+        verdict.canonicalTitle.trim().toLowerCase() ===
+        firstPass.canonicalTitle.trim().toLowerCase()
+      ) {
+        const reasoningLower = verdict.reasoning.toLowerCase();
+        const correctionPhrases = [
+          "more standard",
+          "in favor of",
+          "in favour of",
+          "instead of",
+          "rather than",
+          "removed",
+          "replaced",
+          "corrected",
+          "renaming",
+          "rename to",
+        ];
+        if (correctionPhrases.some((p) => reasoningLower.includes(p))) {
+          console.warn(
+            "[catalogExpansion] judge contract violation: reasoning describes a rename but canonicalTitle echoed the candidate",
+            {
+              candidate: firstPass.canonicalTitle,
+              canonicalTitle: verdict.canonicalTitle,
+              reasoning: verdict.reasoning,
+            },
+          );
+        }
       }
 
       // Step 4d, re-canonicalize using the judge's refined title. The judge

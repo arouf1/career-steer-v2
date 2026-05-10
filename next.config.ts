@@ -24,6 +24,20 @@ const nextConfig: NextConfig = {
         : []),
     ],
   },
+  // Permanent redirects for renamed career-guide slugs. The catalog-
+  // expansion judge now applies its canonical-name corrections at the
+  // schema level (see convex/catalogExpansion.ts), but pre-fix guides
+  // shipped under the seed-derived slug. Each entry here pairs with a
+  // one-shot rename migration in convex/migrations/.
+  async redirects() {
+    return [
+      {
+        source: "/career-guides/director-of-admissions",
+        destination: "/career-guides/admissions-director",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
