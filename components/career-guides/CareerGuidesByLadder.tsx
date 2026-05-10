@@ -143,6 +143,10 @@ export function CareerGuidesByLadder({
   // flip activeSlug back and forth. The lock suppresses observer updates
   // until the scroll settles, then auto-releases.
   const scrollLockRef = useRef<number | null>(null);
+  // Edge-fade visibility: shown only when there's hidden content in that
+  // direction inside the anchor strip. Soft "more pills →" affordance.
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   // Scroll-spy: mark a section "active" when the top of its header
   // crosses ~30% of the viewport. IntersectionObserver with rootMargin
@@ -181,6 +185,28 @@ export function CareerGuidesByLadder({
     strip.scrollTo({ left: targetLeft, behavior: "smooth" });
   }, [activeSlug]);
 
+  // Track strip scroll position to toggle the edge-fade indicators. Fades
+  // visually communicate "more pills hidden in this direction" — the
+  // strip is scroll-snappable but without an indicator it reads as a
+  // truncated list, not a swipe-able rail.
+  useEffect(() => {
+    const strip = stripScrollRef.current;
+    if (!strip) return;
+    const update = () => {
+      setCanScrollLeft(strip.scrollLeft > 1);
+      setCanScrollRight(
+        strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1,
+      );
+    };
+    update();
+    strip.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      strip.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [sections]);
+
   const jumpToSection = (slug: string) => {
     const target = sectionRefs.current.get(slug);
     if (!target) return;
@@ -215,15 +241,18 @@ export function CareerGuidesByLadder({
     <div className="w-full max-w-full overflow-x-clip">
       {/* Anchor strip — sticky inside the section column, no negative
           margins (those caused horizontal page overflow in some workspace
-          layouts). Strip itself owns its own horizontal scroll. */}
+          layouts). Strip itself owns its own horizontal scroll, with
+          edge-fade indicators when content extends beyond the visible
+          rail. */}
       <nav
         aria-label="Career ladders"
         className="sticky top-0 z-20 mb-10 w-full max-w-full border-b border-hairline bg-paper/95 backdrop-blur-[2px]"
       >
-        <ul
-          ref={stripScrollRef}
-          className="hide-scrollbar flex w-full max-w-full snap-x snap-mandatory gap-1.5 overflow-x-auto py-3"
-        >
+        <div className="relative">
+          <ul
+            ref={stripScrollRef}
+            className="hide-scrollbar flex w-full max-w-full snap-x snap-mandatory gap-1.5 overflow-x-auto py-3"
+          >
           {sections.map((s) => {
             const isActive = s.ladder.slug === activeSlug;
             return (
@@ -247,7 +276,24 @@ export function CareerGuidesByLadder({
               </li>
             );
           })}
-        </ul>
+          </ul>
+
+          {/* Edge-fade indicators — soft paper-to-transparent fade on
+              either edge when more pills are hidden in that direction.
+              pointer-events-none so they never block taps. */}
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-paper to-transparent transition-opacity duration-200 ${
+              canScrollLeft ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-paper to-transparent transition-opacity duration-200 ${
+              canScrollRight ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        </div>
       </nav>
 
       {/* Sections */}
