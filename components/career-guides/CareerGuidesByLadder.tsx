@@ -458,7 +458,7 @@ export function CareerGuidesByLadder({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.2, ease }}
-            className="fixed bottom-6 right-6 z-30 grid h-11 w-11 place-items-center rounded-full border border-hairline-strong bg-paper text-ink transition-colors hover:border-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/10 focus-visible:ring-offset-2 sm:bottom-8 sm:right-8"
+            className="fixed bottom-6 right-6 z-30 grid h-11 w-11 place-items-center rounded-full bg-ink text-paper transition-colors hover:bg-ink-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/10 focus-visible:ring-offset-2 sm:bottom-8 sm:right-8"
           >
             <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden />
           </motion.button>
