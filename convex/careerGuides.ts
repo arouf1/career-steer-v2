@@ -125,7 +125,7 @@ const sectionSlotValidator = v.union(
 );
 
 // Validator mirrors the schema's record shape rather than enumerating keys
-// — Convex v.object rejects identifiers with hyphens, but section IDs use
+//. Convex v.object rejects identifiers with hyphens, but section IDs use
 // kebab-case ("day-to-day", "outlook-us", etc.) per FOLLOW_UP_SECTION_IDS.
 const followUpsValidator = v.record(v.string(), v.array(v.string()));
 
@@ -280,7 +280,7 @@ export const getValidation = query({
       .first();
     if (!row?.slug) return row;
     // Self-heal: strip stale slugs whose guide has been deleted (or was
-    // never created — earlier validateCareer set slug optimistically before
+    // never created, earlier validateCareer set slug optimistically before
     // a guide existed). Without this, the search hero would short-circuit
     // straight to a 404.
     const guide = await ctx.db
@@ -379,7 +379,7 @@ export const _hydrateRelated = internalQuery({
 });
 
 // Returns up to `limit` guides whose wholeVector is closest to the source
-// guide's wholeVector. Pure cosine — no rerank — because at depth 4 a fast
+// guide's wholeVector. Pure cosine, no rerank, because at depth 4 a fast
 // SSR-friendly response matters more than the marginal quality lift.
 //
 // Returns [] (not null) if the source guide is missing its embedding row;
@@ -606,7 +606,7 @@ export const _requestGeneration = internalMutation({
 
     const now = Date.now();
 
-    // Reuse existing row unless it failed — failed rows get reset and rerun.
+    // Reuse existing row unless it failed, failed rows get reset and rerun.
     if (existingByTitle && existingByTitle.contentStatus !== "failed") {
       // Even on the reuse path, attach to the ladder if requested. This
       // covers the case where the same title was previously created without
@@ -676,7 +676,7 @@ export const _requestGeneration = internalMutation({
 
 // Ladder attachment helper. Used by _requestGeneration when the on-demand
 // dedup classifier (Tier-2 in `requestGuideFromSearch`) returns a confident
-// ladder placement. Idempotent — silently no-ops if a position for this
+// ladder placement. Idempotent, silently no-ops if a position for this
 // (guide, ladder) already exists.
 async function attachToLadderIfMissing(
   ctx: MutationCtx,
@@ -721,7 +721,7 @@ async function attachToLadderIfMissing(
 // Seeding-flavored sibling of _requestGeneration. Identical slug-OCC dedup
 // pattern (so concurrent seeders for the same canonical title resolve to one
 // career_guides row), but rate-limited per userId instead of per clientIp
-// because profile-setup seeds 5–10 titles in a burst.
+// because profile-setup seeds 5-10 titles in a burst.
 //
 // IMPORTANT: pipeline parity. The existing _requestGeneration only schedules
 // generateContent + generateIllustration + generateSlotIllustration[]; the
@@ -894,7 +894,7 @@ export const _lookupBySlugOrTitle = internalQuery({
 //
 // Returns `created: true` only when a brand-new row was inserted (or a
 // previously failed row was reset and reattempted). The caller uses this
-// to gate the email notification — re-using an existing complete guide
+// to gate the email notification, re-using an existing complete guide
 // should not trigger an email.
 export const _requestGenerationForCron = internalMutation({
   args: { title: v.string() },
@@ -998,7 +998,7 @@ function buildInitialSlotIllustrations(): Record<
 // Grounded path: content was written with Exa research already attached.
 // Citations are materialised from the LLM's `usedSources` index map and
 // stored alongside content in a single atomic patch. Skips enrichGuide
-// because grounding is already done — only schedules the podcast.
+// because grounding is already done, only schedules the podcast.
 export const _updateContentGrounded = internalMutation({
   args: {
     guideId: v.id("career_guides"),
@@ -1037,6 +1037,14 @@ export const _updateContentGrounded = internalMutation({
     await ctx.scheduler.runAfter(0, internal.guideEmbeddings.generate, {
       guideId: args.guideId,
     });
+    // Auto-classify onto a ladder so seeding / cron / Tier-4 fallback
+    // creations never end up orphan in "Other paths". Idempotent — skips
+    // guides that already have an at-creation Tier-2 attachment.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.careerLadders._classifyAndAttach,
+      { guideId: args.guideId },
+    );
   },
 });
 
@@ -1083,6 +1091,14 @@ export const _updateContentDeferred = internalMutation({
     await ctx.scheduler.runAfter(0, internal.guideEmbeddings.generate, {
       guideId: args.guideId,
     });
+    // Auto-classify onto a ladder so seeding / cron / Tier-4 fallback
+    // creations never end up orphan in "Other paths". Idempotent — skips
+    // guides that already have an at-creation Tier-2 attachment.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.careerLadders._classifyAndAttach,
+      { guideId: args.guideId },
+    );
   },
 });
 
@@ -1202,7 +1218,7 @@ export const _purgeValidation = internalMutation({
 });
 
 // Ops trigger: enrich (or re-enrich) any existing guide by slug.
-// Safe to call repeatedly — `_beginEnrichment` short-circuits on
+// Safe to call repeatedly, `_beginEnrichment` short-circuits on
 // running/complete states.
 export const triggerEnrichmentBySlug = mutation({
   args: { slug: v.string() },
@@ -1286,7 +1302,7 @@ export const _purgeAllGuides = internalMutation({
 // illustration + podcast storage), then schedules regeneration of each
 // captured title via the new grounded-first pipeline. Requires an explicit
 // confirmation literal to prevent accidental runs. Validation rows are
-// left in place — getValidation self-heals stale slugs.
+// left in place, getValidation self-heals stale slugs.
 //
 // NOTE on discover-canvas data integrity: this mutation does NOT
 // proactively clean up `discover_canvases.lanes[*].cards[*].guideId`
@@ -1825,7 +1841,7 @@ export const requestGuideFromSearch = internalAction({
           // Validate the matched slug actually exists in the ladder data we
           // sent the LLM. The classifier sometimes hallucinates a plausible
           // matchedGuideSlug (e.g. "head-of-product" for "Head of Product")
-          // for a guide that doesn't exist yet — trusting it would redirect
+          // for a guide that doesn't exist yet, trusting it would redirect
           // the user to a 404. Verify against the LadderForPrompt catalog.
           const targetLadder = ladders.find(
             (l) => l.slug === output.ladderSlug,
@@ -1838,14 +1854,14 @@ export const requestGuideFromSearch = internalAction({
             );
 
           if (matchedSlugIsReal && output.matchedGuideSlug) {
-            // Real dedup — the matched slug is genuinely an existing guide
+            // Real dedup, the matched slug is genuinely an existing guide
             // attached to the suggested ladder.
             return { slug: output.matchedGuideSlug };
           }
           // Either isExistingRung was false, or the slug was hallucinated.
           // Either way: create a new guide attached to the suggested
           // ladder + rung. Use the LLM's canonicalTitle (acronyms expanded)
-          // rather than args.title — guarantees on-demand creations are
+          // rather than args.title, guarantees on-demand creations are
           // never titled with a raw acronym (e.g. "CPO" → "Chief Product
           // Officer", "VP Marketing" → "Vice President of Marketing").
           // attachToLadderIfMissing inside _requestGeneration handles the
@@ -1864,7 +1880,7 @@ export const requestGuideFromSearch = internalAction({
             },
           );
         }
-        // confidence < "high" — fall through to Tier-3 dedup safety net.
+        // confidence < "high", fall through to Tier-3 dedup safety net.
       } catch (err) {
         // Ladder lookup is best-effort; fall through.
         console.error("ladder-lookup:failed", { err });
@@ -1897,7 +1913,7 @@ export const requestGuideFromSearch = internalAction({
 
     // Tier-4 fallback: create a new standalone guide with no ladder
     // attachment. Reaching here means neither the ladder classifier nor the
-    // dedup LLM could place the query — likely a brand-new role family that
+    // dedup LLM could place the query, likely a brand-new role family that
     // needs a new ladder. Logged for human review (the orphan position is
     // visible via `career_guide_ladder_positions` being empty for this guide).
     return await ctx.runMutation(internal.careerGuides._requestGeneration, {
@@ -1930,7 +1946,7 @@ export const generateContent = internalAction({
     });
 
     try {
-      // Phase A — Best-effort Exa fan-out across all 8 enrichment tasks.
+      // Phase A. Best-effort Exa fan-out across all 8 enrichment tasks.
       // We do this BEFORE the LLM call so the model can ground its prose
       // in fresh sources rather than parametric memory. EXA_API_KEY missing
       // skips straight to the deferred fallback.
@@ -2310,14 +2326,14 @@ export const enrichGuide = internalAction({
         ENRICHMENT_CONCURRENCY,
       );
 
-      // Hard-fail if every Exa call errored — likely a key/auth/credits issue,
+      // Hard-fail if every Exa call errored, likely a key/auth/credits issue,
       // not a one-off. Schedule a retry.
       const okCount = outcomes.filter((o) => o.ok).length;
       if (okCount === 0) {
         throw new Error("All Exa calls failed");
       }
 
-      // Salary judge — runs only when both regional salary calls succeeded.
+      // Salary judge, runs only when both regional salary calls succeeded.
       const salaryUs = outcomes.find(
         (o): o is Extract<EnrichmentOutcome, { ok: true }> =>
           o.ok && o.task.fieldPath === "regional.us.salary",
@@ -2371,7 +2387,7 @@ export const enrichGuide = internalAction({
               }
             }
           } catch (err) {
-            // Judge failures don't fail the whole enrichment — citations
+            // Judge failures don't fail the whole enrichment, citations
             // are already attached. Just log and continue.
             console.error("enrichGuide:judge-failed", {
               guideId: args.guideId,
@@ -2614,7 +2630,7 @@ export const _listFailedGuidesForRetry = internalQuery({
 // library that pre-dates the field. Idempotent: skips guides that already
 // carry the field. Per memory `feedback_check_infra_before_model`, the LLM
 // call is cheap (flash tier, single-field schema) so we don't gate on rate
-// limits — the only failure mode is OpenRouter being out of credits.
+// limits, the only failure mode is OpenRouter being out of credits.
 
 export const _setCareerStage = internalMutation({
   args: {

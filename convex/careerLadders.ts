@@ -1,7 +1,21 @@
 import { v } from "convex/values";
-import { internalQuery, query } from "./_generated/server";
+import { generateText, Output } from "ai";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  query,
+} from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { LadderForPrompt } from "../lib/ai/prompts/career-ladders";
+import { chatModel } from "../lib/ai/providers";
+import {
+  LADDER_CLASSIFY_MODEL_ID,
+  LadderAssignmentSchema,
+  buildLadderAssignmentPrompt,
+  type LadderAssignment,
+  type LadderForPrompt,
+} from "../lib/ai/prompts/career-ladders";
 import {
   TIER_RANK,
   tierFromLegacyStage,
@@ -66,7 +80,7 @@ export const listLaddersByFamily = internalQuery({
 });
 
 // All ladders. Used by the on-demand dedup classifier (Phase 2) to give the
-// LLM the full set of candidate ladders for placement. Bounded to 200 — far
+// LLM the full set of candidate ladders for placement. Bounded to 200, far
 // above the realistic ladder count (~20 today).
 export const listAllLadders = internalQuery({
   args: {},
@@ -87,7 +101,7 @@ export const getPositionsByGuide = internalQuery({
   },
 });
 
-// All positions on a ladder, ordered by rung ascending. Bounded to 50 — far
+// All positions on a ladder, ordered by rung ascending. Bounded to 50, far
 // above realistic rung count (~7 max per ladder).
 export const listPositionsByLadder = internalQuery({
   args: { ladderId: v.id("career_ladders") },
@@ -142,7 +156,7 @@ export const walkDown = internalQuery({
 // lane bucketing in Phase 3.
 //
 // Strategy:
-//   1. Find the user's primary ladder via `seedingGuideSlugs[0]` — the slug
+//   1. Find the user's primary ladder via `seedingGuideSlugs[0]`, the slug
 //      of the canonical guide for one of their past/current roles. The
 //      seeded guide's `career_guide_ladder_positions` row identifies which
 //      ladder they sit on.
@@ -153,7 +167,7 @@ export const walkDown = internalQuery({
 //      has the user's tier yet (catalog gap), fall back to the seeded
 //      guide's own rung.
 //
-// Returns null when the profile isn't on a known ladder — the discover
+// Returns null when the profile isn't on a known ladder, the discover
 // pipeline then falls back to today's embedding-based bucketing.
 export const getPositionByProfile = internalQuery({
   args: { profileId: v.id("profiles") },
@@ -207,7 +221,7 @@ export const getPositionByProfile = internalQuery({
 
     // Find the rung on this ladder that matches the user's tier. If none
     // exists yet (catalog gap on this ladder for this tier), fall back to
-    // the seeded guide's rung — the bucketer will then walk up/down
+    // the seeded guide's rung, the bucketer will then walk up/down
     // relative to that rung, accepting that the user is reading a slightly
     // off altitude until a guide is created at their actual rung.
     const allPositionsOnLadder = await ctx.db
@@ -241,7 +255,7 @@ export const getPositionByProfile = internalQuery({
 // "Primary position" here means: the position with the lowest rung number
 // on the ladder where the guide first appears. For X-Manager titles that
 // sit on two ladders, we surface the position from the FUNCTIONAL ladder
-// (engineering, product, etc.) rather than the People-Management ladder —
+// (engineering, product, etc.) rather than the People-Management ladder -
 // the people-mgmt ladder is cross-cutting and would clutter every section.
 // Heuristic: pick the position whose ladder family is NOT "people"; if
 // none, take the first position by rung.
@@ -408,7 +422,7 @@ export const getGuideLadderContext = query({
           .map(([rung, { tier, guides }]) => ({
             rung,
             tier,
-            // Deterministic guide order within a rung — alphabetical by
+            // Deterministic guide order within a rung, alphabetical by
             // title, with the current guide first if it sits at this rung.
             guides: guides.sort((a, b) => {
               if (a.slug === guide.slug) return -1;
@@ -444,7 +458,7 @@ export const getGuideLadderContext = query({
     // Same-tier peers on OTHER ladders. Scan the by_tier index, exclude
     // our ladders, exclude the current guide. Peers are ranked by family
     // proximity to the source ladder so a Product Manager doesn't see
-    // Marine Biologist as a "peer" — same tier alone is too coarse.
+    // Marine Biologist as a "peer", same tier alone is too coarse.
     const peerPositions = await ctx.db
       .query("career_guide_ladder_positions")
       .withIndex("by_tier", (q) => q.eq("tier", primary.currentTier))
@@ -577,7 +591,7 @@ export const _readPositionsForGuides = internalQuery({
 
 // All ladders + their occupied rungs, formatted for the on-demand dedup
 // prompt (`buildLadderLookupPrompt`). Mirrors the migration's
-// `_loadLaddersForPrompt` — kept in this canonical file because the
+// `_loadLaddersForPrompt`, kept in this canonical file because the
 // on-demand path is hot, while the migration helper is one-shot. Two
 // lookups for the same shape is acceptable; consolidating would force the
 // migration to import from this file, which is fine but adds a coupling.
@@ -646,7 +660,7 @@ export const _listLaddersForLookup = internalQuery({
 });
 
 // All positions at a given tier on OTHER ladders. Drives the discover
-// canvas's Adjacent lane in Phase 3 — for a Senior PM (Product ladder,
+// canvas's Adjacent lane in Phase 3, for a Senior PM (Product ladder,
 // `ic-senior` tier), this returns Senior Engineering Manager, Senior
 // Designer, Senior Data Scientist, etc. (peers on other ladders at the same
 // altitude).
@@ -661,5 +675,197 @@ export const peersAtTier = internalQuery({
       .withIndex("by_tier", (q) => q.eq("tier", args.tier))
       .take(100);
     return all.filter((p) => p.ladderId !== args.excludeLadderId);
+  },
+});
+
+// ── Auto-classifier: every guide gets categorised after content lands ───
+//
+// Hooked from `_updateContentGrounded` and `_updateContentDeferred` in
+// careerGuides.ts so the post-content moment is the single guarantee point:
+// once a guide has content, it has a ladder placement (or a review-queue
+// entry). This closes the orphan gap left by the seeding / cron / Tier-4
+// fallback creation paths, which never set `ladderAttachment` themselves.
+//
+// Idempotent: skips guides that already have ≥1 position so the at-creation
+// Tier-2 attachment from `requestGuideFromSearch` stays authoritative when
+// it fired. The mutation re-checks inside the transaction as belt-and-
+// braces, but the race window is essentially nil (Tier-2 runs at creation
+// time, this runs after content lands ~30-60s later).
+//
+// Confidence policy (low-confidence → review queue):
+//   primary.confidence = high|medium → row in `career_guide_ladder_positions`
+//   primary.confidence = low         → row in `career_guide_ladder_review`
+// Hallucinated ladder slugs always go to review with reason prefixed.
+//
+// Cost: one Gemini Flash classify per new guide, ~$0.0003 each. Negligible.
+
+const _placementValidator = v.object({
+  slug: v.string(),
+  rung: v.number(),
+  tier: tierValidator,
+  confidence: v.union(
+    v.literal("high"),
+    v.literal("medium"),
+    v.literal("low"),
+  ),
+});
+
+export const _writeAutoAssignment = internalMutation({
+  args: {
+    guideId: v.id("career_guides"),
+    primary: _placementValidator,
+    secondary: v.union(v.null(), _placementValidator),
+    reasoning: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Defensive re-check: if Tier-2 (on-demand) attachment landed between
+    // the action's idempotency check and now, bail so the at-creation
+    // placement stays authoritative.
+    const existing = await ctx.db
+      .query("career_guide_ladder_positions")
+      .withIndex("by_guide", (q) => q.eq("guideId", args.guideId))
+      .first();
+    if (existing) return null;
+
+    const writeOne = async (
+      placement: typeof args.primary,
+    ): Promise<void> => {
+      const ladder = await ctx.db
+        .query("career_ladders")
+        .withIndex("by_slug", (q) => q.eq("slug", placement.slug))
+        .unique();
+
+      if (!ladder) {
+        await ctx.db.insert("career_guide_ladder_review", {
+          guideId: args.guideId,
+          proposedLadderSlug: placement.slug,
+          proposedRung: placement.rung,
+          proposedTier: placement.tier,
+          confidence: "low",
+          reasoning: `Hallucinated ladder slug: ${args.reasoning}`,
+          queuedAt: now,
+        });
+        return;
+      }
+
+      if (placement.confidence === "low") {
+        await ctx.db.insert("career_guide_ladder_review", {
+          guideId: args.guideId,
+          proposedLadderSlug: placement.slug,
+          proposedRung: placement.rung,
+          proposedTier: placement.tier,
+          confidence: "low",
+          reasoning: args.reasoning,
+          queuedAt: now,
+        });
+        return;
+      }
+
+      // assignedBy reuses "backfill-llm" rather than introducing a new
+      // enum variant; semantics match (LLM placement outside the on-demand
+      // search path) and avoiding a schema widen keeps this change a pure
+      // append. Add a "post-content-llm" variant via convex-migration-helper
+      // if/when ops needs to distinguish the two surfaces.
+      await ctx.db.insert("career_guide_ladder_positions", {
+        ladderId: ladder._id,
+        guideId: args.guideId,
+        rung: placement.rung,
+        tier: placement.tier,
+        assignedAt: now,
+        assignedBy: "backfill-llm",
+      });
+    };
+
+    await writeOne(args.primary);
+    if (args.secondary) await writeOne(args.secondary);
+    return null;
+  },
+});
+
+export const _classifyAndAttach = internalAction({
+  args: { guideId: v.id("career_guides") },
+  returns: v.union(
+    v.object({
+      classified: v.literal(true),
+      primaryLadder: v.string(),
+      secondaryLadder: v.union(v.string(), v.null()),
+    }),
+    v.object({ classified: v.literal(false), reason: v.string() }),
+  ),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    | {
+        classified: true;
+        primaryLadder: string;
+        secondaryLadder: string | null;
+      }
+    | { classified: false; reason: string }
+  > => {
+    // Skip if already attached (covers Tier-2 at-creation attachment and
+    // any earlier classifier run from a content-regen retry).
+    const existing: Array<Doc<"career_guide_ladder_positions">> =
+      await ctx.runQuery(internal.careerLadders.getPositionsByGuide, {
+        guideId: args.guideId,
+      });
+    if (existing.length > 0) {
+      return { classified: false as const, reason: "already_attached" };
+    }
+
+    const guide = await ctx.runQuery(internal.careerGuides._getById, {
+      guideId: args.guideId,
+    });
+    if (!guide) {
+      return { classified: false as const, reason: "guide_not_found" };
+    }
+    if (!guide.content) {
+      return { classified: false as const, reason: "content_not_ready" };
+    }
+
+    const ladders: LadderForPrompt[] = await ctx.runQuery(
+      internal.careerLadders._listLaddersForLookup,
+      {},
+    );
+    if (ladders.length === 0) {
+      return { classified: false as const, reason: "no_ladders" };
+    }
+
+    let assignment: LadderAssignment;
+    try {
+      const { output } = await generateText({
+        model: chatModel(LADDER_CLASSIFY_MODEL_ID, { zdr: true }),
+        output: Output.object({ schema: LadderAssignmentSchema }),
+        prompt: buildLadderAssignmentPrompt({
+          guideTitle: guide.title,
+          guideOverview: guide.content.overview,
+          guideTypicalCareerStage: guide.content.typicalCareerStage,
+          ladders,
+        }),
+      });
+      assignment = output;
+    } catch (err) {
+      console.error("classifyAndAttach: LLM failed", {
+        guideId: args.guideId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { classified: false as const, reason: "llm_failed" };
+    }
+
+    await ctx.runMutation(internal.careerLadders._writeAutoAssignment, {
+      guideId: args.guideId,
+      primary: assignment.primaryLadder,
+      secondary: assignment.secondaryLadder,
+      reasoning: assignment.reasoning,
+    });
+
+    return {
+      classified: true as const,
+      primaryLadder: assignment.primaryLadder.slug,
+      secondaryLadder: assignment.secondaryLadder?.slug ?? null,
+    };
   },
 });
