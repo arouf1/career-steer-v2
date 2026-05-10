@@ -17,6 +17,16 @@ export const proxy = clerkMiddleware(async (auth, req) => {
   if (req.nextUrl.pathname === "/" && userId) {
     return NextResponse.redirect(new URL("/workspace/profile", req.url));
   }
+
+  // Authed users hitting the public /career-guides index get bounced into the
+  // workspace mirror so navigation stays inside the workspace chrome. Only the
+  // index redirects — /career-guides/[slug] detail pages stay public for both
+  // authed and anon visitors (the workspace doesn't mirror those yet).
+  if (req.nextUrl.pathname === "/career-guides" && userId) {
+    return NextResponse.redirect(
+      new URL("/workspace/career-guides", req.url),
+    );
+  }
 });
 
 export const proxyConfig = {
