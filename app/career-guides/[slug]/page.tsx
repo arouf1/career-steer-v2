@@ -11,10 +11,7 @@ import {
 } from "@/components/career-guides/CareerGuideArticle";
 import { JobsForGuide } from "@/components/career-guides/JobsForGuide";
 import { RelatedGuides } from "@/components/career-guides/RelatedGuides";
-import {
-  CareerGuideLadderBreadcrumb,
-  CareerGuideLadderFooter,
-} from "@/components/career-guides/CareerGuideLadderContext";
+import { CareerGuideLadderFooter } from "@/components/career-guides/CareerGuideLadderContext";
 
 export const revalidate = 300;
 
@@ -174,12 +171,6 @@ export default async function CareerGuidePage({
       <main className="flex flex-1 flex-col">
         {guide.contentStatus === "complete" && guide.content ? (
           <>
-            {ladderContext && (
-              <CareerGuideLadderBreadcrumb
-                ctx={ladderContext}
-                currentSlug={guide.slug}
-              />
-            )}
             <CareerGuideArticle
               guide={guide}
               defaultRegion={region}
