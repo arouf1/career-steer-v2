@@ -79,13 +79,17 @@
    overflow can all kick the page sideways otherwise. The product never
    uses horizontal page scroll — content that genuinely scrolls
    horizontally (Career Compass canvas, the ladder anchor strip) lives
-   inside its own overflow-x container. Apply to BOTH html and body
-   because depending on the doctype + browser, either can be the actual
-   scroll container. */
+   inside its own overflow-x container.
+
+   `overflow-x: clip` (not `hidden`) is deliberate — `hidden` makes the
+   element a scroll container, which forces the browser to render a
+   secondary vertical scrollbar inside body and disconnects the body
+   from the html scroll context. `clip` simply truncates overflow without
+   establishing a scroll container. Supported in Chrome 90+, Firefox 81+,
+   Safari 16+. */
 html,
 body {
-  overflow-x: hidden;
-  max-width: 100vw;
+  overflow-x: clip;
 }
 
 body {

@@ -136,7 +136,7 @@ export function CareerGuidesByLadder({
     sections[0]?.ladder.slug ?? "",
   );
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const anchorRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  const anchorRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const stripScrollRef = useRef<HTMLUListElement>(null);
   // While a click-driven smooth scroll is in flight, the IntersectionObserver
   // would otherwise see intermediate sections crossing the rootMargin and
@@ -197,14 +197,16 @@ export function CareerGuidesByLadder({
     // Manual window.scrollTo instead of element.scrollIntoView — the
     // latter defaults inline:"nearest" which still scrolls horizontally
     // when an element is even 1px wider than the viewport. window.scrollTo
-    // is vertical-only and cannot shift the page sideways.
+    // is vertical-only and cannot shift the page sideways. We deliberately
+    // do NOT set the URL hash — anchor pills are purely a navigational
+    // affordance, not a deep-linkable state, and the `#ladder-<slug>` in
+    // the address bar reads as junk for the user.
     const rect = target.getBoundingClientRect();
     const SCROLL_MARGIN_TOP = 96;
     window.scrollTo({
       top: window.scrollY + rect.top - SCROLL_MARGIN_TOP,
       behavior: "smooth",
     });
-    history.replaceState(null, "", `#ladder-${slug}`);
   };
 
   if (sections.length === 0) return null;
@@ -226,16 +228,13 @@ export function CareerGuidesByLadder({
             const isActive = s.ladder.slug === activeSlug;
             return (
               <li key={s.ladder.slug} className="snap-start">
-                <a
+                <button
                   ref={(el) => {
                     if (el) anchorRefs.current.set(s.ladder.slug, el);
                     else anchorRefs.current.delete(s.ladder.slug);
                   }}
-                  href={`#ladder-${s.ladder.slug}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    jumpToSection(s.ladder.slug);
-                  }}
+                  type="button"
+                  onClick={() => jumpToSection(s.ladder.slug)}
                   className={`inline-block whitespace-nowrap rounded-pill px-3 py-1.5 text-[12px] tracking-wide transition-colors ${
                     isActive
                       ? "bg-ink text-paper"
@@ -244,7 +243,7 @@ export function CareerGuidesByLadder({
                   aria-current={isActive ? "true" : undefined}
                 >
                   {s.ladder.name}
-                </a>
+                </button>
               </li>
             );
           })}
