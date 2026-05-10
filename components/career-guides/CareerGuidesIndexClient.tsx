@@ -58,13 +58,16 @@ export function CareerGuidesIndexClient({
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  // Sort starts as "newest" on SSR + first client render to avoid the
+  // Sort starts as "ladder" on SSR + first client render to avoid the
   // hydration mismatch that would happen if useState initialised from
   // localStorage (server has no localStorage; client read produces a
   // different value on hydration). The first effect after mount reads
   // localStorage and applies any stored preference, then later changes
   // are persisted on every change.
-  const [sort, setSort] = useState<SortOption>("newest");
+  // "ladder" is the editorial default — it's the framing the rest of
+  // the product (Career Compass, guide pages) builds on, so the
+  // catalogue lands you in the same mental model.
+  const [sort, setSort] = useState<SortOption>("ladder");
   const sortHydratedRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -330,9 +333,9 @@ export function CareerGuidesIndexClient({
             <div className="flex gap-1.5">
               {(
                 [
+                  { value: "ladder", label: "By ladder" },
                   { value: "newest", label: "Newest" },
                   { value: "alphabetical", label: "A – Z" },
-                  { value: "ladder", label: "By ladder" },
                 ] as const
               ).map((opt) => (
                 <button
