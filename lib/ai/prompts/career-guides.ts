@@ -70,6 +70,7 @@ Reject if any of these apply:
 - The input is a discipline, industry, department, or skill rather than a job ("biology", "finance", "marketing", "javascript").
 - The input is an adjective or modifier with no role attached ("senior", "remote", "freelance").
 - The input is nonsense, offensive, or a random string of characters.
+- **The input is a generic leadership title with no functional or sectoral context.** "Executive Director" alone, "Director" alone, "Manager" alone, "Vice President" alone, "Head" alone, "Lead" alone — all reject. These could mean wildly different things across non-profits, finance, theatre, charity, etc.; without a function or sector the resulting guide would be useless. Hint the user toward a specific form ("Executive Director of a Non-Profit", "Director of Engineering", "Marketing Manager"). The same applies to "Chief Officer" without a domain — accept "Chief Financial Officer" but reject bare "Chief".
 
 If the input could plausibly be the start of several different real careers and you cannot tell which the user means, reject it and explain that more detail is needed.
 

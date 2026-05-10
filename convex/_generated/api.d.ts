@@ -63,6 +63,7 @@ import type * as migrations_2026_05_09_backfill_guide_ladder_positions from "../
 import type * as migrations_2026_05_09_canonicalize_guide_titles from "../migrations/2026_05_09_canonicalize_guide_titles.js";
 import type * as migrations_2026_05_09_recompute_all_snapshots from "../migrations/2026_05_09_recompute_all_snapshots.js";
 import type * as migrations_2026_05_09_seed_ladders from "../migrations/2026_05_09_seed_ladders.js";
+import type * as migrations_2026_05_10_cleanup_misclassified_guides from "../migrations/2026_05_10_cleanup_misclassified_guides.js";
 import type * as migrations_scoresToPercent from "../migrations/scoresToPercent.js";
 import type * as people from "../people.js";
 import type * as peopleOutreach from "../peopleOutreach.js";
@@ -143,6 +144,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/2026_05_09_canonicalize_guide_titles": typeof migrations_2026_05_09_canonicalize_guide_titles;
   "migrations/2026_05_09_recompute_all_snapshots": typeof migrations_2026_05_09_recompute_all_snapshots;
   "migrations/2026_05_09_seed_ladders": typeof migrations_2026_05_09_seed_ladders;
+  "migrations/2026_05_10_cleanup_misclassified_guides": typeof migrations_2026_05_10_cleanup_misclassified_guides;
   "migrations/scoresToPercent": typeof migrations_scoresToPercent;
   people: typeof people;
   peopleOutreach: typeof peopleOutreach;
