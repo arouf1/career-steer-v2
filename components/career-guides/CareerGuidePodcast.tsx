@@ -35,6 +35,11 @@ export function CareerGuidePodcast({ guide }: Props) {
 
   return (
     <ReadyCard
+      // Re-key on audioUrl so a re-synth (status stays "complete", only the
+      // signed storage URL changes) fully remounts the player with a fresh
+      // <audio> element. Without this, React patches the src attribute in
+      // place and the browser keeps serving the already-buffered old audio.
+      key={current.podcastAudioUrl}
       audioUrl={current.podcastAudioUrl}
       transcript={podcast.transcript ?? []}
       // Prefer the LLM-generated hook; fall back to a template for podcasts
@@ -166,7 +171,7 @@ function ReadyCard({
           </h2>
           <p className="mt-1 truncate text-[13px] text-mute">
             {guestName}
-            {guestRole ? ` — ${guestRole}` : ""}
+            {guestRole ? `, ${guestRole}` : ""}
           </p>
 
           <div className="mt-4 flex items-center gap-3">
