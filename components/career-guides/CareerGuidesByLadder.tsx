@@ -212,7 +212,7 @@ export function CareerGuidesByLadder({
   if (sections.length === 0) return null;
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden">
+    <div className="w-full max-w-full overflow-x-clip">
       {/* Anchor strip — sticky inside the section column, no negative
           margins (those caused horizontal page overflow in some workspace
           layouts). Strip itself owns its own horizontal scroll. */}

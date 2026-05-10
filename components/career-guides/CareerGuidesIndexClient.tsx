@@ -58,16 +58,28 @@ export function CareerGuidesIndexClient({
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortOption>(() => {
-    if (typeof window === "undefined") return "newest";
-    const saved = window.localStorage.getItem(SORT_STORAGE_KEY);
-    if (saved === "newest" || saved === "alphabetical" || saved === "ladder") {
-      return saved;
-    }
-    return "newest";
-  });
+  // Sort starts as "newest" on SSR + first client render to avoid the
+  // hydration mismatch that would happen if useState initialised from
+  // localStorage (server has no localStorage; client read produces a
+  // different value on hydration). The first effect after mount reads
+  // localStorage and applies any stored preference, then later changes
+  // are persisted on every change.
+  const [sort, setSort] = useState<SortOption>("newest");
+  const sortHydratedRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!sortHydratedRef.current) {
+      sortHydratedRef.current = true;
+      const saved = window.localStorage.getItem(SORT_STORAGE_KEY);
+      if (
+        saved === "newest" ||
+        saved === "alphabetical" ||
+        saved === "ladder"
+      ) {
+        setSort(saved);
+      }
+      return;
+    }
     window.localStorage.setItem(SORT_STORAGE_KEY, sort);
   }, [sort]);
 
