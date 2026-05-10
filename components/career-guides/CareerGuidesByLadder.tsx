@@ -81,40 +81,13 @@ function buildSections(
     });
   }
 
-  // Order sections by family priority (product/eng/design/data first), then
-  // alphabetically by ladder name. Orphan section always last.
-  const FAMILY_ORDER: string[] = [
-    "product",
-    "engineering",
-    "design",
-    "data",
-    "marketing",
-    "sales",
-    "finance",
-    "legal",
-    "operations",
-    "people",
-    "customer-success",
-    "research",
-    "healthcare",
-    "education",
-    "trades",
-    "creative",
-    "other",
-  ];
-  const familyRank = (family: string): number => {
-    const i = FAMILY_ORDER.indexOf(family);
-    return i === -1 ? FAMILY_ORDER.length : i;
-  };
-
+  // Alphabetical by ladder name. Orphan section ("Other paths") always
+  // tails the list — it's a catch-all, not a peer ladder.
   return Array.from(grouped.values())
     .filter((s) => s.guides.length > 0)
     .sort((a, b) => {
       if (a.ladder.slug === SLUG_ORPHAN) return 1;
       if (b.ladder.slug === SLUG_ORPHAN) return -1;
-      const aRank = familyRank(a.ladder.family);
-      const bRank = familyRank(b.ladder.family);
-      if (aRank !== bRank) return aRank - bRank;
       return a.ladder.name.localeCompare(b.ladder.name);
     });
 }
