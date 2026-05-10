@@ -65,6 +65,7 @@ import type * as migrations_2026_05_09_recompute_all_snapshots from "../migratio
 import type * as migrations_2026_05_09_seed_ladders from "../migrations/2026_05_09_seed_ladders.js";
 import type * as migrations_2026_05_10_cleanup_misclassified_guides from "../migrations/2026_05_10_cleanup_misclassified_guides.js";
 import type * as migrations_2026_05_10_orphan_misclassified_guides from "../migrations/2026_05_10_orphan_misclassified_guides.js";
+import type * as migrations_2026_05_10_rename_director_of_admissions from "../migrations/2026_05_10_rename_director_of_admissions.js";
 import type * as migrations_scoresToPercent from "../migrations/scoresToPercent.js";
 import type * as people from "../people.js";
 import type * as peopleOutreach from "../peopleOutreach.js";
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/2026_05_09_seed_ladders": typeof migrations_2026_05_09_seed_ladders;
   "migrations/2026_05_10_cleanup_misclassified_guides": typeof migrations_2026_05_10_cleanup_misclassified_guides;
   "migrations/2026_05_10_orphan_misclassified_guides": typeof migrations_2026_05_10_orphan_misclassified_guides;
+  "migrations/2026_05_10_rename_director_of_admissions": typeof migrations_2026_05_10_rename_director_of_admissions;
   "migrations/scoresToPercent": typeof migrations_scoresToPercent;
   people: typeof people;
   peopleOutreach: typeof peopleOutreach;

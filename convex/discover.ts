@@ -2124,3 +2124,39 @@ export const querySavedGuides = query({
     );
   },
 });
+
+/**
+ * Per-guide reaction lookup for the current user. Returns the user's
+ * reaction state ("saved" / "dismissed" / null) for a single guide using
+ * the `by_user_and_guide` index, so the career-guide page can render a
+ * save / unsave control without subscribing to the full saved set.
+ *
+ * Anonymous users return null (no auth-race throws on the client) so the
+ * button can render an unauthenticated default. The auth gate on the
+ * client side (Authenticated wrapper) prevents the button rendering at all
+ * for logged-out users; this null is the safety belt.
+ */
+export const getReactionForGuide = query({
+  args: { guideId: v.id("career_guides") },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<"saved" | "dismissed" | null> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!user) return null;
+    const reaction = await ctx.db
+      .query("discover_reactions")
+      .withIndex("by_user_and_guide", (q) =>
+        q.eq("userId", user._id).eq("guideId", args.guideId),
+      )
+      .unique();
+    return reaction?.reaction ?? null;
+  },
+});

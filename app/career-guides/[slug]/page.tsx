@@ -11,7 +11,6 @@ import {
 } from "@/components/career-guides/CareerGuideArticle";
 import { JobsForGuide } from "@/components/career-guides/JobsForGuide";
 import { RelatedGuides } from "@/components/career-guides/RelatedGuides";
-import { CareerGuideLadderFooter } from "@/components/career-guides/CareerGuideLadderContext";
 
 export const revalidate = 300;
 
@@ -176,8 +175,8 @@ export default async function CareerGuidePage({
               defaultRegion={region}
               existingByTitle={existingByTitle}
               initialBranches={initialBranches}
+              ladderContext={ladderContext}
             />
-            {ladderContext && <CareerGuideLadderFooter ctx={ladderContext} />}
             <JobsForGuide
               guideSlug={guide.slug}
               guideTitle={guide.title}

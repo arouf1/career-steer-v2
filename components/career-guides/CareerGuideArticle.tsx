@@ -28,6 +28,11 @@ import {
   MobileTableOfContents,
   WikiTableOfContents,
 } from "@/components/site/TableOfContents";
+import {
+  type LadderContext,
+  RelatedRolesLadderSubsections,
+} from "./CareerGuideLadderContext";
+import { CareerGuideSaveButton } from "./CareerGuideSaveButton";
 import { FieldCitation, type CitationSource } from "./FieldCitation";
 import { CareerGuidePodcast } from "./CareerGuidePodcast";
 import { AllSourcesPanel } from "./AllSourcesPanel";
@@ -84,6 +89,13 @@ type ArticleProps = {
    * than waiting for the client to mount and run useQuery.
    */
   initialBranches: Doc<"career_guide_branches">[];
+  /**
+   * Optional ladder neighbours + peers context. Folded into the Related
+   * roles section so the three "where to go next" treatments (AI-derived
+   * adjacency, ladder neighbours, same-tier peers) live under one heading
+   * and one column width instead of three different containers.
+   */
+  ladderContext?: LadderContext | null;
 };
 
 type SectionLink = { id: string; label: string };
@@ -125,6 +137,7 @@ export function CareerGuideArticle({
   defaultRegion,
   existingByTitle,
   initialBranches,
+  ladderContext,
 }: ArticleProps) {
   const searchParams = useSearchParams();
 
@@ -344,6 +357,12 @@ export function CareerGuideArticle({
                 guideSlug={guide.slug}
                 region={defaultRegion}
                 variant="byline-inline"
+              />
+            }
+            saveControl={
+              <CareerGuideSaveButton
+                guideId={guide._id}
+                guideTitle={guide.title}
               />
             }
           />
@@ -591,7 +610,7 @@ export function CareerGuideArticle({
                 />
               }
             >
-              <ul className="max-w-2xl space-y-1">
+              <ul className="grid max-w-2xl grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {r.relatedRoles.map((role) => {
                   const existingSlug =
                     existingByTitle[role.toLowerCase().trim()];
@@ -605,13 +624,19 @@ export function CareerGuideArticle({
                   );
                 })}
               </ul>
+
+              {ladderContext && (
+                <div className="mt-12 max-w-2xl border-t border-hairline pt-12">
+                  <RelatedRolesLadderSubsections ctx={ladderContext} />
+                </div>
+              )}
             </ArticleSection>
           </div>
         </article>
 
         {/* Sidebar */}
         <aside className="lg:col-span-3">
-          <div className="flex flex-col gap-6 lg:sticky lg:top-12">
+          <div className="flex flex-col gap-6">
             {/* Discrete deep-dive CTA. Anchors at the top of the right column
                 on desktop (visually aligns with the article's publish date in
                 the article column); flows to the bottom of the page on
@@ -650,6 +675,7 @@ function Byline({
   updatedAt,
   lead,
   deepDiveCta,
+  saveControl,
 }: {
   title: string;
   publishedAt: number;
@@ -661,6 +687,11 @@ function Byline({
    * surfaces in the right aside on desktop.
    */
   deepDiveCta?: React.ReactNode;
+  /**
+   * Optional save / unsave pill rendered beside the dateline. Only rendered
+   * for authenticated users; the control itself owns its auth gate.
+   */
+  saveControl?: React.ReactNode;
 }) {
   const formatDate = (ms: number) =>
     new Date(ms).toLocaleDateString("en-GB", {
@@ -713,6 +744,7 @@ function Byline({
             {deepDiveCta}
           </>
         )}
+        {saveControl}
       </div>
       {lead && (
         <p className="mt-7 max-w-2xl text-balance text-[19px] leading-[1.55] text-ink/70 sm:text-[20px]">
@@ -1235,23 +1267,24 @@ function RelatedRoleLink({
   const [generating, setGenerating] = useState(false);
 
   const rowCls =
-    "group -mx-2 flex w-full items-center justify-between rounded-control border-b border-hairline/70 px-2 py-3 text-left transition-colors last:border-b-0 hover:bg-ink/[0.03] disabled:cursor-not-allowed disabled:opacity-70";
+    "group flex h-full w-full items-center justify-between gap-3 rounded-card border border-hairline bg-paper-raised px-4 py-3 text-left transition-colors hover:border-hairline-strong hover:bg-paper-raised/80 disabled:cursor-not-allowed disabled:opacity-70";
 
   const inner = (
     <>
-      <span className="text-[15px] text-ink/85 transition-colors group-hover:text-ink">
+      <span className="min-w-0 flex-1 truncate text-[14px] text-ink transition-colors group-hover:text-ink-deep">
         {title}
       </span>
       {generating ? (
         <Loader2
-          className="h-3.5 w-3.5 animate-spin text-mute"
+          className="h-3.5 w-3.5 shrink-0 animate-spin text-mute"
           aria-hidden="true"
           strokeWidth={1.75}
         />
       ) : (
         <ArrowUpRight
-          className="h-3.5 w-3.5 text-mute opacity-0 transition-all duration-300 group-hover:translate-x-0.5 group-hover:opacity-100"
+          className="h-3.5 w-3.5 shrink-0 text-mute transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-ink"
           aria-hidden="true"
+          strokeWidth={1.75}
         />
       )}
     </>
