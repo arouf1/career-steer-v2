@@ -147,6 +147,17 @@ export function CareerGuidesByLadder({
   // direction inside the anchor strip. Soft "more pills →" affordance.
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  // Mouse drag-to-scroll on the strip. Touch / trackpad / wheel all work
+  // natively on overflow-x:auto, but plain-mouse-pointer drag doesn't —
+  // these refs track the drag state so we can update scrollLeft directly
+  // and suppress the trailing click when a drag actually moved.
+  const dragStateRef = useRef<{
+    isDragging: boolean;
+    startX: number;
+    startScroll: number;
+    moved: boolean;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Scroll-spy: mark a section "active" when the top of its header
   // crosses ~30% of the viewport. IntersectionObserver with rootMargin
@@ -207,6 +218,68 @@ export function CareerGuidesByLadder({
     };
   }, [sections]);
 
+  // Mouse drag-to-scroll. Pointer events handle both mouse and pen; touch
+  // is left to the browser's native overflow-x scrolling so we don't
+  // double-handle and break momentum scroll on iOS / trackpads.
+  useEffect(() => {
+    const strip = stripScrollRef.current;
+    if (!strip) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return; // touch handled natively
+      dragStateRef.current = {
+        isDragging: true,
+        startX: e.clientX,
+        startScroll: strip.scrollLeft,
+        moved: false,
+      };
+      setIsDragging(true);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      const state = dragStateRef.current;
+      if (!state || !state.isDragging) return;
+      const dx = e.clientX - state.startX;
+      if (Math.abs(dx) > 4) state.moved = true;
+      strip.scrollLeft = state.startScroll - dx;
+    };
+    const endDrag = () => {
+      const state = dragStateRef.current;
+      if (!state) return;
+      state.isDragging = false;
+      setIsDragging(false);
+      // Keep `moved` set briefly so the trailing click on a pill can be
+      // suppressed by the click-capture handler below.
+      window.setTimeout(() => {
+        dragStateRef.current = null;
+      }, 0);
+    };
+
+    // Suppress the click that follows a drag — without this, releasing
+    // the mouse on top of a pill would fire that pill's onClick.
+    const onClickCapture = (e: MouseEvent) => {
+      if (dragStateRef.current?.moved) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    strip.addEventListener("pointerdown", onPointerDown);
+    strip.addEventListener("pointermove", onPointerMove);
+    strip.addEventListener("pointerup", endDrag);
+    strip.addEventListener("pointercancel", endDrag);
+    strip.addEventListener("pointerleave", endDrag);
+    strip.addEventListener("click", onClickCapture, { capture: true });
+
+    return () => {
+      strip.removeEventListener("pointerdown", onPointerDown);
+      strip.removeEventListener("pointermove", onPointerMove);
+      strip.removeEventListener("pointerup", endDrag);
+      strip.removeEventListener("pointercancel", endDrag);
+      strip.removeEventListener("pointerleave", endDrag);
+      strip.removeEventListener("click", onClickCapture, { capture: true });
+    };
+  }, [sections]);
+
   const jumpToSection = (slug: string) => {
     const target = sectionRefs.current.get(slug);
     if (!target) return;
@@ -251,7 +324,10 @@ export function CareerGuidesByLadder({
         <div className="relative">
           <ul
             ref={stripScrollRef}
-            className="hide-scrollbar flex w-full max-w-full snap-x snap-mandatory gap-1.5 overflow-x-auto py-3"
+            className={`hide-scrollbar flex w-full max-w-full snap-x snap-mandatory gap-1.5 overflow-x-auto py-3 select-none ${
+              isDragging ? "cursor-grabbing" : "cursor-grab"
+            }`}
+            style={isDragging ? { scrollSnapType: "none" } : undefined}
           >
           {sections.map((s) => {
             const isActive = s.ladder.slug === activeSlug;
