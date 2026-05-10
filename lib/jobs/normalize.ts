@@ -69,7 +69,7 @@ export function extractCity(input: string): string {
 // Trailing-segment country names → ISO country code. SearchAPI's location
 // strings come in the form "City, [Region,] Country" or sometimes
 // "City, Country" or just "City". The country segment, when present, is the
-// reliable signal for which national job market the posting belongs to —
+// reliable signal for which national job market the posting belongs to -
 // far more reliable than the action's `gl` parameter, which Google Jobs
 // often ignores when its results don't have local matches.
 const COUNTRY_NAME_TO_CODE: Record<string, string> = {
@@ -150,7 +150,7 @@ export async function computeDedupKey({
   const t = normalizeTitle(title);
   const c = normalizeCompanyName(company);
   // Pass through extractCity so callers can hand us either a raw location
-  // ("London (Hybrid)") or a clean city ("London") — both normalize.
+  // ("London (Hybrid)") or a clean city ("London"), both normalize.
   const cityNorm = extractCity(city).toLowerCase().replace(COLLAPSE_WS, " ");
   const input = `${t}::${c}::${cityNorm}`;
   // Web Crypto API. Available in Convex V8 runtime + Node 18+ + browsers.

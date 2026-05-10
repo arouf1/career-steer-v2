@@ -27,13 +27,13 @@ const ERROR_COPY: Record<string, string> = {
   UNSUPPORTED_TYPE: "We can read PDF and DOCX. Try one of those.",
   TOO_LARGE: "That file's a bit large. Try a copy under 5 MB.",
   EXTRACTION_FAILED:
-    "We couldn't read this file. It might be a scan — try exporting a fresh PDF.",
+    "We couldn't read this file. It might be a scan, try exporting a fresh PDF.",
   TEXT_TOO_LONG:
     "Your résumé is unusually long. Trim to the highlights and try again.",
   RATE_LIMIT:
     "You've parsed five résumés today. Take a breath; tomorrow we'll be ready again.",
   PARSE_FAILED:
-    "Something on our side gave up. Try again — or wait a moment if it keeps happening.",
+    "Something on our side gave up. Try again, or wait a moment if it keeps happening.",
   INVALID_LINKEDIN_URL:
     "That doesn't look like a LinkedIn profile URL. It should contain '/in/your-handle'.",
   PRIVATE_PROFILE:
@@ -56,7 +56,7 @@ export function UploadCard() {
     status.kind === "linkedin-importing";
 
   // Validate the URL eagerly so we can show inline feedback and disable the
-  // submit button. Empty input shows no icon — only validate once typing.
+  // submit button. Empty input shows no icon, only validate once typing.
   const linkedinValidation = useMemo(() => {
     if (linkedinInput.trim().length === 0) return null;
     const res = linkedinUrlSchema.safeParse(linkedinInput.trim());
@@ -143,7 +143,7 @@ export function UploadCard() {
   const linkedinBodyText =
     status.kind === "linkedin-importing"
       ? "Reading your LinkedIn profile. About fifteen seconds."
-      : "Paste your public LinkedIn URL — we'll read it carefully.";
+      : "Paste your public LinkedIn URL, we'll read it carefully.";
 
   return (
     <article className="w-full rounded-card border border-hairline bg-paper-raised p-6 sm:p-8">
@@ -282,7 +282,7 @@ export function UploadCard() {
           </form>
 
           <p className="type-caption mt-6 text-mute">
-            Public profiles only — we don't sign in on your behalf.
+            Public profiles only, we don't sign in on your behalf.
           </p>
         </div>
       )}

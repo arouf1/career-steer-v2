@@ -28,11 +28,11 @@ type Props = {
 };
 
 /**
- * Per-job-posting voice deep-dive modal. Mirrors DeepDiveCallDialog —
+ * Per-job-posting voice deep-dive modal. Mirrors DeepDiveCallDialog -
  * fixed-frame card with header, focal animation (Rive halo), toggleable
  * transcription, status text, and a compact 2-button control bar.
  *
- * Opened from JobVoiceCallTile already committed to a call — no in-modal
+ * Opened from JobVoiceCallTile already committed to a call, no in-modal
  * "Start call" button. Closing the modal during a live call ends the call
  * cleanly via the underlying hook.
  */
@@ -204,7 +204,7 @@ function getStatusText(call: ReturnType<typeof useJobVoiceCall>): string {
       return "Connecting to your career adviser…";
     case "connected": {
       if (!call.isAITalking && !call.userSpeaking) {
-        return "Connected — say hi to start";
+        return "Connected, say hi to start";
       }
       if (call.isAITalking) return "Adviser is speaking";
       return "Listening";

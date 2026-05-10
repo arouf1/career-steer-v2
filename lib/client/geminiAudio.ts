@@ -169,7 +169,7 @@ export interface PCMCaptureHandle {
    * The MediaStreamAudioSourceNode wired up inside this capture. Exposed so
    * downstream consumers (e.g. a waveform visualiser) can attach an
    * AnalyserNode to the *same* mic source rather than spinning up a duplicate
-   * MediaStreamSource — using two source nodes for the same MediaStream
+   * MediaStreamSource, using two source nodes for the same MediaStream
    * works but doubles the realtime audio graph cost for no benefit.
    */
   sourceNode: MediaStreamAudioSourceNode;
@@ -178,7 +178,7 @@ export interface PCMCaptureHandle {
 export interface PCMCaptureOptions {
   /**
    * Pre-acquired mic stream (from `prewarmAudio()`). When provided, we skip
-   * the internal getUserMedia call — required on iOS Safari where the
+   * the internal getUserMedia call, required on iOS Safari where the
    * permission prompt only fires from the original user gesture.
    */
   stream?: MediaStream;
@@ -195,7 +195,7 @@ export interface PCMCaptureOptions {
  * 100 ms. Caller stops by invoking the returned `stop` handle.
  *
  * On iOS Safari, callers MUST pass `stream` and `audioContext` from
- * `prewarmAudio()` — the internal getUserMedia / new AudioContext path will
+ * `prewarmAudio()`, the internal getUserMedia / new AudioContext path will
  * fail outside the user-gesture window.
  */
 export async function startPCMCapture(
@@ -280,7 +280,7 @@ export async function startPCMCapture(
 
   source.connect(workletNode);
   // The worklet doesn't render audible output, but connecting it to the
-  // destination keeps the AudioContext processing — without this connection
+  // destination keeps the AudioContext processing, without this connection
   // some browsers stop scheduling worklet callbacks.
   workletNode.connect(audioContext.destination);
   console.log("[gemini-audio] startPCMCapture: graph connected, returning handle");
@@ -309,7 +309,7 @@ export async function startPCMCapture(
  * concatenations. `onPlaybackStart` / `onPlaybackEnd` are useful for the
  * "AI is speaking" visual state without needing to inspect the WS stream.
  *
- * On iOS Safari, pass `audioContext` from `prewarmAudio()` — a context
+ * On iOS Safari, pass `audioContext` from `prewarmAudio()`, a context
  * created here would start suspended and never play.
  */
 export class PCMPlayer {
@@ -383,7 +383,7 @@ export class PCMPlayer {
 
   /**
    * Cancel any in-flight playback (barge-in). Stops scheduled sources in
-   * place rather than recreating the AudioContext — on iOS Safari a fresh
+   * place rather than recreating the AudioContext, on iOS Safari a fresh
    * context starts suspended, which would silence every model response after
    * the first interrupt.
    */

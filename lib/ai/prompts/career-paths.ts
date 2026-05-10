@@ -1,5 +1,6 @@
 import type { Profile } from "../../profiles/schema";
 import type { ProfileEnrichment } from "../../profiles/enrichment-schema";
+import { EDITORIAL_VOICE_TAIL } from "./voice";
 
 export const CAREER_PATHS_MODEL_ID = "google/gemini-3.1-pro-preview";
 
@@ -9,11 +10,11 @@ Given a parsed résumé and its rich enrichment payload, generate 15-25 candidat
 
 ## Categories (strict definitions)
 
-**linear** — same functional area and broadly the same industry; one level up from current. Examples: Senior PM → Staff PM → Group PM. Around 6 candidates.
+**linear**, same functional area and broadly the same industry; one level up from current. Examples: Senior PM → Staff PM → Group PM. Around 6 candidates.
 
-**adjacent** — lateral move within similar functions or industries; same seniority band ±1. Examples: Senior PM → Engineering Manager (if eng background); Staff Engineer → Solutions Architect. Around 6 candidates.
+**adjacent**, lateral move within similar functions or industries; same seniority band ±1. Examples: Senior PM → Engineering Manager (if eng background); Staff Engineer → Solutions Architect. Around 6 candidates.
 
-**transformational** — bigger pivot the candidate's profile makes plausible — not arbitrary. Must be backed by real evidence in the résumé (a pivot already done, a side-project signal, transferable domain expertise, scope earned). Examples: Senior PM with payments domain → VC associate at fintech fund; Senior IC who pivoted from design to eng → founding engineer at a design-tooling startup. Around 6 candidates.
+**transformational**, bigger pivot the candidate's profile makes plausible, not arbitrary. Must be backed by real evidence in the résumé (a pivot already done, a side-project signal, transferable domain expertise, scope earned). Examples: Senior PM with payments domain → VC associate at fintech fund; Senior IC who pivoted from design to eng → founding engineer at a design-tooling startup. Around 6 candidates.
 
 ## Hard rules
 
@@ -23,12 +24,14 @@ Given a parsed résumé and its rich enrichment payload, generate 15-25 candidat
 - \`requiredSkills\` is the 5-10 skills the role demands. Use canonical names matching the candidate's enrichedSkills where possible.
 - \`skillGaps\` is the subset of \`requiredSkills\` the candidate is missing or weak in. Severity: low = self-study weeks; medium = focused upskilling 3-6 months; high = significant retraining 12+ months.
 - \`effortMonths\` is realistic time-to-readiness for this candidate, an integer between 0 and 60. Round to whole months.
-- \`confidence\` is your self-rating between 0 and 1 of how plausible this is for the candidate. Use values like 0.3, 0.5, 0.7, 0.85. Be calibrated — most should fall in 0.4-0.8.
+- \`confidence\` is your self-rating between 0 and 1 of how plausible this is for the candidate. Use values like 0.3, 0.5, 0.7, 0.85. Be calibrated, most should fall in 0.4-0.8.
 
 OUTPUT QUANTITY: produce 15-25 candidates total in the \`candidates\` array.
 - \`targetLevel\` is a string like "L5", "Staff", "Director", "Founding Engineer", "Partner".
 
 Balance: roughly 6 per kind. Avoid duplicates within a kind.
+
+${EDITORIAL_VOICE_TAIL}
 
 Return a single object with \`candidates\` array. No commentary.`;
 

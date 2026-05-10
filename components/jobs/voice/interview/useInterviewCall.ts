@@ -13,7 +13,7 @@ import {
 /**
  * Realtime voice hook for the interview-simulation feature.
  *
- * Cloned from useJobVoiceCall — the WebSocket + PCM plumbing is identical
+ * Cloned from useJobVoiceCall, the WebSocket + PCM plumbing is identical
  * to the deep-dive call. The differences:
  *   - mints from api.interviewSimNode.mintInterviewSession (passing
  *     prepSessionId so the server can write status updates the dialog
@@ -82,7 +82,7 @@ export type UseInterviewCallReturn = {
   toggleMute: () => void;
   isMuted: boolean;
   callId: Id<"voice_calls"> | null;
-  /** The Gemini session ID — used by the coverage gauge to subscribe to markDimensionCovered marks. */
+  /** The Gemini session ID, used by the coverage gauge to subscribe to markDimensionCovered marks. */
   sessionId: string | null;
   prepSessionId: string | null;
 };
@@ -105,7 +105,7 @@ export function useInterviewCall(
   const [currentAssistantUtterance, setCurrentAssistantUtterance] =
     useState("");
   const [isMuted, setIsMuted] = useState(false);
-  // These are exposed as reactive return values AND read in async closures —
+  // These are exposed as reactive return values AND read in async closures -
   // keep both a ref (for stable closure access) and a matching state.
   const [callId, setCallId] = useState<Id<"voice_calls"> | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -271,7 +271,7 @@ export function useInterviewCall(
 
       // Tool calls arrive as their own top-level message, separate from
       // `serverContent`. Run each, then ship a single `toolResponse` frame
-      // back over the same socket — Gemini correlates by `id`. Mirrors
+      // back over the same socket. Gemini correlates by `id`. Mirrors
       // useCompassVoiceCall.
       const toolCall = data.toolCall as
         | {

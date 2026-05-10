@@ -18,7 +18,7 @@ import {
 } from "@/lib/ai/prompts/compassAdviser";
 
 /**
- * Career Compass voice assistant hook — parallel to useDeepDiveCall, with
+ * Career Compass voice assistant hook, parallel to useDeepDiveCall, with
  * three differences:
  *
  *  1. Mints via api.compassVoiceNode.mintCompassSession (no guideId / region
@@ -26,7 +26,7 @@ import {
  *  2. Exposes the live PCMCaptureHandle so the ambient dock can wire an
  *     AnalyserNode into the dock's waveform without duplicating the
  *     MediaStreamSource.
- *  3. Doesn't expose a transcript array — the compass surface is caption-
+ *  3. Doesn't expose a transcript array, the compass surface is caption-
  *     free by design (transcripts still persist server-side).
  *
  * Same WebSocket → setup → mic capture lifecycle as the per-guide path.
@@ -54,7 +54,7 @@ type AppendMessageInput = {
 
 // The server now hands back a ready-to-send setup message (minimal on the
 // ephemeral path, full on the API-key fallback path). The client just
-// ws.send()s it on open — see convex/lib/voiceLiveConfig.ts for the full
+// ws.send()s it on open, see convex/lib/voiceLiveConfig.ts for the full
 // rationale. We keep `model` + `voice` as separate fields purely for
 // console diagnostics / display, not for wire use.
 type ServerSetupMessage = Record<string, unknown>;
@@ -86,10 +86,10 @@ export type CompassToolCallbacks = {
   onDismissCard: (guideId: string) => Promise<CompassToolResult>;
   onUndismissCard: (guideId: string) => Promise<CompassToolResult>;
   onRefreshCanvas: () => Promise<CompassToolResult>;
-  // Desktop only — undefined on mobile. The dispatcher returns an
+  // Desktop only, undefined on mobile. The dispatcher returns an
   // unwired-tool error if the model calls a callback that's missing.
   onSetDensity?: (level: string) => Promise<CompassToolResult>;
-  // Mobile only — undefined on desktop.
+  // Mobile only, undefined on desktop.
   onGoToLane?: (lane: string) => Promise<CompassToolResult>;
 };
 
@@ -107,12 +107,12 @@ export type UseCompassVoiceCallArgs = {
    */
   densityLevel?: CompassDensityLevel;
   /**
-   * Device surface — drives which tool list the server declares and how
+   * Device surface, drives which tool list the server declares and how
    * the prompt frames navigation. Defaults to "desktop".
    */
   surface?: CompassSurface;
   /**
-   * Mobile only — which lane is currently in view. Updates mid-call are
+   * Mobile only, which lane is currently in view. Updates mid-call are
    * pushed to the model via clientContent so it knows what's on-screen.
    */
   activeLane?: CompassLaneKind;
@@ -124,7 +124,7 @@ export type UseCompassVoiceCallReturn = {
   isAITalking: boolean;
   userSpeaking: boolean;
   /**
-   * Live capture handle — null until the call is connected. The dock uses
+   * Live capture handle, null until the call is connected. The dock uses
    * `captureHandle.audioContext` + `captureHandle.sourceNode` to attach an
    * AnalyserNode for the waveform visualisation.
    */
@@ -159,7 +159,7 @@ export function useCompassVoiceCall(
     toolsRef.current = tools;
   }, [tools]);
 
-  // Same pattern for density — startCall reads through the ref so a slider
+  // Same pattern for density, startCall reads through the ref so a slider
   // tick mid-mint doesn't get clobbered by a stale closure.
   const densityRef = useRef<CompassDensityLevel>(densityLevel);
   useEffect(() => {
@@ -282,7 +282,7 @@ export function useCompassVoiceCall(
       if (!cbs) {
         return {
           ok: false,
-          message: "Tools aren't wired up on this surface — describe instead.",
+          message: "Tools aren't wired up on this surface, describe instead.",
         };
       }
       try {
@@ -352,7 +352,7 @@ export function useCompassVoiceCall(
               return {
                 ok: false,
                 message:
-                  "Lane navigation isn't needed on this surface — all four lanes are visible at once.",
+                  "Lane navigation isn't needed on this surface, all four lanes are visible at once.",
               };
             }
             return await cbs.onGoToLane(lane);
@@ -378,7 +378,7 @@ export function useCompassVoiceCall(
 
       // Tool calls arrive as their own top-level message, separate from
       // `serverContent`. Run each, then ship a single `toolResponse` frame
-      // back over the same socket — Gemini correlates by `id`.
+      // back over the same socket. Gemini correlates by `id`.
       const toolCall = data.toolCall as
         | { functionCalls?: Array<{ id?: string; name?: string; args?: Record<string, unknown> }> }
         | undefined;
@@ -487,7 +487,7 @@ export function useCompassVoiceCall(
     // Acquire mic + create + resume both AudioContexts INSIDE the user-
     // gesture sync window. iOS rejects getUserMedia called after any await,
     // and starts AudioContexts suspended unless resumed from a gesture.
-    // Must run before any await — including before the React state updates
+    // Must run before any await, including before the React state updates
     // below (those are sync, but keeping the prewarm above any other work
     // makes the gesture-window contract obvious).
     let prewarm: PrewarmedAudio;
@@ -505,7 +505,7 @@ export function useCompassVoiceCall(
     finalizedRef.current = false;
     console.log("[compass-voice] startCall: state=connecting, racing mint+mic");
 
-    // Race mint and mic-permission in parallel — both are network/UI round
+    // Race mint and mic-permission in parallel, both are network/UI round
     // trips, no point serialising them.
     let mintResult: Awaited<ReturnType<typeof mintSession>>;
     let micStream: MediaStream;
@@ -591,7 +591,7 @@ export function useCompassVoiceCall(
     ws.onopen = () => {
       console.log("[compass-voice] ws.onopen");
       // Setup is built server-side (see convex/lib/voiceLiveConfig.ts).
-      // Ephemeral path: minimal — just `setup.model`. The full session
+      // Ephemeral path: minimal, just `setup.model`. The full session
       // config is bound at the token via liveConnectConstraints, so the
       // constrained WS endpoint pulls it from there.
       // API-key fallback path: full setup payload, model + every option.
@@ -724,8 +724,8 @@ export function useCompassVoiceCall(
 
   // ── Realtime canvas sync ────────────────────────────────────────────────
   // Subscribe to the live canvas-context query whenever a call is in flight
-  // (connecting / connected). When the formatted canvas text changes —
-  // density tick, save/dismiss reaction, snapshot regen — push it to the
+  // (connecting / connected). When the formatted canvas text changes -
+  // density tick, save/dismiss reaction, snapshot regen, push it to the
   // model via `clientContent` with `turnComplete: false` so it lands in the
   // running session context without triggering a model response of its own.
   const liveContextActive =
@@ -756,7 +756,7 @@ export function useCompassVoiceCall(
       ) {
         return;
       }
-      const message = `[Canvas state — density: ${liveContext.densityLevel}; saved: ${liveContext.savedCount}]\n${text}`;
+      const message = `[Canvas state, density: ${liveContext.densityLevel}; saved: ${liveContext.savedCount}]\n${text}`;
       wsRef.current.send(
         JSON.stringify({
           clientContent: {
@@ -773,7 +773,7 @@ export function useCompassVoiceCall(
     return () => clearTimeout(t);
   }, [callState, liveContext]);
 
-  // Mobile only — push activeLane changes to the model mid-call so it
+  // Mobile only, push activeLane changes to the model mid-call so it
   // knows what's actually on the user's screen as they swipe between
   // lanes. The same clientContent / turnComplete: false pattern as the
   // canvas-state sync above.

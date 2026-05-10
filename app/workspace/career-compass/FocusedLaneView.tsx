@@ -55,7 +55,7 @@ export function FocusedLaneView({
     return () => window.removeEventListener("keydown", onKey);
   }, [onBack]);
 
-  // Sort by squared Euclidean distance from the user node — mirrors the
+  // Sort by squared Euclidean distance from the user node, mirrors the
   // canvas where closer to (0, 0) means closer fit. Squared distance is
   // sufficient since we only need ordering, not the actual magnitude.
   const sorted = [...cards].sort(
@@ -71,7 +71,7 @@ export function FocusedLaneView({
       className="absolute inset-0 z-30 flex flex-col"
       style={{ backgroundColor: LANE_TINT[lane] ?? "white" }}
     >
-      {/* Top bar — back button + lane title */}
+      {/* Top bar, back button + lane title */}
       <div className="flex items-center justify-between border-b border-hairline/60 bg-paper/40 px-6 py-4 backdrop-blur-sm">
         <button
           type="button"

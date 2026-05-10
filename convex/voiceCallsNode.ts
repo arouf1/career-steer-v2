@@ -1,7 +1,7 @@
 "use node";
 
 /**
- * Realtime AI voice "deep dive" — Node runtime.
+ * Realtime AI voice "deep dive". Node runtime.
  *
  * Two responsibilities:
  *
@@ -46,7 +46,7 @@ import {
 } from "./lib/voiceLiveConfig";
 
 // Per the plan: "verify the current Live model ID at implementation time".
-// 2026-05 — Gemini 3.x Live "preview" lineage. If Google rotates this, the
+// 2026-05. Gemini 3.x Live "preview" lineage. If Google rotates this, the
 // model field on the voice_calls row captures whatever was active at session
 // start, so we can spot drift in production data.
 const LIVE_MODEL = "gemini-3.1-flash-live-preview";
@@ -130,7 +130,7 @@ export const mintSession = action({
     // Pull everything we need to assemble the prompt. Each of these queries
     // is cheap (single-doc lookups + bounded fan-outs); inline rather than
     // a single composite query because they're independently reusable.
-    // Lives in voiceCalls.ts (V8 runtime) — internalQuery can't be defined
+    // Lives in voiceCalls.ts (V8 runtime), internalQuery can't be defined
     // in a "use node" file.
     const bundle = await ctx.runQuery(
       internal.voiceCalls._gatherSessionContext,
@@ -173,7 +173,7 @@ export const mintSession = action({
     //   1. As `liveConnectConstraints.config` at token mint, so every field
     //      is bound to the ephemeral token. The constrained WS endpoint
     //      then takes the effective config from the token, not from any
-    //      client setup message — this fixes the voice-rotation regression
+    //      client setup message, this fixes the voice-rotation regression
     //      that motivated yesterday's 22ee91c without re-introducing the
     //      partial-overlap 1011 problem da8d6d3 had to revert.
     //
@@ -187,7 +187,7 @@ export const mintSession = action({
       tools: [{ googleSearch: {} }],
     });
 
-    // Mint the credential. Try ephemeral first (preferred — single-use,
+    // Mint the credential. Try ephemeral first (preferred, single-use,
     // short-lived, scoped to this session); fall back to API key if Google's
     // auth_tokens endpoint returns an error. V1 commit 0689253 documented
     // that this fallback is needed in practice.
@@ -209,7 +209,7 @@ export const mintSession = action({
           ).toISOString(),
           // Bind the entire live config at the token. The SDK transforms
           // the LiveConnectConfig shape (`liveConfig`) into the wire
-          // `bidiGenerateContentSetup` shape internally — see
+          // `bidiGenerateContentSetup` shape internally, see
           // liveConnectConstraintsToMldev in @google/genai.
           liveConnectConstraints: {
             model: LIVE_MODEL,
@@ -223,7 +223,7 @@ export const mintSession = action({
       if (!token.name) throw new Error("empty_token_name");
       credential = { type: "ephemeral_token", value: token.name };
       authMode = "ephemeral";
-      // Token has the whole config — client setup just declares the model.
+      // Token has the whole config, client setup just declares the model.
       setupMessage = buildMinimalSetupMessage(LIVE_MODEL);
     } catch (err) {
       console.warn(
@@ -382,10 +382,10 @@ Turn counts: user ${args.userTurns}, adviser ${args.assistantTurns}
 
 Guidelines for your output:
 - Address the user directly ("you said…", "you wondered…") rather than third-person.
-- British English; calm, neutral tone — no emojis.
+- British English; calm, neutral tone, no emojis.
 - "title" should be a natural-language headline of ~6-10 words about what the conversation was actually about.
 - "summary" is 2-3 sentences. State what was discussed and any decisions reached.
-- "insights" lists genuine learnings — things the user *discovered* during the call. Skip generic platitudes.
+- "insights" lists genuine learnings, things the user *discovered* during the call. Skip generic platitudes.
 - "actionPoints" should be concrete and grounded in what was actually said. If nothing actionable came up, return an empty array. Cap at five.
 - "keyTopics" are short noun phrases (e.g. "salary expectations", "portfolio gaps", "career pivot to UX research"). Aim for 3-7.
 - "guideRelevance" answers: did the conversation actually engage with the career path the user came in to discuss, or did it drift?

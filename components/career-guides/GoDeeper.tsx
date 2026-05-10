@@ -109,7 +109,7 @@ export function GoDeeper({
         body: JSON.stringify({ guideId, sectionId, question }),
       });
     } catch {
-      // Silent failure — row stays collapsed-on-next-click; user can retry.
+      // Silent failure, row stays collapsed-on-next-click; user can retry.
     } finally {
       setPending((prev) => {
         const next = new Set(prev);
@@ -226,7 +226,7 @@ export function GoDeeper({
                       Couldn&rsquo;t draft this one. Click again to retry.
                     </p>
                   ) : (
-                    // generating / researching / pending — render skeleton
+                    // generating / researching / pending, render skeleton
                     <div className="mt-4 space-y-3">
                       {[80, 95, 70].map((w, i) => (
                         <div

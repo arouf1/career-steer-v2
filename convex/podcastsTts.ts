@@ -24,7 +24,7 @@ import {
 const JINGLE_TAIL_SILENCE_MS = 350;
 
 // Google publishes two multi-speaker TTS models. Flash is "optimized for
-// cost-efficient everyday applications" — fine for short clips but drifts
+// cost-efficient everyday applications", fine for short clips but drifts
 // in clarity over a few minutes of continuous output (audio analysis on
 // flash showed an 18% drop in spectral centroid past 80s). Pro is
 // explicitly "optimized for structured workflows like podcast generation
@@ -33,7 +33,7 @@ const JINGLE_TAIL_SILENCE_MS = 350;
 // `gemini-2.5-pro-tts`).
 const TTS_MODEL = "gemini-2.5-pro-preview-tts";
 // Pro TTS renders multi-speaker dialogue sequentially and can take 3-5 min
-// on a 30-turn transcript. 180s was too aggressive — bumped to 6 min.
+// on a 30-turn transcript. 180s was too aggressive, bumped to 6 min.
 const TTS_TIMEOUT_MS = 360_000;
 // Retry once if our own timeout fires; non-abort errors fail fast.
 const TTS_RETRIES_ON_ABORT = 1;
@@ -118,7 +118,7 @@ export const synthesize = internalAction({
                 ],
               },
             },
-            // 1.5 — stepped down from the docs' example value of 2.0
+            // 1.5, stepped down from the docs' example value of 2.0
             // because max creativity made Alice (the host) drift in pitch
             // and timbre between episodes. Still well above the 1.0 default
             // so the delivery keeps its podcast-y energy.

@@ -46,7 +46,7 @@ const resolveAuthedUser = async (
     .unique();
 };
 
-// What the UI sees per person — strips internal cost / query metadata.
+// What the UI sees per person, strips internal cost / query metadata.
 type PublicKeyPerson = {
   _id: Id<"key_people">;
   name: string;
@@ -146,7 +146,7 @@ export const triggerSearch = mutation({
       )
       .unique();
 
-    // A fresh in-flight run wins — do not double-schedule.
+    // A fresh in-flight run wins, do not double-schedule.
     if (
       existingRun?.status === "running" &&
       Date.now() - existingRun.startedAt < RUN_FRESHNESS_MS
@@ -365,7 +365,7 @@ export const _runSearch = internalAction({
         clearTimeout(exaTimer);
       }
 
-      // Filter to actual /in/ profiles — search results occasionally
+      // Filter to actual /in/ profiles, search results occasionally
       // surface company pages or articles even with includeDomains.
       const profileResults = exaResults.results.filter((r) =>
         LINKEDIN_PROFILE_RE.test(r.url),
@@ -391,10 +391,10 @@ export const _runSearch = internalAction({
       const dupeSet = new Set(dupes);
       const fresh = profileResults.filter((r) => !dupeSet.has(r.url));
       if (fresh.length === 0) {
-        // Already have results for this user — surface them by marking run
+        // Already have results for this user, surface them by marking run
         // complete; listForGuide will return the existing rows from
         // by_guide_user_created (if they're for this guide). If they're for
-        // a different guide, the user sees an empty list + retry — acceptable.
+        // a different guide, the user sees an empty list + retry, acceptable.
         await ctx.runMutation(internal.people._markRun, {
           guideId: args.guideId,
           userId: args.userId,

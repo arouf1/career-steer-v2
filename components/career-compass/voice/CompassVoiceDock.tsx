@@ -19,14 +19,14 @@ import { CompassVoiceControls } from "./CompassVoiceControls";
 type Props = {
   /**
    * Whether the canvas snapshot is ready. The dock disables itself while the
-   * compass is generating or failed — minting a session against a non-ready
+   * compass is generating or failed, minting a session against a non-ready
    * canvas would just bounce server-side, so we keep the affordance honest.
    */
   canvasReady: boolean;
   /**
    * Tool callbacks the voice model can invoke during the call (open a card,
    * save/unsave, dismiss, refresh). Wired from DiscoverCanvas where the
-   * underlying mutations + previewCard state live. Optional — when absent
+   * underlying mutations + previewCard state live. Optional, when absent
    * the model gets a "tools aren't wired here" response and falls back to
    * description.
    */
@@ -48,7 +48,7 @@ type Props = {
   /**
    * When the card preview sheet is open the floating dock shifts from the
    * bottom-right (where it'd sit underneath the sheet) to the top-left of
-   * the canvas — matching the corner of the Linear Lane quadrant — so the
+   * the canvas, matching the corner of the Linear Lane quadrant, so the
    * waveform stays visible alongside the open card.
    */
   sheetOpen?: boolean;
@@ -59,12 +59,12 @@ type Props = {
    */
   densityLevel?: CompassDensityLevel;
   /**
-   * Device surface — drives surface-specific tool list and prompt. Defaults
+   * Device surface, drives surface-specific tool list and prompt. Defaults
    * to "desktop" inside the hook.
    */
   surface?: CompassSurface;
   /**
-   * Mobile only — which lane is currently in view. Mid-call changes get
+   * Mobile only, which lane is currently in view. Mid-call changes get
    * pushed to the live session so the model knows what's on-screen.
    */
   activeLane?: CompassLaneKind;
@@ -76,7 +76,7 @@ type Props = {
  * Idle: small pill button anchored bottom-right of the canvas wrapper. Click
  * starts the call. While connecting / connected, the pill expands into an
  * ambient bar with mic frequency waveform + status line + mute / end-call
- * controls. Caption-free by design — the canvas should remain the focal
+ * controls. Caption-free by design, the canvas should remain the focal
  * point; the full transcript persists server-side and lands in the post-call
  * summary.
  */
@@ -125,8 +125,8 @@ export function CompassVoiceDock({
         return "Connecting…";
       case "connected":
         if (call.isAITalking) return "Adviser is speaking";
-        if (call.userSpeaking) return "Listening — go ahead";
-        return "Open mic — talk to me";
+        if (call.userSpeaking) return "Listening, go ahead";
+        return "Open mic, talk to me";
       default:
         return "";
     }
@@ -290,7 +290,7 @@ export function CompassVoiceDock({
           >
             {call.callState === "error"
               ? (call.error ?? "Connection error")
-              : "Call ended — summary saved"}
+              : "Call ended, summary saved"}
           </motion.div>
         )}
       </AnimatePresence>

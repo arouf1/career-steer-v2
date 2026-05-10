@@ -17,13 +17,13 @@ type Confidence = "weak" | "solid" | "strong";
 /**
  * 4-pip indicator that lights up as the interviewer marks dimensions covered.
  *
- * Visible to the user, invisible to the interviewer model — purely a "we
+ * Visible to the user, invisible to the interviewer model, purely a "we
  * see them paying attention" signal that's good for trust during a 10-min
  * call. The interviewer is told (via the prompt) NOT to narrate tool calls,
  * so the user shouldn't notice a behavior change beyond pips lighting up.
  *
  * Each pip has 4 visual states:
- *   - empty (outline only) — no mark yet
+ *   - empty (outline only), no mark yet
  *   - weak  (small filled inner dot)
  *   - solid (full filled pip)
  *   - strong (full filled + faint glow ring)

@@ -33,7 +33,7 @@ export const deleteAccount = action({
     const clerk = createClerkClient({ secretKey });
 
     // Step 1: Delete Clerk user. If this throws, nothing in Convex is
-    // destroyed yet — user can retry safely.
+    // destroyed yet, user can retry safely.
     try {
       await clerk.users.deleteUser(identity.subject);
     } catch (err) {
@@ -42,7 +42,7 @@ export const deleteAccount = action({
     }
 
     // Step 2: Cascade Convex data inline. Webhook will fire user.deleted
-    // and run this again idempotently — having both ensures the user sees
+    // and run this again idempotently, having both ensures the user sees
     // data gone immediately, not on webhook delay.
     await ctx.runMutation(internal.users.deleteByTokenIdentifierInternal, {
       tokenIdentifier: identity.tokenIdentifier,

@@ -43,7 +43,7 @@ const resolveRegion = async (
 
 // Pulls the Vercel-supplied request geo headers and decodes them into a
 // shape JobsForGuide can feed into the Convex location ladder. All fields
-// are optional — missing values fall through the ladder to country or
+// are optional, missing values fall through the ladder to country or
 // anywhere automatically. Local dev (no Vercel proxy) returns {} so the
 // orchestrator just shows globally-ranked results.
 const resolveAnonymousGeo = async (): Promise<AnonymousGeo> => {
@@ -78,7 +78,7 @@ export async function generateMetadata({
   if (!guide) return { title: "Career guide", robots: { index: false } };
   if (guide.contentStatus !== "complete" || !guide.content) {
     return {
-      title: `${guide.title} — career guide`,
+      title: `${guide.title}, career guide`,
       robots: { index: false },
     };
   }
@@ -270,7 +270,7 @@ function ArticleJsonLd({
   const article = {
     "@context": "https://schema.org",
     "@type": "Article",
-    headline: `${guide.title} — career guide`,
+    headline: `${guide.title}, career guide`,
     description: c.overview.slice(0, 200),
     inLanguage: "en-GB",
     articleSection: "Career guides",

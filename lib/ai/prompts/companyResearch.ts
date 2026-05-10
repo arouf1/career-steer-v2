@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EDITORIAL_VOICE_TAIL } from "./voice";
 
 // Sub-project 5 of the jobs feature. Two tightly-related but separate
 // pipelines:
@@ -32,7 +33,7 @@ export type GroundedResearch = {
 // ── Output schemas ────────────────────────────────────────────────────────
 //
 // Bound constraints (.min/.max/.length on strings or arrays) are deliberately
-// omitted because Gemini structured output rejects them — see project memory
+// omitted because Gemini structured output rejects them, see project memory
 // "Gemini structured output rejects bound/array-length constraints".
 
 export const CompanyResearchSchema = z.object({
@@ -104,8 +105,10 @@ export const COMPANY_RESEARCH_SYSTEM_PROMPT = [
   "2. Cite by returning the source indexes you used in `usedSources.{field}`.",
   "3. If the research provided isn't enough to summarise a field without inventing, return null for that field and an empty index list.",
   "4. Never invent funding figures, headcounts, interview formats, or comp ranges. Never hallucinate.",
-  "5. Be concise — these summaries appear as small panels next to the main job posting, not as standalone articles.",
+  "5. Be concise, these summaries appear as small panels next to the main job posting, not as standalone articles.",
   "6. Plain prose. No bullet lists. No markdown.",
+  "",
+  EDITORIAL_VOICE_TAIL,
 ].join("\n");
 
 // ── Per-field input rendering ─────────────────────────────────────────────
@@ -117,12 +120,12 @@ function renderField(
   if (!research || research.sources.length === 0) {
     return [
       `## ${fieldKey}`,
-      `(no research available for this field — return null in your output)`,
+      `(no research available for this field, return null in your output)`,
       "",
     ].join("\n");
   }
   const sources = research.sources
-    .map((s, i) => `[${i}] ${s.title} — ${s.url}`)
+    .map((s, i) => `[${i}] ${s.title}, ${s.url}`)
     .join("\n");
   return [
     `## ${fieldKey}`,

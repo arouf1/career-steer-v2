@@ -17,7 +17,7 @@ type Props = {
 };
 
 /**
- * Live transcript view — rendered as the modal centerpiece when the user
+ * Live transcript view, rendered as the modal centerpiece when the user
  * toggles away from the Rive animation. Each completed message is shown as
  * a labelled line; the in-flight assistant utterance streams in with a
  * blinking caret.

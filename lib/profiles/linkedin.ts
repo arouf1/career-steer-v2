@@ -61,7 +61,7 @@ export const linkedinUrlSchema = z
 
 // Heuristic for "this scrape came back as the signed-out wall, not the real
 // profile". Used to drive the retry-on-private loop in the parseLinkedIn
-// action. Ported from V1 — the indicators are the strings LinkedIn actually
+// action. Ported from V1, the indicators are the strings LinkedIn actually
 // renders on the gated wall, so they only get false-positives on profiles
 // whose real text happens to contain the same phrases (rare).
 export function isPrivateLinkedInProfile(text: string): boolean {
@@ -79,7 +79,7 @@ export function isPrivateLinkedInProfile(text: string): boolean {
     text.includes(needle),
   ).length;
 
-  // "View Jane's full experience" / "View Jane Doe's full experience" — the
+  // "View Jane's full experience" / "View Jane Doe's full experience", the
   // single-string tell that the profile is gated even when sign-in prompts
   // are absent.
   const hasViewFullExperience = /View\s+\w+['']s full experience/i.test(text);

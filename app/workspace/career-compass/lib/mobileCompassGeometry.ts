@@ -62,7 +62,7 @@ export function dotPosition(args: {
 }
 
 /**
- * Centre point of a quadrant in normalised space — used to position lane
+ * Centre point of a quadrant in normalised space, used to position lane
  * labels at quadrant midpoints.
  */
 export function quadrantCenter(lane: CompassLane): { x: number; y: number } {
@@ -87,7 +87,7 @@ export function quadrantClipPath(lane: CompassLane): string {
 /**
  * Lane-tint colour for compass quadrants.
  *
- * The active quadrant must be visibly darker than the inactive ones — that
+ * The active quadrant must be visibly darker than the inactive ones, that
  * difference is now the *only* signal of which lane the user is on (taps
  * are removed; the compass is a passive indicator). `intensity` is a 0..1
  * scalar; in practice values land in the [0.3, 1] band:
@@ -112,14 +112,14 @@ export function laneTint(lane: CompassLane, intensity: number): string {
   // visibly darker), and C from 0.005 (barely tinted) → 0.05 (clearly
   // tinted) over the full i range. With QuadrantTint clamping i to
   // [0.3, 1], inactive lands around (L 0.952, C 0.0185) and active around
-  // (L 0.91, C 0.05) — calm, but with enough contrast to read at a glance.
+  // (L 0.91, C 0.05), calm, but with enough contrast to read at a glance.
   const L = 0.97 - (0.97 - 0.91) * i;
   const C = 0.005 + (0.05 - 0.005) * i;
   return `oklch(${L} ${C} ${HUE[lane]})`;
 }
 
 /**
- * Dot colour by lane — slightly more saturated than the tint so dots read
+ * Dot colour by lane, slightly more saturated than the tint so dots read
  * against their quadrant background.
  */
 export function laneDotColor(lane: CompassLane): string {

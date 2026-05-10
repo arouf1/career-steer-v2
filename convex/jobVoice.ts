@@ -1,5 +1,5 @@
 /**
- * Per-job-posting voice assistant — non-Node Convex surface.
+ * Per-job-posting voice assistant, non-Node Convex surface.
  *
  * Parallel to convex/voiceCalls.ts (per-guide) and convex/compassVoice.ts
  * (per-canvas). Shares the persistence + post-call analysis pipeline
@@ -8,7 +8,7 @@
  * that writes `surface: "job"`.
  *
  * The action that mints the Gemini Live ephemeral token lives in
- * convex/jobVoiceNode.ts (Node runtime) — same split as voiceCalls.ts vs
+ * convex/jobVoiceNode.ts (Node runtime), same split as voiceCalls.ts vs
  * voiceCallsNode.ts.
  */
 
@@ -39,7 +39,7 @@ export const _createJobSession = internalMutation({
       userId: args.userId,
       surface: "job",
       jobPostingId: args.jobPostingId,
-      // guideId / canvasSnapshotId deliberately omitted — job calls aren't
+      // guideId / canvasSnapshotId deliberately omitted, job calls aren't
       // anchored to either. Schema makes both optional for exactly this case.
       sessionId: args.sessionId,
       title: args.title,
@@ -63,17 +63,17 @@ export const _createJobSession = internalMutation({
  *
  * Loads:
  *   - user identity + latest profile + enrichment (warm narrative for adviser)
- *   - profile_embeddings (4-facet vectors — used for fit cosine sim)
+ *   - profile_embeddings (4-facet vectors, used for fit cosine sim)
  *   - posting + company (the entity the call is about)
  *   - company_research (culture/financials; status checked downstream)
  *   - company_role_research (interview/compensation; only when the posting
- *     has a roleArchetypeSlug — research keys on it)
+ *     has a roleArchetypeSlug, research keys on it)
  *   - job_posting_embeddings (4-facet vectors for fit narrative)
- *   - linked career_guide (when roleArchetypeSlug resolves) — gives the
+ *   - linked career_guide (when roleArchetypeSlug resolves), gives the
  *     adviser typicalSkills / dayToDay / risk-factors grounding to compare
  *     the posting against the canonical role
  *
- * Read-only — the action follows up with _createJobSession to insert.
+ * Read-only, the action follows up with _createJobSession to insert.
  */
 export const _gatherJobContext = internalQuery({
   args: {

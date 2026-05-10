@@ -23,17 +23,17 @@ type Props = {
  * Discrete CTA for the realtime deep-dive call.
  *
  * Two variants:
- *   - aside         — compact card placed at the top of the article's right
+ *   - aside        , compact card placed at the top of the article's right
  *                     column on desktop. Visually anchors next to the
  *                     publish-date row in the article column. On mobile the
  *                     entire right aside reflows below the article body.
- *   - byline-inline — small text-link chip rendered inside <Byline> next to
- *                     the publish date. lg:hidden — only shows on mobile so
+ *   - byline-inline, small text-link chip rendered inside <Byline> next to
+ *                     the publish date. lg:hidden, only shows on mobile so
  *                     it doesn't compete with the desktop aside variant.
  *
  * Anonymous branch (both variants): the slot still renders, but it's a Link
  * to /sign-in?redirect_url=<guidePath> instead of a button that opens the
- * call. Same visual density — only the label and target change.
+ * call. Same visual density, only the label and target change.
  */
 export function DeepDiveCallTile({
   guideId,
@@ -125,7 +125,7 @@ export function DeepDiveCallTile({
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-ink">Talk it through</p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-mute">
-            Live 1-on-1 with an AI career adviser, tailored to you. ~5–10
+            Live 1-on-1 with an AI career adviser, tailored to you. ~5-10
             minutes.
           </p>
         </div>

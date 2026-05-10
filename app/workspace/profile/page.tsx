@@ -67,7 +67,7 @@ function ProfileShell() {
 
   // Step 2 of profile setup: the user must confirm their location
   // before the rest of the profile UI unlocks. Pre-filled with whatever
-  // the LLM extracted from the CV/LinkedIn — the user just confirms or
+  // the LLM extracted from the CV/LinkedIn, the user just confirms or
   // edits. Once confirmed, locationConfirmedAt is set and we never come
   // back through this gate for this profile.
   if (profile.locationConfirmedAt === undefined) {

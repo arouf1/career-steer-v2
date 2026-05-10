@@ -7,7 +7,7 @@ type Props = {
   /** Real card rows rendered behind the blur (passed as children so callers control the markup). */
   children: React.ReactNode;
   totalRemaining: number;
-  /** "near London" / "in the UK" / "near you" — slot label for the CTA copy. */
+  /** "near London" / "in the UK" / "near you", slot label for the CTA copy. */
   geoLabel: string;
   guideTitle: string;
   signInRedirectUrl: string;

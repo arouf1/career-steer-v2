@@ -1,7 +1,7 @@
 // One-shot cleanup of two backfill / generation problems:
 //
 // 1. Structural Engineer was placed on the Software Engineering ladder by
-//    the backfill LLM classifier — the word "engineer" overlapped. It's
+//    the backfill LLM classifier, the word "engineer" overlapped. It's
 //    a chartered civil engineering profession, not software. Removes the
 //    bad ladder position; the guide stays in the catalogue but lands in
 //    the "Other paths" orphan section until a Civil Engineering ladder
@@ -101,7 +101,7 @@ export const cleanup = internalMutation({
       for (const e of edEmbeddings) await ctx.db.delete(e._id);
       ed.embeddings = edEmbeddings.length;
 
-      // Go Deeper branches — by_guide_status_created is the only
+      // Go Deeper branches, by_guide_status_created is the only
       // guide-keyed index and works as a guide-only prefix scan.
       const edBranches = await ctx.db
         .query("career_guide_branches")
@@ -112,7 +112,7 @@ export const cleanup = internalMutation({
       for (const b of edBranches) await ctx.db.delete(b._id);
       ed.branches = edBranches.length;
 
-      // personalizations — no by_guide index; scan + filter. The dev
+      // personalizations, no by_guide index; scan + filter. The dev
       // catalogue is small enough that a one-shot full scan is fine.
       const allPersonalizations = await ctx.db
         .query("career_guide_personalizations")

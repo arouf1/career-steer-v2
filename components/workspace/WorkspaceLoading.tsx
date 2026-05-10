@@ -1,6 +1,6 @@
 // Standardised loading skeletons for workspace pages. Hairline-divided
 // rows mirror the populated row shapes so the page rhythm doesn't shift
-// when data lands — only the content fills in. The fade-in-view utility
+// when data lands, only the content fills in. The fade-in-view utility
 // (see globals.css) softens the swap; both honour prefers-reduced-motion.
 //
 // Three shapes covering every workspace surface today:
@@ -11,7 +11,7 @@
 //
 // Every variant lives in one file so the visual language stays in sync.
 // Loader2 spinners are reserved for INLINE transient actions (refreshing
-// in-flight, archiving) — never for first-render data fetches.
+// in-flight, archiving), never for first-render data fetches.
 
 export function WorkspaceLoadingHeader() {
   return (
@@ -54,7 +54,7 @@ export function WorkspaceLoadingRows({ count = 3 }: { count?: number }) {
 export function WorkspaceLoadingProfile() {
   return (
     <article className="flex flex-col gap-16" aria-busy="true">
-      {/* Header — matches WorkspacePageHeader output */}
+      {/* Header, matches WorkspacePageHeader output */}
       <div className="flex flex-col gap-3" aria-hidden>
         <div className="skeleton-block h-3 w-20" />
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -80,7 +80,7 @@ export function WorkspaceLoadingProfile() {
         </div>
       </section>
 
-      {/* Experience section — three entries */}
+      {/* Experience section, three entries */}
       <section aria-hidden>
         <div className="skeleton-block h-2.5 w-24" />
         <div className="mt-4 flex flex-col gap-8">
@@ -97,7 +97,7 @@ export function WorkspaceLoadingProfile() {
         </div>
       </section>
 
-      {/* Education section — one entry */}
+      {/* Education section, one entry */}
       <section aria-hidden>
         <div className="skeleton-block h-2.5 w-20" />
         <div className="mt-4 flex flex-col gap-2">
@@ -140,7 +140,7 @@ export function WorkspaceLoadingArticle({
       className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8"
       aria-busy="true"
     >
-      {/* Top bar — back link + actions menu placeholders */}
+      {/* Top bar, back link + actions menu placeholders */}
       <div className="mb-6 flex items-center justify-between gap-3 pt-4 sm:pt-6">
         <div className="skeleton-block h-3 w-28" />
         <div className="skeleton-block h-7 w-7 rounded-full" />
@@ -185,7 +185,7 @@ export function WorkspaceLoadingArticle({
             </div>
           </section>
 
-          {/* Section stack — three blocks, each: heading → key/score row → prose */}
+          {/* Section stack, three blocks, each: heading → key/score row → prose */}
           <section className="mt-12" aria-hidden>
             <div className="skeleton-block h-2.5 w-44" />
             <div className="mt-4 flex flex-col">

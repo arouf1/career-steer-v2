@@ -32,7 +32,7 @@ function PopoverContent({
         className={cn(
           // Brand-tuned defaults: cream paper background, hairline border,
           // ink foreground, soft shadow. Mirrors the DropdownMenu primitive
-          // overrides in components/ui/dropdown-menu.tsx — the shipped
+          // overrides in components/ui/dropdown-menu.tsx, the shipped
           // shadcn tokens (bg-popover / text-popover-foreground / plain
           // border / shadow-md) read off-brand or render transparent in
           // this repo per the project tokens-gap memory.

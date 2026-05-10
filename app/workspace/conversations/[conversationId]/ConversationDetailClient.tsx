@@ -131,7 +131,7 @@ export function ConversationDetailClient({ callId }: Props) {
     } else {
       await archive({ callId: call._id as Id<"voice_calls"> });
       // Drop user back to the list after archive so the row disappears from
-      // the default (active-only) view — avoids visual confusion.
+      // the default (active-only) view, avoids visual confusion.
       router.push("/workspace/conversations");
     }
   };
@@ -159,7 +159,7 @@ export function ConversationDetailClient({ callId }: Props) {
   // sidebar + lg:col-span-8 reading column, max-w-6xl container.
   return (
     <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
-      {/* Top bar — back link + actions menu — full width */}
+      {/* Top bar, back link + actions menu, full width */}
       <header className="mb-6 flex items-center justify-between gap-3 pt-4 sm:pt-6">
         <Link
           href="/workspace/conversations"
@@ -214,16 +214,16 @@ export function ConversationDetailClient({ callId }: Props) {
       </header>
 
       <div className="lg:grid lg:grid-cols-12 lg:gap-12">
-        {/* Desktop TOC sidebar — sticky, hidden below lg */}
+        {/* Desktop TOC sidebar, sticky, hidden below lg */}
         <aside className="hidden lg:col-span-2 lg:block">
           <div className="sticky top-24">
             <WikiTableOfContents sections={sections} eyebrow="In this summary" />
           </div>
         </aside>
 
-        {/* Main reading column — lg:col-span-8 keeps body lines editorial-width */}
+        {/* Main reading column, lg:col-span-8 keeps body lines editorial-width */}
         <main className="lg:col-span-8">
-          {/* Surface-aware summary panel — flush on paper, no wrapping card */}
+          {/* Surface-aware summary panel, flush on paper, no wrapping card */}
           {summary != null ? (
             isInterview ? (
               <InterviewDetailPanel
@@ -245,7 +245,7 @@ export function ConversationDetailClient({ callId }: Props) {
             </div>
           )}
 
-          {/* Transcript — section label outside, ScrollArea sits inside a
+          {/* Transcript, section label outside, ScrollArea sits inside a
               hairline rectangular container with an explicit height so the
               Radix Viewport's size-full resolves to a real boundary and the
               transcript actually scrolls instead of growing to content
@@ -262,7 +262,7 @@ export function ConversationDetailClient({ callId }: Props) {
         </main>
       </div>
 
-      {/* Mobile floating section pill — hidden on lg+ (component self-hides) */}
+      {/* Mobile floating section pill, hidden on lg+ (component self-hides) */}
       <MobileTableOfContents sections={sections} />
     </div>
   );

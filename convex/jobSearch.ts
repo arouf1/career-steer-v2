@@ -11,7 +11,7 @@ import { cosineSim } from "./lib/discoverScoring";
 import { loadProfileAndJobVectors } from "./lib/jobFit";
 
 // Cosine bands for the qualitative fit tier surfaced to the user. We
-// deliberately do not show a numeric percentage — V1 did and it read as the
+// deliberately do not show a numeric percentage. V1 did and it read as the
 // generic AI-product cliché. Editorial tiers ("Strong match" / "Worth
 // exploring" / nothing) lean on the brand voice instead. Thresholds are an
 // initial guess; tune with real distributions once we have telemetry.
@@ -21,7 +21,7 @@ const FIT_TIER_WORTH_MIN = 0.55;
 const DESCRIPTION_MAX_CHARS = 400;
 
 // Cache freshness window for the workspace search action. Tunable;
-// 1 hour is a starting point that errs toward freshness — frequent
+// 1 hour is a starting point that errs toward freshness, frequent
 // re-searches inside a session will hit cache, but the next morning
 // we'll re-fetch and pick up new postings.
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000;
@@ -29,7 +29,7 @@ const CACHE_MAX_AGE_MS = 60 * 60 * 1000;
 // Fallback floor for the legacy "any cached postings will do" path. Only
 // used when no `search_runs` row exists for this query (i.e. queries cached
 // before search_runs shipped). The deterministic search_runs lookup
-// supersedes this — once a query has been recorded, we honour the run
+// supersedes this, once a query has been recorded, we honour the run
 // regardless of count.
 const MIN_CACHE_HITS_TO_SKIP_API = 5;
 
@@ -64,7 +64,7 @@ export type JobResult = {
   dedupKey: string | null;
   // URL slugs for the canonical detail-page path
   // /jobs/listing/[citySlug]/[companySlug]/[titleSlug]/[jobPostingId].
-  // Same nullability story as jobPostingId — present iff the row is cached.
+  // Same nullability story as jobPostingId, present iff the row is cached.
   citySlug: string | null;
   companySlug: string | null;
   titleSlug: string | null;
@@ -74,7 +74,7 @@ export type JobResult = {
   companyDomain: string | null;
   companyLogoUrl: string | null;
   companyBrandColor: string | null;
-  // Qualitative fit tier — populated only when the user is signed in, has a
+  // Qualitative fit tier, populated only when the user is signed in, has a
   // profile embedding, and the posting itself has been embedded. Ranking
   // upstream sorts strong/worth ahead of unscored postings; the UI surfaces
   // a small editorial tag for strong/worth and nothing otherwise.
@@ -94,7 +94,7 @@ export type SearchOk = {
   totalActiveCached: number; // total active postings in the whole cache (system-wide)
   // Typo correction. When the Flash corrector changed the input, originalQuery
   // is what the user typed and correctedQuery is what we actually searched.
-  // The UI surfaces "Showing results for X — search instead for Y" and the
+  // The UI surfaces "Showing results for X, search instead for Y" and the
   // alternative re-runs with skipCorrection: true.
   originalQuery: string;
   correctedQuery: string | null; // null when no correction was applied
@@ -110,7 +110,7 @@ export type SearchResult = SearchOk | SearchErr;
 
 // SearchAPI sometimes returns the description as raw HTML (with <p>, <br>,
 // entity escapes, etc). Convert to plain text before we hand it to the
-// client — otherwise the workspace card renders "<p>Are you…" verbatim while
+// client, otherwise the workspace card renders "<p>Are you…" verbatim while
 // the LLM rewrite is still in flight. Keep it cheap: regex strip, minimal
 // entity expansion, whitespace collapse.
 const stripHtmlToText = (s: string): string =>
@@ -170,7 +170,7 @@ const projectFromSearchAPI = (raw: GoogleJobsRawJob[]): JobResult[] =>
         citySlug: null as string | null,
         companySlug: null as string | null,
         titleSlug: null as string | null,
-        // Brand + fit fields — filled in by attachIdsByDedupKey (which joins
+        // Brand + fit fields, filled in by attachIdsByDedupKey (which joins
         // companies) and applyFitScores (which joins embeddings) downstream.
         // Defaulted to null here so the projection is shape-stable.
         companyDomain: null as string | null,
@@ -232,7 +232,7 @@ export const _loadFitScores = internalQuery({
 // (within tier, original SearchAPI/cache order is preserved). When the user
 // has no profile embedding, no posting embeddings, or both, the input list is
 // returned unchanged. This is the "honest absence" UX call: we don't leak
-// missing scores as a visible state — the list just falls back to relevance.
+// missing scores as a visible state, the list just falls back to relevance.
 async function applyFitAndRank(
   ctx: ActionCtx,
   jobs: JobResult[],
@@ -256,7 +256,7 @@ async function applyFitAndRank(
     try {
       sim = cosineSim(fitData.profileVector, vector);
     } catch {
-      // Dimension mismatch — happens during a model migration window.
+      // Dimension mismatch, happens during a model migration window.
       // Drop fit silently, the rest of the list is still usable.
       continue;
     }
@@ -277,7 +277,7 @@ async function applyFitAndRank(
         : null,
   }));
 
-  // Stable sort — tier rank desc, original order preserved within tier.
+  // Stable sort, tier rank desc, original order preserved within tier.
   const tierRank: Record<string, number> = { strong: 2, worth: 1 };
   return stamped
     .map((j, i) => ({ j, i }))
@@ -373,12 +373,12 @@ export const search = action({
     const stats = await ctx.runQuery(api.jobPostings.cacheStats, {});
     const totalActiveCached = stats.totalActive;
 
-    // Cache lookup — only on the first page of a query. Pagination tokens are
+    // Cache lookup, only on the first page of a query. Pagination tokens are
     // session-bound to SearchAPI's continuation state, so paginated requests
     // always go to the API.
     //
     // Decision uses two signals, in order:
-    //   1. search_runs row for this exact (queryNormalized, citySlug, gl) —
+    //   1. search_runs row for this exact (queryNormalized, citySlug, gl) -
     //      authoritative "we've already paid SearchAPI for this query within
     //      the freshness window". Honour the run regardless of cache size.
     //   2. Legacy fallback: searchCache returned ≥ MIN_CACHE_HITS_TO_SKIP_API
@@ -402,7 +402,7 @@ export const search = action({
       // query (e.g. "London" surfaces Slough, Croydon, Rotherham, …), so
       // filtering the cache by per-posting citySlug throws away the very
       // results we just paid for. The search_runs row already keys the
-      // (query, citySlug, countryCode) tuple — that's the cache boundary.
+      // (query, citySlug, countryCode) tuple, that's the cache boundary.
       // The legacy fallback path keeps the citySlug filter so cold queries
       // pre-dating search_runs still scope sensibly.
       const cached = await ctx.runQuery(api.jobPostings.searchCache, {
@@ -501,7 +501,7 @@ export const search = action({
     );
 
     // Stamp the per-query cache marker so the next identical search inside
-    // the freshness window skips SearchAPI. Only on the first page — page 2+
+    // the freshness window skips SearchAPI. Only on the first page, page 2+
     // continues SearchAPI's pagination cursor and shouldn't reset the run.
     if (!isPaginated) {
       await ctx.runMutation(internal.searchRuns.record, {

@@ -8,9 +8,9 @@ export type CallTimerState = "idle" | "connecting" | "connected" | "ended" | "er
  * Tracks call duration in seconds while the call is connected and a
  * conversation has actually started (someone has spoken). The "wait until
  * first speech" rule means connection setup time isn't counted against the
- * displayed duration — matches V1's behaviour.
+ * displayed duration, matches V1's behaviour.
  *
- * No time limits in this V2 port — discovery calls are unmetered for now.
+ * No time limits in this V2 port, discovery calls are unmetered for now.
  */
 export function useCallTimer({
   callState,

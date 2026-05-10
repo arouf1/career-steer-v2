@@ -1,5 +1,5 @@
 /**
- * Realtime AI voice "deep dive" — non-Node Convex surface.
+ * Realtime AI voice "deep dive", non-Node Convex surface.
  *
  * Live audio runs browser↔Gemini Live (WebSocket); this file persists the
  * transcript and surfaces session metadata. Token minting and post-call
@@ -40,7 +40,7 @@ const messageValidator = v.object({
 //
 // Shared between listForUser (returns) and _hydrateForList (returns) so the
 // mapping logic lives in exactly one place. No transcript, no embedding bytes
-// are included — only what the history page needs to render a card.
+// are included, only what the history page needs to render a card.
 
 const callListRowValidator = v.object({
   _id: v.id("voice_calls"),
@@ -68,7 +68,7 @@ const callListRowValidator = v.object({
   archivedAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
-  // Joined company info — present only on rows whose jobPostingId resolved to
+  // Joined company info, present only on rows whose jobPostingId resolved to
   // a company. Optional so existing consumers (and rows without a posting)
   // remain compatible.
   companyName: v.optional(v.string()),
@@ -251,7 +251,7 @@ export const appendMessage = mutation({
       return { ok: false as const, reason: "not-active" as const };
     }
 
-    // Idempotent on the client-supplied message id — debounce/retry on the
+    // Idempotent on the client-supplied message id, debounce/retry on the
     // browser side will sometimes resend the same message. Cheaper to dedupe
     // here than to push that complexity into the hook.
     if (row.messages.some((m) => m.id === args.message.id)) {
@@ -269,7 +269,7 @@ export const appendMessage = mutation({
 // ── Public mutation: mark a rubric dimension as covered ──────────────────
 //
 // Called from the client hook in response to a Gemini Live toolCall for
-// markDimensionCovered. Idempotent on dimension — replaces any prior mark
+// markDimensionCovered. Idempotent on dimension, replaces any prior mark
 // for the same dimension with the new one (last write wins).
 
 export const markDimensionCovered = mutation({
@@ -403,7 +403,7 @@ export const finalize = mutation({
     });
 
     // Only run the analysis pipeline on a successful "completed" status with
-    // at least one round-trip — silent / errored / 0-message calls aren't
+    // at least one round-trip, silent / errored / 0-message calls aren't
     // worth the OpenRouter spend, and the AI summary would be junk anyway.
     if (args.status === "completed" && row.messages.length >= 2) {
       // Surface-aware dispatch. Interview rows need a different rubric
@@ -461,7 +461,7 @@ export const getActiveSessionForUser = query({
 
     // by_user_created (reverse) gets us the latest row in O(log n). We then
     // confirm status == active rather than indexing on a composite of
-    // [userId, status, createdAt] — keeps index list small for a low-volume
+    // [userId, status, createdAt], keeps index list small for a low-volume
     // table.
     const latest = await ctx.db
       .query("voice_calls")
@@ -571,7 +571,7 @@ export const _getCallById = internalQuery({
  * Single round-trip context loader for voiceCallsNode.mintSession.
  *
  * Lives here (not voiceCallsNode.ts) because internalQuery cannot be defined
- * in a "use node" file. Read-only — the action follows up with
+ * in a "use node" file. Read-only, the action follows up with
  * _createSession to actually persist the new row.
  */
 export const _gatherSessionContext = internalQuery({
@@ -614,7 +614,7 @@ export const _gatherSessionContext = internalQuery({
       };
     }
 
-    // Latest profile row for this user — covers the resume-replacement case.
+    // Latest profile row for this user, covers the resume-replacement case.
     const profile = await ctx.db
       .query("profiles")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -629,7 +629,7 @@ export const _gatherSessionContext = internalQuery({
       : null;
 
     // by_guide_status_created lets us bound the branch fan-out to completed
-    // rows only — flagged/in-flight branches don't carry usable citations
+    // rows only, flagged/in-flight branches don't carry usable citations
     // for the prompt.
     const branches = await ctx.db
       .query("career_guide_branches")
@@ -654,7 +654,7 @@ export const _gatherSessionContext = internalQuery({
 // Powers the /workspace/calls history page. Surface filter applied
 // in-memory on the materialised page (cheap at small N); archive filter is a
 // true index range via by_user_archived_created. Trimmed shape returned per
-// row — no transcript or embedding bytes shipped to the client list.
+// row, no transcript or embedding bytes shipped to the client list.
 
 export const listForUser = query({
   args: {
@@ -674,7 +674,7 @@ export const listForUser = query({
   returns: v.object({
     page: v.array(callListRowValidator),
     isDone: v.boolean(),
-    // PaginationResult.continueCursor is always string (never null) — the
+    // PaginationResult.continueCursor is always string (never null), the
     // empty string "" signals "no more pages" in the Convex pagination protocol.
     continueCursor: v.string(),
   }),
@@ -803,7 +803,7 @@ export const _hydrateForList = internalQuery({
 //
 // Vector search excels at conceptual queries ("system design at a payments
 // company") but is weak on short proper-noun queries (a company name, a role
-// keyword) — and any row whose summaryEmbedding hasn't been backfilled is
+// keyword), and any row whose summaryEmbedding hasn't been backfilled is
 // invisible to the vector index entirely. This pass is the fallback: scan
 // the user's calls via by_user_archived_created and pick rows whose title
 // OR companyName contains the query (case-insensitive). Cheap; bounded by

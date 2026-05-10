@@ -12,16 +12,16 @@
 //   3. Brainstorm 5 candidate canonical titles via Gemini Flash + structured output.
 //   4. For each candidate, in priority order:
 //      a. Canonicalize via existing titleCanonicalization.getOrCreateCanonical.
-//      b. Pre-check the DB against the canonicalized slug+title — drop if exists.
+//      b. Pre-check the DB against the canonicalized slug+title, drop if exists.
 //      c. Verify legitimacy via Exa + LLM judge (confidence >= 0.7).
 //      d. Re-canonicalize using the judge's refined title (catches the case
 //         where Exa points at a more standard variant than what was brainstormed).
-//      e. Re-check the DB after the second canonicalization — drop if exists.
+//      e. Re-check the DB after the second canonicalization, drop if exists.
 //      f. Schedule generation via _requestGenerationForCron. The mutation does
 //         a final OCC-protected dedup, so concurrent fan-outs from any other
 //         entry point (user-driven seeding, search create) resolve to one row.
 //      g. If the mutation reports a brand-new row was inserted, fire the email.
-//      Bail on first success — we want one new guide per tick, not five.
+//      Bail on first success, we want one new guide per tick, not five.
 //   5. If no candidate survives, log and return; the next hourly tick retries
 //      with a different industry bucket.
 //
@@ -48,7 +48,7 @@ import {
 } from "../lib/ai/prompts/catalog-expansion";
 
 // Brainstorm + judge are structured-extraction tasks; Flash is the right
-// tier (matches the canonicalization model choice — neither needs reasoning).
+// tier (matches the canonicalization model choice, neither needs reasoning).
 const BRAINSTORM_MODEL_ID = "google/gemini-3-flash-preview";
 const JUDGE_MODEL_ID = "google/gemini-3-flash-preview";
 
@@ -58,7 +58,7 @@ const JUDGE_MODEL_ID = "google/gemini-3-flash-preview";
 const SLUG_SAMPLE_SIZE = 200;
 
 // Gates that drop a candidate. Per the rules in catalog-expansion.ts the
-// canonicalization step returns 0.0–1.0; the seeding pipeline already uses
+// canonicalization step returns 0.0-1.0; the seeding pipeline already uses
 // 0.3 as its floor, but for autonomous catalog growth we want a higher bar.
 const MIN_CANONICALIZATION_CONFIDENCE = 0.5;
 const MIN_LEGITIMACY_CONFIDENCE = 0.7;
@@ -87,10 +87,10 @@ const legitimacyJudgeSchema = z.object({
     ),
   confidence: z
     .number()
-    .describe("0.0–1.0 confidence the rubric is satisfied."),
+    .describe("0.0-1.0 confidence the rubric is satisfied."),
   reasoning: z
     .string()
-    .describe("1–2 sentence rationale, plain text, for logs."),
+    .describe("1-2 sentence rationale, plain text, for logs."),
 });
 
 type LegitimacyVerdict = z.infer<typeof legitimacyJudgeSchema>;
@@ -137,7 +137,7 @@ const judgeLegitimacy = async (
   }
   if (!exaResult.answer || exaResult.answer.trim().length < 50) {
     console.warn(
-      `[catalogExpansion] Exa answer too short for "${candidateTitle}" — rejecting`,
+      `[catalogExpansion] Exa answer too short for "${candidateTitle}", rejecting`,
     );
     return null;
   }
@@ -203,7 +203,7 @@ export const runExpansion = internalAction({
     for (const rawCandidate of candidates) {
       tried += 1;
 
-      // Step 4a — first canonicalization (catches "Sr. PM" → "Product Manager").
+      // Step 4a, first canonicalization (catches "Sr. PM" → "Product Manager").
       const firstPass: {
         canonicalTitle: string;
         confidence: number;
@@ -214,12 +214,12 @@ export const runExpansion = internalAction({
       );
       if (firstPass.confidence < MIN_CANONICALIZATION_CONFIDENCE) {
         console.log(
-          `[catalogExpansion] dropping "${rawCandidate}" — canonicalization confidence ${firstPass.confidence}`,
+          `[catalogExpansion] dropping "${rawCandidate}", canonicalization confidence ${firstPass.confidence}`,
         );
         continue;
       }
 
-      // Step 4b — pre-Exa DB dedup against the first-pass canonical.
+      // Step 4b, pre-Exa DB dedup against the first-pass canonical.
       const firstPassCheck = await ctx.runQuery(
         internal.careerGuides._lookupBySlugOrTitle,
         {
@@ -229,12 +229,12 @@ export const runExpansion = internalAction({
       );
       if (firstPassCheck.exists) {
         console.log(
-          `[catalogExpansion] "${firstPass.canonicalTitle}" already in catalog (${firstPassCheck.contentStatus}) — skipping`,
+          `[catalogExpansion] "${firstPass.canonicalTitle}" already in catalog (${firstPassCheck.contentStatus}), skipping`,
         );
         continue;
       }
 
-      // Step 4c — legitimacy verification via Exa + LLM judge.
+      // Step 4c, legitimacy verification via Exa + LLM judge.
       const verdict = await judgeLegitimacy(firstPass.canonicalTitle);
       if (
         !verdict ||
@@ -242,7 +242,7 @@ export const runExpansion = internalAction({
         verdict.confidence < MIN_LEGITIMACY_CONFIDENCE
       ) {
         console.log(
-          `[catalogExpansion] rejecting "${firstPass.canonicalTitle}" — verdict:`,
+          `[catalogExpansion] rejecting "${firstPass.canonicalTitle}", verdict:`,
           verdict
             ? {
                 isLegitimate: verdict.isLegitimate,
@@ -254,7 +254,7 @@ export const runExpansion = internalAction({
         continue;
       }
 
-      // Step 4d — re-canonicalize using the judge's refined title. The judge
+      // Step 4d, re-canonicalize using the judge's refined title. The judge
       // may have surfaced a more standard variant than the brainstorm output;
       // we want the canonicalization cache and the final guide row to use the
       // best canonical form available.
@@ -268,12 +268,12 @@ export const runExpansion = internalAction({
       );
       if (finalPass.confidence < MIN_CANONICALIZATION_CONFIDENCE) {
         console.log(
-          `[catalogExpansion] dropping after judge — second canonicalization confidence ${finalPass.confidence}`,
+          `[catalogExpansion] dropping after judge, second canonicalization confidence ${finalPass.confidence}`,
         );
         continue;
       }
 
-      // Step 4e — re-check after second canonicalization. The judge's refined
+      // Step 4e, re-check after second canonicalization. The judge's refined
       // title may now collide with an existing slug that the first-pass
       // canonical didn't.
       const finalCheck = await ctx.runQuery(
@@ -285,12 +285,12 @@ export const runExpansion = internalAction({
       );
       if (finalCheck.exists) {
         console.log(
-          `[catalogExpansion] post-judge canonical "${finalPass.canonicalTitle}" already in catalog — skipping`,
+          `[catalogExpansion] post-judge canonical "${finalPass.canonicalTitle}" already in catalog, skipping`,
         );
         continue;
       }
 
-      // Step 4f — request generation. Mutation does its own OCC-protected
+      // Step 4f, request generation. Mutation does its own OCC-protected
       // dedup as the final line of defense against races.
       const result: { slug: string; created: boolean } | { error: string } =
         await ctx.runMutation(internal.careerGuides._requestGenerationForCron, {
@@ -302,7 +302,7 @@ export const runExpansion = internalAction({
           `[catalogExpansion] _requestGenerationForCron rejected "${finalPass.canonicalTitle}":`,
           result.error,
         );
-        // Hitting the global rate limit is terminal for this tick — don't
+        // Hitting the global rate limit is terminal for this tick, don't
         // burn more candidates if we can't insert anyway.
         if (result.error.includes("rate limit")) {
           return {
@@ -318,12 +318,12 @@ export const runExpansion = internalAction({
         // Race winner inserted before us, or a "failed" row we declined to
         // reset. Either way, not our publish.
         console.log(
-          `[catalogExpansion] "${finalPass.canonicalTitle}" already exists post-mutation (race) — skipping email`,
+          `[catalogExpansion] "${finalPass.canonicalTitle}" already exists post-mutation (race), skipping email`,
         );
         continue;
       }
 
-      // Step 4g — fire-and-forget email notification.
+      // Step 4g, fire-and-forget email notification.
       await ctx.scheduler.runAfter(
         0,
         internal.catalogEmail.sendCatalogCreateEmail,

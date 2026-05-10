@@ -1,6 +1,6 @@
 // components/workspace/conversations/ConversationSection.tsx
 //
-// Editorial section header for /workspace/conversations — Today / Yesterday /
+// Editorial section header for /workspace/conversations. Today / Yesterday /
 // This week / Earlier. Serif italic label + hairline rule, no chromatic accent.
 
 import { GROUP_LABEL, type GroupKey } from "./groupConversationsByDate";

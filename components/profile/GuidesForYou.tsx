@@ -9,7 +9,7 @@ import { api } from "@/convex/_generated/api";
 import type { GuidesFromSnapshot, ProfileGuideCard } from "@/convex/matching";
 
 // Quadrant keys, labels, and descriptions match `LANE_META` in
-// app/workspace/career-compass/DiscoverCanvas.tsx — keep in sync.
+// app/workspace/career-compass/DiscoverCanvas.tsx, keep in sync.
 type LaneKey = "linear" | "adjacent" | "earlier" | "transformational";
 
 const LANES: Array<{

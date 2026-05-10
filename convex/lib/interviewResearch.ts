@@ -3,7 +3,7 @@
  *   - Build the 5 Exa queries used by `_synthesizeInterviewResearch`.
  *   - Check freshness against the 30-day (bundle) and 7-day (news) TTLs.
  *
- * No I/O, no Convex context — easy to unit-test.
+ * No I/O, no Convex context, easy to unit-test.
  */
 
 export const BUNDLE_TTL_MS = 30 * 24 * 60 * 60 * 1000;

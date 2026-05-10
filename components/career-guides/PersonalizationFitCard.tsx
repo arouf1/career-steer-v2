@@ -92,14 +92,14 @@ export function PersonalizationFitCard({ guideId, guideTitle }: Props) {
   if (result.state === "profile-pending") {
     // Profile or enrichment has moved on since the last personalization, so
     // any stored content is by definition stale (e.g. references old
-    // location). Always show the skeleton — never stale narrative.
+    // location). Always show the skeleton, never stale narrative.
     return <FitSkeleton label="Reading your profile..." />;
   }
 
   // result.state === "ready"
   if (!row || row.status === "generating") {
     // We only schedule a regenerate when the existing row's enrichment
-    // stamp is older than the live enrichment — i.e. the existing content
+    // stamp is older than the live enrichment, i.e. the existing content
     // is stale. So during "generating" we also avoid showing the row.content.
     return <FitSkeleton label="Personalising this guide for you..." />;
   }

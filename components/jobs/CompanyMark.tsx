@@ -13,7 +13,7 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-// Brandfetch CDN URL — canonical pattern is `cdn.brandfetch.io/{domain}?c=`.
+// Brandfetch CDN URL, canonical pattern is `cdn.brandfetch.io/{domain}?c=`.
 // Their CDN cross-checks Referer against the allowed-origins list configured
 // for the client ID; if the deploy domain isn't whitelisted the request 302s
 // and our <img> onError handler falls through to the initials. Returns null

@@ -11,11 +11,11 @@ import { cn } from "@/lib/utils";
 //   mobile (default): px-6 py-8
 //   sm (≥640):        px-10 py-10
 //   lg (≥1024):       px-14 py-12
-// Bigger screens get noticeably more breathing room — calm + generous
+// Bigger screens get noticeably more breathing room, calm + generous
 // whitespace per PRODUCT.md is non-negotiable, and on wide monitors the
 // older px-8 sat too tight against the workspace chrome.
 //
-// Career Compass is a deliberate exception — it's a full-bleed canvas and
+// Career Compass is a deliberate exception, it's a full-bleed canvas and
 // does NOT use this shell.
 export function WorkspacePageShell({
   children,

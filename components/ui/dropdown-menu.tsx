@@ -84,7 +84,7 @@ function DropdownMenuItem({
         // Brand-tuned defaults: tonal layering on focus (paper-raised, not
         // shadcn's bg-accent), ink foreground, mute icon. Destructive
         // variant uses a soft warm clay-red for the text (oklch warm
-        // family — picked to match DESIGN.md's "state-error" sidecar
+        // family, picked to match DESIGN.md's "state-error" sidecar
         // mention without introducing a new global token).
         "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] outline-hidden select-none text-ink focus:bg-paper-raised focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-[oklch(45%_0.18_25)] data-[variant=destructive]:focus:bg-[oklch(45%_0.18_25/0.08)] data-[variant=destructive]:focus:text-[oklch(45%_0.18_25)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-mute",
         className

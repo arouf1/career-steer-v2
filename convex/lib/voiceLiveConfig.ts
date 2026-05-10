@@ -1,8 +1,8 @@
 /**
  * Shared Gemini Live setup builder.
  *
- * Two surfaces — career-guide deep-dive (`voiceCallsNode.mintSession`) and
- * Career Compass (`compassVoiceNode.mintCompassSession`) — both connect to
+ * Two surfaces, career-guide deep-dive (`voiceCallsNode.mintSession`) and
+ * Career Compass (`compassVoiceNode.mintCompassSession`), both connect to
  * Gemini Live with the same model + nearly the same generation config.
  * They differ only in the system instruction and tool list. This module
  * keeps the wire shape in one place so the two surfaces can't drift.

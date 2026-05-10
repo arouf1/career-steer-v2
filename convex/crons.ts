@@ -4,10 +4,10 @@ import { isCronAllowedDeployment, isProdDeployment } from "./lib/env";
 
 const crons = cronJobs();
 
-// Allow-list guard — see .claude/rules/deployment-previews.md.
+// Allow-list guard, see .claude/rules/deployment-previews.md.
 // On any deployment whose CONVEX_CLOUD_URL is not the known prod or dev
 // backend (i.e. preview backends, ad-hoc deployments), no crons get
-// registered at all — _scheduled_functions stays empty, no spend possible.
+// registered at all, _scheduled_functions stays empty, no spend possible.
 if (isCronAllowedDeployment()) {
   crons.interval(
     "retry failed career guides",
@@ -15,7 +15,7 @@ if (isCronAllowedDeployment()) {
     internal.careerGuides._retryFailedGuides,
   );
 
-  // Phase 4.3 — discover snapshot retry sweep. Picks up `discover_canvases`
+  // Phase 4.3, discover snapshot retry sweep. Picks up `discover_canvases`
   // rows still in `status: "failed"` after 24h (and below the 3-attempt cap)
   // and schedules a regen via `scheduleSnapshotRegeneration`. 03:00 UTC sits
   // outside US/EU peak hours so retries are cheap; daily cadence keeps total
@@ -51,7 +51,7 @@ if (isCronAllowedDeployment()) {
   // Sub-project 2 of the jobs feature. Drains job_postings rows stuck in
   // contentStatus: "pending" (missed a runAfter schedule) or "failed" (under
   // the 3-attempt cap and past cooldown). Same cadence as the career-guide
-  // retry — 30 minutes balances "don't burn retry budget" against "transient
+  // retry, 30 minutes balances "don't burn retry budget" against "transient
   // OpenRouter blips clear within an hour or two."
   crons.interval(
     "retry failed job-posting rewrites",
@@ -61,7 +61,7 @@ if (isCronAllowedDeployment()) {
 
   // Sub-project 6 of the jobs feature.
   //
-  // Google Indexing API drain. PROD-ONLY — we don't want dev URLs in
+  // Google Indexing API drain. PROD-ONLY, we don't want dev URLs in
   // Google's index, and the 200/day quota is shared across deployments.
   // The queue caps each tick at 8 items (192/day, leaving 8/day headroom
   // under Google's 200/day publish quota). Hourly cadence keeps the queue

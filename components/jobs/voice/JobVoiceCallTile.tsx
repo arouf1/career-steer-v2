@@ -14,7 +14,7 @@ type Props = {
   jobPostingId: Id<"job_postings">;
   /** Composed once at the call site so the dialog header can render it. */
   callTitle: string;
-  /** URL path of the listing — used to build the sign-in redirect. */
+  /** URL path of the listing, used to build the sign-in redirect. */
   listingPath: string;
   variant: Variant;
   className?: string;
@@ -25,15 +25,15 @@ type Props = {
  * components/career-guides/DeepDiveCallTile.
  *
  * Two variants:
- *   - aside         — compact card placed in the right column of the
+ *   - aside        , compact card placed in the right column of the
  *                     posting article. Visible on desktop.
- *   - byline-inline — small text-link near the apply CTA. lg:hidden — only
+ *   - byline-inline, small text-link near the apply CTA. lg:hidden, only
  *                     shows on mobile so it doesn't compete with the desktop
  *                     aside variant.
  *
  * Anonymous branch (both variants): the slot still renders, but it's a Link
  * to /sign-in?redirect_url=<listingPath> instead of a button that opens the
- * call. Same visual density — only the label and target change.
+ * call. Same visual density, only the label and target change.
  */
 export function JobVoiceCallTile({
   jobPostingId,
@@ -117,7 +117,7 @@ export function JobVoiceCallTile({
           <p className="text-[13px] font-medium text-ink">Talk through this role</p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-mute">
             Live 1-on-1 with an AI career adviser, anchored in this listing
-            and your background. ~5–10 minutes.
+            and your background. ~5-10 minutes.
           </p>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EDITORIAL_VOICE_TAIL } from "./voice";
 
 /**
  * Schemas, prompts, and helpers for the interview simulation feature.
@@ -6,12 +7,12 @@ import { z } from "zod";
  * Three logical chunks colocated in one file because they share constants
  * and the calibration story is only readable when you can see them
  * side-by-side:
- *   1. InterviewSynthesisSchema + buildSynthesisPrompt — turn raw Exa
+ *   1. InterviewSynthesisSchema + buildSynthesisPrompt, turn raw Exa
  *      research into a structured `interviewBundle` (+ prose + news).
- *   2. buildInterviewerPrompt — build the Gemini Live system instruction
+ *   2. buildInterviewerPrompt, build the Gemini Live system instruction
  *      that drives the actual mock interview.
  *   3. InterviewRubricSchema + buildRubricPrompt + enforceVerbatimQuotes
- *      — post-call grading against the same bundle, with a hallucinated-
+ *     , post-call grading against the same bundle, with a hallucinated-
  *      quote check.
  *
  * Per .claude/rules/ai-sdk-patterns.md: Zod schemas avoid .min/.max/.int
@@ -114,7 +115,7 @@ export function buildSynthesisPrompt(args: SynthesisPromptArgs): string {
   }
   sections.push("");
   sections.push("== Calibration anchors ==");
-  sections.push("Derive `rigor` from the prestige signals you receive — NOT from the company name. Anchors:");
+  sections.push("Derive `rigor` from the prestige signals you receive. NOT from the company name. Anchors:");
   sections.push("- <50 employees, no household name → rigor 2-3 (less calibrated process).");
   sections.push("- 50-500 employees, modest brand → rigor 3.");
   sections.push("- 500-5k employees, recognised in domain → rigor 3-4.");
@@ -123,7 +124,7 @@ export function buildSynthesisPrompt(args: SynthesisPromptArgs): string {
   sections.push("");
   sections.push("Each dimension's `anchorAt` should describe what a 60/100 score looks like at THIS company specifically (the bar for 'meets expectations' here, not in general). `anchorBelow` describes what scores below 40 look like; `anchorAbove` describes what scores above 80 look like.");
   sections.push("");
-  sections.push("Each round in `rounds` should have an `interviewerArchetype` like 'recruiter', 'hiring manager', 'engineering manager', 'staff engineer', 'bar raiser', 'principal', etc. The whole-loop `rubric.interviewerArchetype` should be the dominant one — this is the persona the live interviewer adopts.");
+  sections.push("Each round in `rounds` should have an `interviewerArchetype` like 'recruiter', 'hiring manager', 'engineering manager', 'staff engineer', 'bar raiser', 'principal', etc. The whole-loop `rubric.interviewerArchetype` should be the dominant one, this is the persona the live interviewer adopts.");
   sections.push("");
   sections.push(`== Research input ==`);
   sections.push(`Company: ${args.companyName}`);
@@ -205,7 +206,7 @@ export function buildInterviewerPrompt(args: InterviewerPromptArgs): string {
     : "  (no recent news captured)";
 
   const loopBullets = bundle.rounds
-    .map((r) => `  - ${r.name} (${r.interviewerArchetype}) — ${r.focus}`)
+    .map((r) => `  - ${r.name} (${r.interviewerArchetype}), ${r.focus}`)
     .join("\n");
 
   const signatureSpine = bundle.signatureQuestions
@@ -216,46 +217,49 @@ export function buildInterviewerPrompt(args: InterviewerPromptArgs): string {
     `**Persona:**`,
     `You are a ${archetype} at ${company.name}, interviewing ${candidate.firstName} for the ${posting.title} position. Your tone matches how this company actually conducts this loop, based on candidate accounts.`,
     ``,
-    `Calibration: this loop runs at rigor ${bundle.rubric.rigor}/5 (${bundle.rubric.rigorRationale}). Hold the bar at that level — your bar is not "hard" or "easy" in the abstract, it is what excellence looks like at ${company.name} for this role. Reference frame for what "meets the bar" (60/100) means here:`,
+    `Calibration: this loop runs at rigor ${bundle.rubric.rigor}/5 (${bundle.rubric.rigorRationale}). Hold the bar at that level, your bar is not "hard" or "easy" in the abstract, it is what excellence looks like at ${company.name} for this role. Reference frame for what "meets the bar" (60/100) means here:`,
     anchorAtBullets,
     ``,
     `**About ${candidate.firstName}:**`,
-    candidateLines.length ? candidateLines.join("\n") : "(no candidate profile available — ask open questions to learn the basics first)",
+    candidateLines.length ? candidateLines.join("\n") : "(no candidate profile available, ask open questions to learn the basics first)",
     ``,
     `**About this role:**`,
     `${posting.title} at ${company.name}${posting.city ? ` · ${posting.city}` : ""}`,
     posting.excerpt ? posting.excerpt.slice(0, 500) : "",
     ``,
-    `**Recent at ${company.name}** (use sparingly — only if the candidate brings it up or asks "what do you know about us recently"):`,
+    `**Recent at ${company.name}** (use sparingly, only if the candidate brings it up or asks "what do you know about us recently"):`,
     newsBullets,
     ``,
-    `**Likely loop structure** — you are simulating ONE round of this loop; pick whichever feels most useful given the candidate's background:`,
+    `**Likely loop structure**, you are simulating ONE round of this loop; pick whichever feels most useful given the candidate's background:`,
     loopBullets,
     ``,
-    `**Coverage target — what "done" looks like:**`,
-    `Your job is to come away with enough signal to grade the candidate against these four dimensions: ${bundle.rubric.dimensions.map((d) => d.key).join(", ")}. You are NOT trying to cover every signature question — you are trying to leave with a confident read on each dimension. Each dimension needs at least one substantive exchange (the candidate said something specific enough that you could write a non-trivial sentence about it). After each substantive exchange, call markDimensionCovered to mark which dimension you just got signal on (silently — do NOT narrate the call out loud, the candidate must not hear it). When all four dimensions are marked solid or stronger, you have enough to wrap.`,
+    `**Coverage target, what "done" looks like:**`,
+    `Your job is to come away with enough signal to grade the candidate against these four dimensions: ${bundle.rubric.dimensions.map((d) => d.key).join(", ")}. You are NOT trying to cover every signature question, you are trying to leave with a confident read on each dimension. Each dimension needs at least one substantive exchange (the candidate said something specific enough that you could write a non-trivial sentence about it). After each substantive exchange, call markDimensionCovered to mark which dimension you just got signal on (silently, do NOT narrate the call out loud, the candidate must not hear it). When all four dimensions are marked solid or stronger, you have enough to wrap.`,
     ``,
     `**Conversational rules:**`,
     `1. Open with a 30-second warm hello. One ice-breaker. Then transition.`,
     `2. One question per turn. Wait for the full answer.`,
-    `3. **Hold the bar.** Do not validate, thank, or move on after a weak, vague, or wrong answer. If the candidate hand-waves ("we just kind of figured it out", "it was complicated"), push back in character: "Let me push you on that — what specifically did you do?" or "That's surprising for someone with your background — walk me through the actual decision." If the candidate says something factually wrong or contradicts themselves, name it: "That doesn't square with what you said earlier — help me reconcile that." If they don't know, sit in the silence for a beat before moving on; do not rescue them. Affirmation ("great answer", "love it", "makes sense") is reserved for genuinely strong responses — not as filler. Your warmth comes through in tone, not in praise.`,
-    `4. **Drill down on substance.** When the candidate mentions a specific number, system, decision, trade-off, conflict, or choice that has real meat behind it, do NOT move on to the next question. Pull on that thread for 1-3 follow-ups before continuing: "What was the trade-off you considered?" / "How did you arrive at that number?" / "What would you do differently?" / "Who pushed back, and what did you do about it?" The trade-off is depth vs coverage — favor depth, but do not let one story consume the whole interview if it leaves a dimension untouched.`,
+    `3. **Hold the bar.** Do not validate, thank, or move on after a weak, vague, or wrong answer. If the candidate hand-waves ("we just kind of figured it out", "it was complicated"), push back in character: "Let me push you on that, what specifically did you do?" or "That's surprising for someone with your background, walk me through the actual decision." If the candidate says something factually wrong or contradicts themselves, name it: "That doesn't square with what you said earlier, help me reconcile that." If they don't know, sit in the silence for a beat before moving on; do not rescue them. Affirmation ("great answer", "love it", "makes sense") is reserved for genuinely strong responses, not as filler. Your warmth comes through in tone, not in praise.`,
+    `4. **Drill down on substance.** When the candidate mentions a specific number, system, decision, trade-off, conflict, or choice that has real meat behind it, do NOT move on to the next question. Pull on that thread for 1-3 follow-ups before continuing: "What was the trade-off you considered?" / "How did you arrive at that number?" / "What would you do differently?" / "Who pushed back, and what did you do about it?" The trade-off is depth vs coverage, favor depth, but do not let one story consume the whole interview if it leaves a dimension untouched.`,
     `5. **Steer toward gaps.** Before asking the next question, mentally check which of the four dimensions you still lack signal on, and pick a question (from the spine below or your own) that targets the weakest area. By minute 8-10 you should have at least surface signal on all four; the remaining time is for the dimension that needs the most depth.`,
-    `6. Use these signature questions as your spine. Pick from them based on which dimension you need to probe — you don't need to ask all of them. Use them verbatim or near-verbatim; mix in your own follow-ups based on candidate answers:`,
+    `6. Use these signature questions as your spine. Pick from them based on which dimension you need to probe, you don't need to ask all of them. Use them verbatim or near-verbatim; mix in your own follow-ups based on candidate answers:`,
     signatureSpine,
     `7. Mid-call, if the candidate references current events about ${company.name} you don't already know from the brief above, you may call googleSearch ONCE to fetch context. Do not search proactively.`,
     `8. Cap each spoken response at ~25 seconds.`,
-    `9. **Knowing when you're done.** End the interview when EITHER (a) you have called markDimensionCovered on all four dimensions with confidence solid or stronger, OR (b) you reach minute 13 — whichever comes first. The minimum interview length is ~5 minutes (you need at least the warm hello, two substantive exchanges, and a wrap); ending earlier than that means you didn't really interview them. To wrap, say: "I think I have a good sense of where you're at — before we close, what questions do you have for me?" Answer honestly from the hiring-manager POV. End by thanking them and naming one specific thing they did well — only if they earned it; if the interview was weak, end professionally without false praise.`,
+    `9. **Knowing when you're done.** End the interview when EITHER (a) you have called markDimensionCovered on all four dimensions with confidence solid or stronger, OR (b) you reach minute 13, whichever comes first. The minimum interview length is ~5 minutes (you need at least the warm hello, two substantive exchanges, and a wrap); ending earlier than that means you didn't really interview them. To wrap, say: "I think I have a good sense of where you're at, before we close, what questions do you have for me?" Answer honestly from the hiring-manager POV. End by thanking them and naming one specific thing they did well, only if they earned it; if the interview was weak, end professionally without false praise.`,
     ``,
     `**Tool usage:**`,
-    `- markDimensionCovered: silently call after each exchange that gave you real signal on a dimension. Idempotent — re-call if the candidate elaborates and your confidence changes. Use the dimension keys ${bundle.rubric.dimensions.map((d) => '"' + d.key + '"').join(", ")} verbatim.`,
+    `- markDimensionCovered: silently call after each exchange that gave you real signal on a dimension. Idempotent, re-call if the candidate elaborates and your confidence changes. Use the dimension keys ${bundle.rubric.dimensions.map((d) => '"' + d.key + '"').join(", ")} verbatim.`,
     `- googleSearch: only when the candidate references something about ${company.name} you cannot answer from the brief. One search per call max.`,
     ``,
     `**Guardrails:**`,
     `- Never break character. You are the interviewer, not an AI.`,
     `- Never mention the rigor score, the rubric, or that this is a simulation.`,
     `- Never repeat what the candidate said back to them.`,
-    `- If the candidate asks for feedback during the call, defer: "I'll have thoughts at the end — let's keep going."`,
+    `- If the candidate asks for feedback during the call, defer: "I'll have thoughts at the end, let's keep going."`,
+    ``,
+    `**Voice:**`,
+    EDITORIAL_VOICE_TAIL,
   ].join("\n");
 }
 
@@ -297,7 +301,7 @@ export function interviewerTools(dimensionKeys: string[]): InterviewerLiveTool[]
         {
           name: "markDimensionCovered",
           description:
-            "Call this once you have substantive signal on a rubric dimension — i.e. the candidate has said something specific enough that you could write a non-trivial sentence about that dimension. Idempotent: if you've already marked a dimension and your view changes (e.g. they elaborated and demonstrated more), call it again with the new evidence and confidence; the latest call wins. Do NOT narrate the call out loud — keep it silent. Do NOT mark a dimension based on hand-waving or vague answers; if in doubt, don't mark it yet.",
+            "Call this once you have substantive signal on a rubric dimension, i.e. the candidate has said something specific enough that you could write a non-trivial sentence about that dimension. Idempotent: if you've already marked a dimension and your view changes (e.g. they elaborated and demonstrated more), call it again with the new evidence and confidence; the latest call wins. Do NOT narrate the call out loud, keep it silent. Do NOT mark a dimension based on hand-waving or vague answers; if in doubt, don't mark it yet.",
           parameters: {
             type: "OBJECT",
             properties: {
@@ -310,7 +314,7 @@ export function interviewerTools(dimensionKeys: string[]): InterviewerLiveTool[]
               evidence: {
                 type: "STRING",
                 description:
-                  "One sentence summarizing what the candidate said that gave you signal on this dimension. Keep it concrete — quote a phrase or number if useful.",
+                  "One sentence summarising what the candidate said that gave you signal on this dimension. Keep it concrete, quote a phrase or number if useful.",
               },
               confidence: {
                 type: "STRING",
@@ -364,7 +368,7 @@ export type RubricPromptArgs = {
   company: CompanyContext;
   bundle: InterviewBundle;
   transcript: string;
-  /** Optional correction echo for retry attempts — listed quotes were not found verbatim. */
+  /** Optional correction echo for retry attempts, listed quotes were not found verbatim. */
   failedQuotes?: string[];
 };
 
@@ -377,7 +381,7 @@ export function buildRubricPrompt(args: RubricPromptArgs): string {
   const sections: string[] = [];
   sections.push(`You are grading a mock interview for the ${posting.title} role at ${company.name}.`);
   sections.push(`Calibration: rigor ${bundle.rubric.rigor}/5 (${bundle.rubric.rigorRationale}).`);
-  sections.push(`A score of 60 means "meets the bar at ${company.name} for this role" — NOT "good in general". 80+ is strong. 90+ is exceptional. 40-59 is below the bar. <40 is a significant gap.`);
+  sections.push(`A score of 60 means "meets the bar at ${company.name} for this role". NOT "good in general". 80+ is strong. 90+ is exceptional. 40-59 is below the bar. <40 is a significant gap.`);
   sections.push(``);
   sections.push(`== Output schema requirements ==`);
   sections.push(`- nextStepExercises: exactly 3 entries.`);
@@ -390,8 +394,8 @@ export function buildRubricPrompt(args: RubricPromptArgs): string {
   sections.push(`bestMoment.quote and biggestMiss.quote MUST be substrings of the transcript exactly as the candidate spoke them. Do not paraphrase. If you cannot find a verbatim quote that supports the point you'd like to make, lower the score for that dimension instead of fabricating a quote.`);
   sections.push(``);
   sections.push(`== Null-score rule (strict) ==`);
-  sections.push(`Set score to null for a dimension when there is NO substantive candidate statement in the transcript that addresses it. "Substantive" means at least one candidate turn with more than a sentence of relevant content. If the candidate gave only a greeting, a vague one-liner, or no turn at all on that dimension, the score MUST be null — do not infer or extrapolate.`);
-  sections.push(`For very short transcripts (fewer than 5 candidate turns total), most dimensions will be null. That is correct and expected — report what actually happened.`);
+  sections.push(`Set score to null for a dimension when there is NO substantive candidate statement in the transcript that addresses it. "Substantive" means at least one candidate turn with more than a sentence of relevant content. If the candidate gave only a greeting, a vague one-liner, or no turn at all on that dimension, the score MUST be null, do not infer or extrapolate.`);
+  sections.push(`For very short transcripts (fewer than 5 candidate turns total), most dimensions will be null. That is correct and expected, report what actually happened.`);
   sections.push(``);
   if (args.failedQuotes?.length) {
     sections.push(`== CORRECTION ==`);

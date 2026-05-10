@@ -53,7 +53,7 @@ export function MobileGuideCard({
           : "border-hairline bg-white",
       )}
     >
-      {/* Hero thumbnail — 64x64 rounded square. Renders a calm
+      {/* Hero thumbnail, 64x64 rounded square. Renders a calm
           paper-raised placeholder until the image resolves. */}
       <div className="relative size-16 shrink-0 overflow-hidden rounded-md border border-hairline bg-paper-raised">
         {image && (
@@ -97,7 +97,7 @@ export function MobileGuideCard({
 
 /**
  * Tiny SVG arc that visualises arcScore as a stroke fraction around a
- * 28px circle. Quiet visual rhyme with the compass rings — same metaphor,
+ * 28px circle. Quiet visual rhyme with the compass rings, same metaphor,
  * shrunk to per-card scale.
  */
 function MatchArc({ value }: { value: number }) {

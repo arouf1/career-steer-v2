@@ -22,7 +22,7 @@ export function useOutreachDraft({ personId }: Args) {
 
   const startOutreach = useMutation(api.peopleOutreach.startOutreach);
 
-  // Most recent finished draft for this person — used to render the
+  // Most recent finished draft for this person, used to render the
   // previous result on revisit without re-streaming.
   const lastDraft = useQuery(api.peopleOutreach.getMostRecentDraftForPerson, {
     personId,

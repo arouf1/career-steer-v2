@@ -28,7 +28,7 @@ export const findGuideByExactTitle = async (
     )
     .first();
   if (!exact) return null;
-  // Failed rows are retryable — fall through so _requestGeneration can reset them.
+  // Failed rows are retryable, fall through so _requestGeneration can reset them.
   if (exact.contentStatus === "failed") return null;
 
   return {

@@ -10,7 +10,7 @@ export const revalidate = 3600;
 const PAGE_SIZE = 5000; // Google's per-sitemap limit; we'll need an index later if we exceed.
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Reads from job_postings_index — the lightweight mirror — so this query
+  // Reads from job_postings_index, the lightweight mirror, so this query
   // doesn't pay the byte cost of carrying rawDescription / content / future
   // embeddings on each row.
   const { items } = await fetchQuery(api.jobPostings.listPublicRecent, {

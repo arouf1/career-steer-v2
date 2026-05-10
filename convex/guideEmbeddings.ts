@@ -58,7 +58,7 @@ export const upsert = internalMutation({
       await ctx.db.insert("career_guide_embeddings", doc);
     }
 
-    // Phase 4.2 — fan-out: when a guide's embeddings change, every user
+    // Phase 4.2, fan-out: when a guide's embeddings change, every user
     // whose current snapshot includes the guide should regenerate against
     // the fresh vectors. Hook lives ONLY at the upsert (not at
     // careerGuides content-update mutations) because the matching-relevant

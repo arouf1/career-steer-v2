@@ -39,7 +39,7 @@ export function buildJobImagePrompt(input: JobImagePromptInput): string {
 
   // Compose. The leading sentence anchors the role; the company is referenced
   // as context (not a logo to render). Slugify is used as a sanity assertion
-  // so this file's import isn't unused — `slugify(input.title)` is computed
+  // so this file's import isn't unused, `slugify(input.title)` is computed
   // and concatenated as a hidden hint that the model can use as a tag.
   // (Keeping the import live also catches schema drift via the test suite.)
   const tag = slugify(input.title, 60);
@@ -47,7 +47,7 @@ export function buildJobImagePrompt(input: JobImagePromptInput): string {
   const sections = [
     `Editorial hero illustration for a job posting: a "${input.title}" role at ${input.companyName} in ${input.city}.`,
     archetypeContext,
-    "The image should evoke the work itself — tools, environment, abstract motifs from the role's domain — without depicting the company or its people.",
+    "The image should evoke the work itself, tools, environment, abstract motifs from the role's domain, without depicting the company or its people.",
     colourHint,
     HARD_RULES,
     `Internal tag: ${tag}.`,

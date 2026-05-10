@@ -71,7 +71,7 @@ const sectionProseFor = (
 
 // Map a UI sectionId to the citations key used in `career_guides.citations`.
 // (The citations map keys come from the enrichment pipeline, which uses
-// "regional.us.careerOutlook" etc. — we translate.)
+// "regional.us.careerOutlook" etc., we translate.)
 const citationsKeyFor = (sectionId: string): string | null => {
   switch (sectionId) {
     case "outlook-us":
@@ -271,9 +271,9 @@ export const deepenSection = action({
 // ships with crawlable Q&A in its SSR'd HTML rather than waiting for organic
 // user clicks. Three picks balance coverage vs. cost (~3 LLM calls + 2 Exa
 // calls per guide):
-//   - "overview"        — inherited mode, fast, no Exa cost
-//   - "outlook-us"      — exa-grounded, US is the larger market
-//   - "considerations"  — exa-grounded, high-engagement section
+//   - "overview"       , inherited mode, fast, no Exa cost
+//   - "outlook-us"     , exa-grounded, US is the larger market
+//   - "considerations" , exa-grounded, high-engagement section
 // _createOrGetBranch is idempotent, so re-runs are safe and cheap.
 
 const PREWARM_SECTION_IDS = ["overview", "outlook-us", "considerations"] as const;
@@ -319,7 +319,7 @@ export const _prewarmTopBranches = internalAction({
 //   1. If `followUps` is missing (the early generateContent path discarded
 //      it), regenerate them via the backfill prompt.
 //   2. Trigger _prewarmTopBranches so the article ships with crawlable Q&A.
-// Both steps are idempotent — safe to re-run, and skips work already done.
+// Both steps are idempotent, safe to re-run, and skips work already done.
 
 const followUpsValidator = v.record(v.string(), v.array(v.string()));
 
@@ -381,7 +381,7 @@ export const _backfillOneGuide = internalAction({
       }
     }
 
-    // Step 2: pre-warm top branches (idempotent — _createOrGetBranch is
+    // Step 2: pre-warm top branches (idempotent, _createOrGetBranch is
     // race-safe and short-circuits when the row already exists).
     await ctx.scheduler.runAfter(
       0,

@@ -97,7 +97,7 @@ const cascadeDeleteUser = async (
   // Discover canvas + junction rows (Phase 1+ tables). The snapshot is 1:1
   // per user; junction rows are bounded by N cards in the snapshot
   // (≤ 3 lanes × 20 max). We use by_snapshotId rather than adding a
-  // by_userId index on discover_snapshot_guides — keeps the schema lean.
+  // by_userId index on discover_snapshot_guides, keeps the schema lean.
   const canvas = await ctx.db
     .query("discover_canvases")
     .withIndex("by_userId", (q) => q.eq("userId", userId))
@@ -125,7 +125,7 @@ const cascadeDeleteUser = async (
     .collect();
   for (const r of reasons) await ctx.db.delete(r._id);
 
-  // People search results — LinkedIn profiles found via guide-driven search.
+  // People search results. LinkedIn profiles found via guide-driven search.
   // by_user_url has userId as prefix, so a direct .eq scan is correct.
   const people = await ctx.db
     .query("key_people")
@@ -142,7 +142,7 @@ const cascadeDeleteUser = async (
 
   // Outreach drafts. Each row carries a threadId pointing into the Convex
   // Agent component's tables (private to the component). We schedule the
-  // component's own deletion mutation for each thread — it will recursively
+  // component's own deletion mutation for each thread, it will recursively
   // delete the thread's messages and streams pages off the parent commit.
   const streams = await ctx.db
     .query("outreach_streams")

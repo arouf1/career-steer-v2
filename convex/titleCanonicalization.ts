@@ -21,7 +21,7 @@ export const _lookup = internalQuery({
 // Read-then-insert under Convex's serializable transaction. If a concurrent
 // writer commits first, our commit OCC-conflicts and retries; on retry the
 // read finds the existing row and we return it instead of inserting a
-// duplicate. This is the layer-2 dedup primitive — guarantees one
+// duplicate. This is the layer-2 dedup primitive, guarantees one
 // canonical title per prefilteredKey forever.
 export const _writeThrough = internalMutation({
   args: {
@@ -64,7 +64,7 @@ export const _writeThrough = internalMutation({
 });
 
 // Gemini structured output rejects bound/array-length constraints (.int(),
-// .min/max, etc) — encode bounds in the prompt instead.
+// .min/max, etc), encode bounds in the prompt instead.
 const canonicalSchema = z.object({
   canonical_title: z.string().describe(
     "The canonical, fully-spelled-out form of this job title for use as a " +
@@ -83,7 +83,7 @@ const canonicalSchema = z.object({
   ),
 });
 
-// Canonicalization is a trivial structured-extraction transform — it does
+// Canonicalization is a trivial structured-extraction transform, it does
 // not need a reasoning model. Project precedent: Gemini Flash is the
 // standard choice for this tier of task (BRANCH_MODEL_ID, VALIDATION_MODEL_ID,
 // PERSONALIZATION_MODEL_ID, PEOPLE_EXTRACT_MODEL_ID all use it). Earlier
@@ -117,7 +117,7 @@ export const getOrCreateCanonical = internalAction({
       };
     }
 
-    // No maxOutputTokens cap — Flash returns ~10–20 tokens for this prompt
+    // No maxOutputTokens cap. Flash returns ~10-20 tokens for this prompt
     // naturally, and other Flash callers in the project don't cap either.
     const model = chatModel(CANONICAL_MODEL_ID, { zdr: true });
     const { experimental_output } = await generateText({

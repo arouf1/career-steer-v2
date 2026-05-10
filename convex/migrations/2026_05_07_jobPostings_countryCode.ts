@@ -3,7 +3,7 @@
 // stamped blindly). Re-resolves gps using the corrected countryCode so the
 // locations lookup picks the right City row.
 //
-// Background: SearchAPI's `gl` parameter is a soft hint — Google Jobs may
+// Background: SearchAPI's `gl` parameter is a soft hint. Google Jobs may
 // return out-of-region results when local matches are thin. The original
 // upsertFromSearch trusted args.countryCode for every result, producing
 // rows where city="Everett" + countryCode="gb" (US-located postings tagged

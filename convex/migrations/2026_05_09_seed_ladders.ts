@@ -1,4 +1,4 @@
-// One-shot: insert the initial career ladder catalog. Idempotent — re-running
+// One-shot: insert the initial career ladder catalog. Idempotent, re-running
 // skips ladders whose `slug` already exists. Subsequent ladder additions
 // should be done by adding a new entry below and re-running this migration.
 //
@@ -12,7 +12,7 @@
 // The `description` field encodes the canonical rung layout per ladder so
 // the LLM classifier in the backfill action has a strong prior for which
 // title belongs at which rung. We deliberately do NOT pre-create rungs as
-// rows in `career_guide_ladder_positions` — positions are created by the
+// rows in `career_guide_ladder_positions`, positions are created by the
 // backfill (and on-demand generation later) once a guide actually exists.
 
 import { v } from "convex/values";
@@ -42,7 +42,7 @@ type SeedLadder = {
   description: string;
 };
 
-// Editorial, user-facing descriptions. Single sentence each — these surface
+// Editorial, user-facing descriptions. Single sentence each, these surface
 // directly in the catalogue's "By ladder" section headers and in the guide
 // page's breadcrumb context. The LLM ladder classifier no longer needs the
 // rung-by-rung encoding here because it gets that information at runtime
@@ -199,7 +199,7 @@ export const seedLadders = internalMutation({
 });
 
 // Patch existing rows' editorial fields (name, description) to match the
-// current SEED_LADDERS constant. Used after rewriting copy — original seed
+// current SEED_LADDERS constant. Used after rewriting copy, original seed
 // descriptions encoded the rung map for the LLM classifier and leaked to
 // the catalogue UI. This is idempotent and safe to re-run any time the
 // editorial copy changes.

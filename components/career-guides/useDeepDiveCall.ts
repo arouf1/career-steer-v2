@@ -22,7 +22,7 @@ import {
  *   6. On end-call (or error/interrupt), call finalize which schedules the
  *      post-call analysis pipeline.
  *
- * No raw audio is persisted — only the rolling text transcript via
+ * No raw audio is persisted, only the rolling text transcript via
  * `appendMessage`. The action's response is the only place we ever see the
  * Google API key (when ephemeral mint failed and we're in apiKey-fallback
  * mode); per privacy rule, we don't log the value, only the auth mode.
@@ -58,7 +58,7 @@ type AppendMessageInput = {
 
 // The server now hands back a ready-to-send setup message (minimal on the
 // ephemeral path, full on the API-key fallback path). The client just
-// ws.send()s it on open — see convex/lib/voiceLiveConfig.ts for the full
+// ws.send()s it on open, see convex/lib/voiceLiveConfig.ts for the full
 // rationale. Plain alias kept so the flow inside startCall stays readable.
 type ServerSetupMessage = Record<string, unknown>;
 
@@ -116,7 +116,7 @@ export function useDeepDiveCall(
   const pendingAssistantRef = useRef<string>("");
   const finalizedRef = useRef(false);
 
-  // Keep mutedRef in sync — capture callback reads from it on every chunk.
+  // Keep mutedRef in sync, capture callback reads from it on every chunk.
   useEffect(() => {
     mutedRef.current = isMuted;
   }, [isMuted]);
@@ -145,7 +145,7 @@ export function useDeepDiveCall(
       try {
         await appendMessage({ sessionId, message });
       } catch (err) {
-        // Network blip; log only — we re-render from the local optimistic
+        // Network blip; log only, we re-render from the local optimistic
         // copy and the user keeps talking.
         console.warn("useDeepDiveCall: appendMessage failed", err);
       }
@@ -206,7 +206,7 @@ export function useDeepDiveCall(
 
   const handleServerMessage = useCallback(
     (data: Record<string, unknown>) => {
-      // Setup complete — server has accepted our config and is ready for
+      // Setup complete, server has accepted our config and is ready for
       // realtime input. Mic capture is wired up by the caller below.
       if ("setupComplete" in data) {
         setupCompleteRef.current = true;
@@ -337,7 +337,7 @@ export function useDeepDiveCall(
 
     ws.onopen = () => {
       // Setup is built server-side (see convex/lib/voiceLiveConfig.ts).
-      // Ephemeral path: minimal — just `setup.model`. The full live config
+      // Ephemeral path: minimal, just `setup.model`. The full live config
       // (voice, system instruction, VAD, context window compression,
       // googleSearch tool, transcription) is bound at the token via
       // liveConnectConstraints, so the constrained WS endpoint pulls it
@@ -411,7 +411,7 @@ export function useDeepDiveCall(
     ws.onclose = () => {
       // We only treat the close as final if we haven't already finalized
       // (e.g. user-initiated end). The hook owns the lifecycle. Use a
-      // functional setter so we read the latest call state — TS narrows
+      // functional setter so we read the latest call state. TS narrows
       // `callState` from the closure capture above, but the actual runtime
       // value will be "connected" / "connecting" if the WS closed mid-call.
       if (!finalizedRef.current) {
@@ -449,7 +449,7 @@ export function useDeepDiveCall(
         teardown();
       }
     };
-    // Intentionally empty deps — we only want this on unmount.
+    // Intentionally empty deps, we only want this on unmount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

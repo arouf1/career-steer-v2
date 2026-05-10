@@ -24,15 +24,15 @@ type Props = {
  * and mirrors its two-variant structure.
  *
  * Two variants:
- *   - aside         — compact card placed in the right column of the
+ *   - aside        , compact card placed in the right column of the
  *                     posting article. Visible on desktop.
- *   - byline-inline — small text-link near the apply CTA. lg:hidden — only
+ *   - byline-inline, small text-link near the apply CTA. lg:hidden, only
  *                     shows on mobile so it doesn't compete with the desktop
  *                     aside variant.
  *
  * Anonymous branch (both variants): the slot still renders, but it's a Link
  * to /sign-in?redirect_url=<listingPath> instead of a button that opens the
- * dialog. Same visual density — only the label and target change.
+ * dialog. Same visual density, only the label and target change.
  *
  * Uses Mic icon (not Phone, which belongs to the discuss tile) to distinguish
  * the mock-interview surface from the discuss-this-role deep-dive.
@@ -113,7 +113,7 @@ export function InterviewSimCallTile({
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-ink">Mock interview</p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-mute">
-            Realistic 10–15 minute simulation, calibrated to how {companyName} actually interviews for this role.
+            Realistic 10-15 minute simulation, calibrated to how {companyName} actually interviews for this role.
           </p>
         </div>
       </div>

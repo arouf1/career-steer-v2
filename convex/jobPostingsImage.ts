@@ -57,7 +57,7 @@ export const ensureHeroQueued = mutation({
 //
 // The detail page is server-rendered and reads the posting once via fetchQuery.
 // That gives a clean first paint but means the gradient placeholder stays put
-// until the user reloads — even if the image landed seconds later. This query
+// until the user reloads, even if the image landed seconds later. This query
 // is consumed by a small client component (HeroImageLive) that subscribes via
 // useQuery, so the hero re-renders the moment _markHeroComplete fires. URL is
 // a signed Convex storage URL, refreshed on each subscription tick (no client-
@@ -191,7 +191,7 @@ export const _loadHeroContext = internalQuery({
 // Mirrors convex/careerGuides.ts:generateAndStoreImage (which is private to
 // that module). Same shape, same OpenRouter endpoint, same Gemini Flash
 // Image model. Lifted here so the jobs pipeline doesn't depend on careerGuides
-// internals — they can evolve independently.
+// internals, they can evolve independently.
 async function generateAndStoreImage(
   ctx: { storage: { store: (blob: Blob) => Promise<Id<"_storage">> } },
   prompt: string,

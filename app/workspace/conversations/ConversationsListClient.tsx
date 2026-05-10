@@ -4,8 +4,8 @@
 // Owns: surface filter pills, archive toggle, debounced semantic search,
 // paginated browse query, archive/unarchive mutations, and all empty/loading/error states.
 //
-// Browse mode:  usePaginatedQuery(api.voiceCalls.listForUser, …) — live subscription
-// Search mode:  useAction(api.voiceCallsSearch.searchByText) — snapshot per debounce tick
+// Browse mode:  usePaginatedQuery(api.voiceCalls.listForUser, …), live subscription
+// Search mode:  useAction(api.voiceCallsSearch.searchByText), snapshot per debounce tick
 //               The paginated query is "skip"-ped while in search mode.
 
 "use client";
@@ -40,7 +40,7 @@ const SURFACE_LABEL: Record<Surface, string> = {
 };
 
 const SEARCH_DEBOUNCE_MS = 350;
-// LocalStorage keys intentionally unchanged — changing them would silently
+// LocalStorage keys intentionally unchanged, changing them would silently
 // reset users' filter preferences with no benefit.
 const STORAGE_FILTER_KEY = "calls.surfaces.v1";
 const STORAGE_ARCHIVED_KEY = "calls.includeArchived.v1";
@@ -62,7 +62,7 @@ type ListRow = {
 };
 
 // ---------------------------------------------------------------------------
-// localStorage helpers (safe for SSR — typeof window guard)
+// localStorage helpers (safe for SSR, typeof window guard)
 // ---------------------------------------------------------------------------
 
 function readSurfaces(): Set<Surface> {
@@ -114,7 +114,7 @@ export function ConversationsListClient() {
   }, [includeArchived]);
 
   // ── Search state ──────────────────────────────────────────────────────────
-  // Simplified to a single searchQuery — a non-empty value always runs semantic
+  // Simplified to a single searchQuery, a non-empty value always runs semantic
   // search; empty falls back to the paginated browse. No mode toggle needed.
   const [searchQuery, setSearchQuery] = useState("");
   const [queryFocused, setQueryFocused] = useState(false);
@@ -135,7 +135,7 @@ export function ConversationsListClient() {
   const usingSearch = searchQuery.trim().length > 0;
 
   // "skip" sentinel tells usePaginatedQuery not to subscribe while we're in
-  // semantic-search mode — avoids a wasted subscription running in parallel.
+  // semantic-search mode, avoids a wasted subscription running in parallel.
   const paginated = usePaginatedQuery(
     api.voiceCalls.listForUser,
     usingSearch ? "skip" : listArgs,
@@ -234,7 +234,7 @@ export function ConversationsListClient() {
 
   // Browse mode: bucket rows into Today / Yesterday / This week / Earlier so
   // the editorial section headers can render between them. Search mode skips
-  // the grouping — vector-search results are ranked by relevance, not time.
+  // the grouping, vector-search results are ranked by relevance, not time.
   const grouped = useMemo(
     () => (usingSearch ? null : groupConversationsByDate(rows)),
     [rows, usingSearch],
@@ -249,7 +249,7 @@ export function ConversationsListClient() {
         lede="Mock interviews and deep-dive conversations you've had. Search by topic or filter by type."
       />
 
-      {/* Search input — editorial underline pattern (matches jobs page) */}
+      {/* Search input, editorial underline pattern (matches jobs page) */}
       <div>
         <span className="type-label mb-3 block uppercase text-mute">Search</span>
         <div
@@ -336,7 +336,7 @@ export function ConversationsListClient() {
         </div>
       ) : usingSearch ? (
         // Search mode: flat list, no date sections (results are ranked by
-        // semantic relevance — chronological grouping would scramble the rank).
+        // semantic relevance, chronological grouping would scramble the rank).
         <div className="fade-in-view flex flex-col divide-y divide-hairline">
           {rows.map((call) => (
             <RowDispatch
@@ -395,7 +395,7 @@ export function ConversationsListClient() {
 }
 
 // ---------------------------------------------------------------------------
-// RowDispatch — picks InterviewRow vs DeepDiveRow based on surface
+// RowDispatch, picks InterviewRow vs DeepDiveRow based on surface
 // ---------------------------------------------------------------------------
 
 function RowDispatch({
@@ -456,7 +456,7 @@ function FilterPill({
 }
 
 // ---------------------------------------------------------------------------
-// EmptyState — three branches: cold, filter-narrowed, search-narrowed
+// EmptyState, three branches: cold, filter-narrowed, search-narrowed
 // ---------------------------------------------------------------------------
 
 function EmptyState({

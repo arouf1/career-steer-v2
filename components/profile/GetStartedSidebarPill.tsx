@@ -6,8 +6,8 @@ import { useSidebar } from "@/components/ui/sidebar";
 
 /**
  * Floating bottom-center "Get started" pill that opens the workspace
- * sidebar. Mirrors the floating Save bar on the profile edit page —
- * same pill shape, same enter/exit motion — so floating CTAs across
+ * sidebar. Mirrors the floating Save bar on the profile edit page -
+ * same pill shape, same enter/exit motion, so floating CTAs across
  * the workspace read as one vocabulary.
  *
  * Self-hides when the sidebar is already expanded or on mobile (where

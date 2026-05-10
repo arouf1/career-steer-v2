@@ -42,7 +42,7 @@ export const JobsForGuideEmpty = forwardRef<HTMLDivElement, Props>(
         : variant === "signed-in-searching"
           ? "Pulling fresh postings from the wire. This usually takes a few seconds."
           : variant === "signed-in-empty-after-search"
-            ? "Try again later — postings refresh continuously."
+            ? "Try again later, postings refresh continuously."
             : "Search live to pull fresh postings into the cache.";
 
     return (

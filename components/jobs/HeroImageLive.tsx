@@ -2,7 +2,7 @@
 
 // Subscribes to convex/jobPostingsImage.heroState so the detail-page hero
 // flips from gradient placeholder to the real illustration the moment
-// _markHeroComplete fires — no reload needed. Initial paint uses the SSR'd
+// _markHeroComplete fires, no reload needed. Initial paint uses the SSR'd
 // `initialUrl` (from getByPublicId's joined storage.getUrl call) so a posting
 // with an already-generated image renders instantly without a placeholder
 // flash. Once the Convex subscription delivers fresh state, that wins.
@@ -33,7 +33,7 @@ export function HeroImageLive({ jobPostingId, initialUrl, alt }: Props) {
   if (url && !imageError) {
     return (
       // Brandfetch + Convex storage URLs are stable signed paths the user
-      // already approved via JobPostingArticle's other <img> tag — same
+      // already approved via JobPostingArticle's other <img> tag, same
       // rationale: keeps next.config out of the picture for now.
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -48,7 +48,7 @@ export function HeroImageLive({ jobPostingId, initialUrl, alt }: Props) {
   }
 
   // No image yet (initial generation in flight, or the upstream gen failed).
-  // The placeholder is paper-raised rather than a tonal gradient — DESIGN.md
+  // The placeholder is paper-raised rather than a tonal gradient. DESIGN.md
   // bans gradients globally and the earlier critique flagged the previous
   // from-ink/5 version. A subtle pulse signals "in flight" without leaning
   // on chroma; it falls silent once status moves out of generating.

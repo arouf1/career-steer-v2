@@ -7,7 +7,7 @@ import { CareerGuidesIndexClient } from "@/components/career-guides/CareerGuides
 export const revalidate = 60;
 
 const description =
-  "Honest, in-depth guides to real career paths — what the work involves, the skills that matter, realistic salary ranges, and how to get started.";
+  "Honest, in-depth guides to real career paths, what the work involves, the skills that matter, realistic salary ranges, and how to get started.";
 
 export const metadata: Metadata = {
   title: "Career guides",
@@ -43,7 +43,7 @@ export default async function CareerGuidesIndexPage() {
             Career path guides.
           </h1>
           <p className="max-w-xl text-balance text-[15px] leading-relaxed text-body">
-            Honest, in-depth guides to real career paths — what the work
+            Honest, in-depth guides to real career paths, what the work
             involves, the skills that matter, realistic salary ranges, and how
             to get started.
           </p>

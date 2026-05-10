@@ -113,7 +113,7 @@ export function PersonCard({ person }: { person: Person }) {
 }
 
 // LinkedIn's signed photo URLs (`profile-displayphoto-shrink_*`) rotate on a
-// short TTL — by the time we render, many have either 4xx'd or quietly
+// short TTL, by the time we render, many have either 4xx'd or quietly
 // redirected to a generic placeholder. The placeholder *loads successfully*
 // (so `onError` alone doesn't catch it), but it's small (typically
 // ≤200px square). Anything below this threshold is treated as a non-photo

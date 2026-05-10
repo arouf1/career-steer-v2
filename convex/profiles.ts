@@ -50,7 +50,7 @@ export const current = query({
 // country-code triple via the locations table. Used by JobsForGuide to feed
 // `viewer.lat / lon / countryCode` into the location ladder. Returns null
 // when not signed-in, no profile, no confirmed location, or no matching
-// City row — callers fall back to anonymous IP geo in those cases.
+// City row, callers fall back to anonymous IP geo in those cases.
 //
 // The lookup is at most one indexed read against `locations` per call;
 // Convex re-runs only when the underlying profile or matching locations
@@ -98,7 +98,7 @@ export const resolvedLocation = query({
       .take(20);
     if (matches.length === 0) return null;
 
-    // Prefer the highest-reach (most populous) match — handles ambiguous
+    // Prefer the highest-reach (most populous) match, handles ambiguous
     // names ("Cambridge", "Springfield") by surfacing the canonical big
     // city, mirroring locations.searchCities's popularity rerank.
     const best = matches.reduce((a, b) => (b.reach > a.reach ? b : a));
@@ -165,7 +165,7 @@ const RATE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_PARSES_PER_WINDOW = 5;
 const MAX_TEXT_LENGTH = 200_000;
 // Model chosen: only Haiku-family entry in live OpenRouter catalog as of task execution.
-// Haiku is fast and cheap — the correct choice for structured extraction per project rules.
+// Haiku is fast and cheap, the correct choice for structured extraction per project rules.
 const MODEL_ID = "anthropic/claude-haiku-4.5";
 
 // LinkedIn scrape budget. V1 ran ten attempts; V2 caps at 5 because the
@@ -189,7 +189,7 @@ type ExtractResult =
 // parseLinkedIn both delegate here so the OpenRouter config, rate-limit
 // counter, schema mapping, and post-upsert enrichment kickoff live in
 // exactly one place. The rate-limit counter is intentionally shared across
-// sources — the cost driver is the LLM call, not the input format.
+// sources, the cost driver is the LLM call, not the input format.
 async function extractAndUpsertProfile(
   ctx: ActionCtx,
   args: ExtractInput,
@@ -203,7 +203,7 @@ async function extractAndUpsertProfile(
 
   const userId = await ctx.runMutation(api.users.store, {});
 
-  // Rate limit — window state lives on the profile row.
+  // Rate limit, window state lives on the profile row.
   const existing = await ctx.runQuery(api.profiles.current, {});
   const now = Date.now();
   let rateLimit: { countInWindow: number; windowStartedAt: number };
@@ -254,7 +254,7 @@ async function extractAndUpsertProfile(
   }
 
   // ProfileSchema uses z.string().nullable() for optional string fields.
-  // Convex upsert uses v.optional(v.string()), which expects undefined — not null.
+  // Convex upsert uses v.optional(v.string()), which expects undefined, not null.
   // Strip nulls here so the mutation validator accepts the data.
   const profileId: Id<"profiles"> = await ctx.runMutation(
     internal.profiles.upsert,
@@ -443,7 +443,7 @@ export const update = mutation({
 });
 
 // Step 2 of profile setup: the user confirms their location after
-// CV/LinkedIn intake. Required because LLM extraction is unreliable —
+// CV/LinkedIn intake. Required because LLM extraction is unreliable -
 // confirmation is what makes regional personalization trustworthy.
 // Sets `locationConfirmedAt` so the ProfileShell gate can let the user
 // through to the full ProfileView.
@@ -497,7 +497,7 @@ export const markReviewed = mutation({
     );
 
     // Seed public career guides for the canonical job titles in this
-    // profile's work history. Idempotent — re-running markReviewed on an
+    // profile's work history. Idempotent, re-running markReviewed on an
     // unchanged experience array is a no-op via the checksum gate in
     // seedGuidesFromProfile. Runs in parallel with the discover snapshot
     // regen above; both are independent fan-outs.

@@ -28,10 +28,10 @@ export function clamp01(x: number): number {
 /**
  * Career-stage rank for the 4-lane bucketing in `discover.ts`.
  *
- * Ranks compare across both ICs and managers — `senior-IC` and `manager` sit
+ * Ranks compare across both ICs and managers, `senior-IC` and `manager` sit
  * at the same level (7+ years, comparable scope) so a senior-IC user looking
  * at a manager guide registers as "sideways", not forward. The `transitioning`
- * stage (used on profile_enrichments only — not on guides) maps to the same
+ * stage (used on profile_enrichments only, not on guides) maps to the same
  * rank as `mid-career` so a user mid-pivot still gets meaningful bucketing.
  */
 export const STAGE_RANK: Record<string, number> = {
@@ -47,7 +47,7 @@ export const STAGE_RANK: Record<string, number> = {
 /**
  * Compare a user's career stage against a guide's stage and return the lane
  * direction. Returns `"unknown"` when either side is missing or unrecognised
- * — callers fall through to the transformational ("a different chapter")
+ *, callers fall through to the transformational ("a different chapter")
  * lane rather than guessing.
  *
  *   forward    → guide is at a higher stage than the user (= next steps)

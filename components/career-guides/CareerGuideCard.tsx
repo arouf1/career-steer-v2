@@ -13,7 +13,7 @@ export function CareerGuideCard({
   guide: GuideWithUrl;
   variant?: Variant;
   // Optional tier chip shown in the top-right of the illustration. Only
-  // rendered when a tier is provided — leaves legacy callers untouched.
+  // rendered when a tier is provided, leaves legacy callers untouched.
   tier?: Tier;
 }) {
   const isLead = variant === "lead";

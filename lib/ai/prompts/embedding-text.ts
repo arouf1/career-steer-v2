@@ -53,7 +53,7 @@ const formatExperienceLine = (pair: ExperiencePair): string => {
     ? `${enriched.functionalArea}/${enriched.subFunction}`
     : enriched.functionalArea;
   const industry = enriched.industry ? ` · ${enriched.industry}` : "";
-  return `${source.title} @ ${source.company} (${dates}) — ${fn} · ${level}${industry}`;
+  return `${source.title} @ ${source.company} (${dates}), ${fn} · ${level}${industry}`;
 };
 
 const formatAchievements = (enriched: EnrichedExperienceEntry): string => {

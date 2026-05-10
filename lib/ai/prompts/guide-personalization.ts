@@ -1,14 +1,15 @@
 import { z } from "zod";
+import { EDITORIAL_VOICE_TAIL } from "./voice";
 
-// Gemini 3 Flash — picked for personalization because the surface is
+// Gemini 3 Flash, picked for personalisation because the surface is
 // latency-sensitive (user is staring at a skeleton waiting for output) and
 // the inputs are already grounded in profile data + Exa snippets, so the
 // model doesn't need pro-tier reasoning. Verified live on OpenRouter
 // (`google/gemini-3-flash-preview`) at the time of writing.
 export const PERSONALIZATION_MODEL_ID = "google/gemini-3-flash-preview";
 
-// Bound counts (4–6 strengths, 3–5 transferable / gaps, 80–120 word summary,
-// 150–200 word fit narrative, 14–22 word "why" per skill row) are described in
+// Bound counts (4-6 strengths, 3-5 transferable / gaps, 80-120 word summary,
+// 150-200 word fit narrative, 14-22 word "why" per skill row) are described in
 // prompt + .describe() copy and NOT enforced via Zod constraints. Gemini
 // structured output rejects .min/.max/.int/array-length constraints; encoding
 // bounds in prose is the project-standard workaround.
@@ -30,7 +31,7 @@ const PersonalizedRegionalSchema = z.object({
     entry: z
       .string()
       .describe(
-        "Entry-level salary range for this role in this country, in local currency. Format examples: '45,000 to 60,000', '40,000+'. Do NOT include the currency symbol — it is supplied separately.",
+        "Entry-level salary range for this role in this country, in local currency. Format examples: '45,000 to 60,000', '40,000+'. Do NOT include the currency symbol, it is supplied separately.",
       ),
     mid: z.string().describe("Mid-level salary range, same format as entry."),
     senior: z
@@ -128,7 +129,7 @@ export const GuidePersonalizationSchema = z.object({
       ),
   }),
   regional: PersonalizedRegionalSchema.nullable().describe(
-    "Country-tailored regional block (salary band, outlook, learning path, related roles) for the reader's home country. Set to null ONLY when the reader's country is United States or United Kingdom (the public guide already covers those) or when the reader's country cannot be determined from their profile. For every other country — Canada, Germany, Australia, Singapore, India, Japan, Brazil, anywhere — populate this block with locally accurate figures and context.",
+    "Country-tailored regional block (salary band, outlook, learning path, related roles) for the reader's home country. Set to null ONLY when the reader's country is United States or United Kingdom (the public guide already covers those) or when the reader's country cannot be determined from their profile. For every other country. Canada, Germany, Australia, Singapore, India, Japan, Brazil, anywhere, populate this block with locally accurate figures and context.",
   ),
 });
 export type GuidePersonalization = z.infer<typeof GuidePersonalizationSchema>;
@@ -200,8 +201,8 @@ Voice rules:
 - Address the reader as "you" / "your" throughout. Never "the candidate" or "the user".
 - Be specific. Reference at least one concrete detail from the reader's profile (a role title, a company, a skill, a sector, or their location) in the fit narrative and in the skills summary.
 - Be honest. If the fit is weak in a meaningful way, say so. Do not flatter.
-- Use hyphens (-), never em-dashes.
-- No bullet symbols or formatting characters in any field - just the phrase or sentence.
+- ${EDITORIAL_VOICE_TAIL}
+- No bullet symbols or formatting characters in any field, just the phrase or sentence.
 
 "Why" rules for every skill row (strengths, transferable, gaps):
 - Each "why" is one sentence, 14-22 words, in second person.
@@ -274,7 +275,7 @@ const formatRegionalSources = (sources: RegionalExaSnippet[]): string => {
     .map((s, i) => {
       const sourceList = s.sources
         .slice(0, 6)
-        .map((src, j) => `   [${i + 1}.${j + 1}] ${src.title} — ${src.url}`)
+        .map((src, j) => `   [${i + 1}.${j + 1}] ${src.title}, ${src.url}`)
         .join("\n");
       return `### Topic ${i + 1}: ${s.topic} (query: "${s.query}")\n${trimToWords(s.answer, 240)}\nSources:\n${sourceList}`;
     })
@@ -351,8 +352,8 @@ ${cv}
 
 ${
   regionalSources && regionalSources.length > 0
-    ? `These snippets were freshly retrieved by Exa for this reader's location. They are the GROUND TRUTH for the regional block — use the salary numbers, outlook claims, and learning path steps from these snippets, not from your training data. Quote and paraphrase them, do not invent.\n\n${formatRegionalSources(regionalSources)}`
-    : "(none — either the reader is in US/UK and the public guide already serves them, or no Exa context was retrieved. Set regional to null in this case.)"
+    ? `These snippets were freshly retrieved by Exa for this reader's location. They are the GROUND TRUTH for the regional block, use the salary numbers, outlook claims, and learning path steps from these snippets, not from your training data. Quote and paraphrase them, do not invent.\n\n${formatRegionalSources(regionalSources)}`
+    : "(none, either the reader is in US/UK and the public guide already serves them, or no Exa context was retrieved. Set regional to null in this case.)"
 }
 
 ## Your task
@@ -368,15 +369,15 @@ Produce JSON matching the schema with three pieces:
    - summary (80-120 words): An honest narrative weighing where you stand against this role's demands. Mention the location angle if relevant.
 
 3. regional: A country-tailored regional block for the reader's home country.
-   - When to populate: Exa snippets were provided above (i.e., this section is non-empty). Pull every salary figure, outlook claim, and learning-path step from those snippets — DO NOT invent numbers, employers, or qualifications.
+   - When to populate: Exa snippets were provided above (i.e., this section is non-empty). Pull every salary figure, outlook claim, and learning-path step from those snippets. DO NOT invent numbers, employers, or qualifications.
    - When to set null: no Exa snippets were provided OR the reader's location is missing/ambiguous OR the reader is clearly in the United States or United Kingdom (public guide already serves them).
    - When populated, all fields must be locally accurate AND grounded in the Exa snippets:
      * countryCode: ISO 3166-1 alpha-2.
      * countryName: full country name.
-     * currencySymbol: the form local readers actually use ('CA$' for Canadian dollars, 'A$' for Australian, '€' for euro, '¥' for yen, '₹' for rupee, 'S$' for Singapore dollar, 'HK$' for Hong Kong, 'AED' for UAE dirham, etc.). Do NOT include the symbol in the salary numbers — it is rendered separately.
+     * currencySymbol: the form local readers actually use ('CA$' for Canadian dollars, 'A$' for Australian, '€' for euro, '¥' for yen, '₹' for rupee, 'S$' for Singapore dollar, 'HK$' for Hong Kong, 'AED' for UAE dirham, etc.). Do NOT include the symbol in the salary numbers, it is rendered separately.
      * salary.entry / mid / senior: take ranges directly from the salary Exa snippet, in local currency shorthand (e.g. '60,000 to 80,000', '40,000+'). Use national-level figures unless the snippet only gives city data, in which case note the city in salary.note.
-     * careerOutlook (120-180 words): paraphrase the outlook Exa snippet — demand, growth direction, dominant employers and sectors, regulatory landscape, geographic concentration. Cite real institutions named in the sources.
-     * learningPath (5-7 ordered steps): build from the learning-path Exa snippet — credentials, institutions, professional bodies, and certifications named in the sources.
+     * careerOutlook (120-180 words): paraphrase the outlook Exa snippet, demand, growth direction, dominant employers and sectors, regulatory landscape, geographic concentration. Cite real institutions named in the sources.
+     * learningPath (5-7 ordered steps): build from the learning-path Exa snippet, credentials, institutions, professional bodies, and certifications named in the sources.
      * relatedRoles (4-6): titles common in this country's job market (Exa-derived where present, otherwise general knowledge).
    - Address the reader directly throughout ("you", "your") and use hyphens, not em-dashes.`;
 

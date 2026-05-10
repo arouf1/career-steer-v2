@@ -1,12 +1,12 @@
 /**
  * Pure helpers for the per-job-posting voice assistant ("Talk through this
  * role"). Mirrors voiceCallContext.ts (per-guide) and compassVoiceContext.ts
- * — no Convex APIs imported, unit-testable, called from convex/jobVoice.ts
+ *, no Convex APIs imported, unit-testable, called from convex/jobVoice.ts
  * after the loader has pulled the necessary documents through ctx.db.
  */
 
 import type { Doc } from "./_generated/dataModel";
-// The per-guide profile snapshot builder is the right shape for jobs too —
+// The per-guide profile snapshot builder is the right shape for jobs too -
 // candidate name, narrative, top skills, motivations, work-style. Re-export
 // so jobVoiceNode.ts only has one helper module to import from.
 export { buildProfileSnapshotForVoice } from "./voiceCallContext";
@@ -25,7 +25,7 @@ export type JobSnapshotForVoice = {
   salary?: string;
   hasApplyLink: boolean;
   // Enriched prose. Each field may be empty if the rewrite hasn't landed
-  // yet — but the loader gates on contentStatus === "complete" so by the
+  // yet, but the loader gates on contentStatus === "complete" so by the
   // time this is built, the fields are populated.
   overview: string;
   theRole: string;
@@ -71,7 +71,7 @@ export type CompanyContextForVoice = {
   culture: string | null;
   financials: string | null;
   // Per-(company, role-archetype) research. Same status semantics as above.
-  // "missing" when the posting has no roleArchetypeSlug — the page can't
+  // "missing" when the posting has no roleArchetypeSlug, the page can't
   // synthesise role-specific research without a canonical role anchor.
   roleResearchStatus:
     | "missing"
@@ -140,9 +140,9 @@ export type FitNarrativeForVoice = {
   domainScore: number;
   // Pre-computed anchors the adviser can drop into the conversation without
   // having to read a number aloud. Examples:
-  //   "current-state strong" — they can do this work tomorrow
-  //   "arc lower than current-state" — sideways move rather than stepping up
-  //   "domain weak" — would need a real reskilling effort
+  //   "current-state strong", they can do this work tomorrow
+  //   "arc lower than current-state", sideways move rather than stepping up
+  //   "domain weak", would need a real reskilling effort
   headline: string;
   anchorPoints: string[];
 };
@@ -195,15 +195,15 @@ export function buildFitNarrativeForVoice(args: {
   const WEAK = 0.6;
 
   if (currentStateScore >= STRONG) {
-    anchorPoints.push("Their current-state fit is strong — they can do this work today.");
+    anchorPoints.push("Their current-state fit is strong, they can do this work today.");
   } else if (currentStateScore < WEAK) {
-    anchorPoints.push("Their current-state fit is weak — significant ramp-up needed.");
+    anchorPoints.push("Their current-state fit is weak, significant ramp-up needed.");
   }
 
   if (arcScore >= STRONG) {
     anchorPoints.push("This role is on the arc they've been building toward.");
   } else if (arcScore < WEAK) {
-    anchorPoints.push("This role sits off their stated trajectory — worth checking why it appeals.");
+    anchorPoints.push("This role sits off their stated trajectory, worth checking why it appeals.");
   }
 
   if (currentStateScore - arcScore >= 0.1) {
@@ -213,7 +213,7 @@ export function buildFitNarrativeForVoice(args: {
   }
 
   if (domainScore < WEAK) {
-    anchorPoints.push("Domain overlap is light — probable real reskilling effort.");
+    anchorPoints.push("Domain overlap is light, probable real reskilling effort.");
   } else if (domainScore >= STRONG) {
     anchorPoints.push("Their technical domain matches well.");
   }
@@ -222,9 +222,9 @@ export function buildFitNarrativeForVoice(args: {
   if (wholeScore >= STRONG) {
     headline = "Strong overall fit";
   } else if (wholeScore >= WEAK) {
-    headline = "Worth-exploring fit — some gaps";
+    headline = "Worth-exploring fit, some gaps";
   } else {
-    headline = "Stretch fit — significant gaps";
+    headline = "Stretch fit, significant gaps";
   }
 
   return {
@@ -257,7 +257,7 @@ type AggregatedCitation = {
  * Flatten citations from companyResearch (culture/financials), companyRole-
  * Research (interview/compensation), and the linked career_guide (typical
  * skills, day-to-day, etc.) into one deduplicated list. Same shape as
- * aggregateGuideCitations — recency-sorted, capped at MAX_CITATIONS_FOR_PROMPT.
+ * aggregateGuideCitations, recency-sorted, capped at MAX_CITATIONS_FOR_PROMPT.
  */
 export function aggregateJobCitations(args: {
   companyResearch: Doc<"company_research"> | null;

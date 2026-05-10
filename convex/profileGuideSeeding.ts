@@ -29,7 +29,7 @@ const sortByRecency = (jobs: readonly ExperienceEntry[]): ExperienceEntry[] =>
   });
 
 // Deterministic equality token for the canonical-title set. We do not need
-// a cryptographic hash — just an unambiguous string that changes iff the set
+// a cryptographic hash, just an unambiguous string that changes iff the set
 // changes. Sort first so order doesn't affect equality.
 const checksumOf = (canonicalTitles: readonly string[]): string =>
   [...canonicalTitles].sort().join("|");
@@ -92,7 +92,7 @@ export const seedGuidesFromProfile = internalAction({
       return { seededSlugs: [], skipped: true };
     }
 
-    // Canonicalize each unique prefilter — cache hits return instantly,
+    // Canonicalize each unique prefilter, cache hits return instantly,
     // misses share the cache for future profiles. Run in parallel; bounded
     // implicitly by MAX_JOBS_PER_SEED.
     const canonicalResults = await Promise.all(

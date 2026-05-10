@@ -1,7 +1,7 @@
 // app/workspace/conversations/[conversationId]/page.tsx
 //
 // Server component shell for the per-conversation detail page.
-// Auth guard mirrors app/workspace/conversations/page.tsx — Clerk auth() check
+// Auth guard mirrors app/workspace/conversations/page.tsx. Clerk auth() check
 // server-side before any client hydration.
 
 import type { Metadata } from "next";

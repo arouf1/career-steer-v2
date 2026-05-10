@@ -36,7 +36,7 @@ const isLikelyHit = (raw: unknown): raw is Record<string, unknown> => {
   );
 };
 
-// Pure picker — exported for tests. Given a list of raw hits, pick the best
+// Pure picker, exported for tests. Given a list of raw hits, pick the best
 // candidate per the policy described above.
 export function pickBestHit(
   hits: ReadonlyArray<BrandfetchHit>,
@@ -48,7 +48,7 @@ export function pickBestHit(
   return claimed ?? hits[0];
 }
 
-// Pure normaliser — exported for tests. Maps Brandfetch's raw response shape
+// Pure normaliser, exported for tests. Maps Brandfetch's raw response shape
 // into our internal BrandfetchHit type, tolerating missing optional fields.
 export function normaliseHits(raw: unknown): BrandfetchHit[] {
   if (!Array.isArray(raw)) return [];
@@ -80,7 +80,7 @@ export async function searchBrand(
 
   if (!res.ok) {
     // Brandfetch returns 404 with `{ message: "Brand not found" }` for
-    // empty searches — treat as a clean "no hit" rather than throwing.
+    // empty searches, treat as a clean "no hit" rather than throwing.
     if (res.status === 404) return null;
     throw new Error(
       `Brandfetch search ${res.status} for "${trimmed}": ${await res
@@ -97,7 +97,7 @@ export async function searchBrand(
 // Build a Brandfetch CDN logo URL. Canonical pattern per Brandfetch's
 // current docs: `cdn.brandfetch.io/{domain}?c={clientId}`. The CDN also
 // cross-checks the request Referer against the allowed-origins list
-// registered to the client ID — so the URL succeeding in production
+// registered to the client ID, so the URL succeeding in production
 // requires the deploy domain (and `localhost:3000` for dev) to be added
 // in the Brandfetch dashboard. The client ID itself is non-sensitive
 // by Brandfetch's design (meant to ship in <img src>).

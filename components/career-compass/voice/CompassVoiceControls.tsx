@@ -11,7 +11,7 @@ type Props = {
 
 /**
  * Compact in-dock control pair for an active compass call. Sized for a 64px
- * dock — smaller than the modal call's circular buttons, but still big
+ * dock, smaller than the modal call's circular buttons, but still big
  * enough to hit on touch.
  */
 export function CompassVoiceControls({
@@ -26,7 +26,7 @@ export function CompassVoiceControls({
         onClick={onToggleMute}
         aria-pressed={isMuted}
         aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
-        // Sits on a bg-ink dock — idle/unmuted state uses a translucent paper
+        // Sits on a bg-ink dock, idle/unmuted state uses a translucent paper
         // wash so the icon sits quietly; muted flips to a red wash so the
         // mute affordance is unmistakable mid-call.
         className={cn(

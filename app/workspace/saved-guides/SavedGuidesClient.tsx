@@ -2,6 +2,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { Authenticated, AuthLoading, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { SavedGuideCard, type SavedGuide } from "./SavedGuideCard";
@@ -10,25 +11,27 @@ import {
   WorkspaceLoadingHeader,
   WorkspaceLoadingRows,
 } from "@/components/workspace/WorkspaceLoading";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const SORT_KEY = "savedGuides.sort";
 
-// Sort within each lane section. Lane is the natural editorial grouping —
+const ease = [0.2, 0.65, 0.3, 1] as const;
+
+const eyebrowCls =
+  "text-[10px] uppercase tracking-[0.18em] font-medium text-mute";
+
+// Sort within each lane section. Lane is the natural editorial grouping -
 // no separate lane filter needed, the user's eye tracks lane via the
-// section eyebrow. Removed v1's `lane` sort: with sections it was a
-// no-op. Kept `recent` and `score` (the meaningful ranks within a lane).
+// section eyebrow.
 type Sort = "recent" | "score";
 const SORT_VALUES: ReadonlyArray<Sort> = ["recent", "score"];
 function isSort(s: string | null): s is Sort {
   return s !== null && SORT_VALUES.includes(s as Sort);
 }
+
+const SORT_OPTIONS: ReadonlyArray<{ value: Sort; label: string }> = [
+  { value: "recent", label: "Recently saved" },
+  { value: "score", label: "Strongest first" },
+];
 
 type Lane = NonNullable<SavedGuide["lane"]>;
 
@@ -42,7 +45,7 @@ const LANE_ORDER: ReadonlyArray<Lane> = [
   "transformational",
 ];
 
-const LANE_EYEBROW: Record<Lane, string> = {
+const LANE_NAME: Record<Lane, string> = {
   linear: "Next steps",
   adjacent: "Sideways",
   earlier: "Earlier",
@@ -52,7 +55,7 @@ const LANE_EYEBROW: Record<Lane, string> = {
 const LANE_LEDE: Record<Lane, string> = {
   linear: "Roles that build directly on what you've done.",
   adjacent: "Adjacent fields where your experience translates well.",
-  earlier: "Paths you considered before — still worth keeping in view.",
+  earlier: "Paths you considered before, still worth keeping in view.",
   transformational: "Bigger jumps. Different shape, same person.",
 };
 
@@ -156,57 +159,6 @@ function SavedGuidesClientInner() {
 
   return (
     <div className="fade-in-view">
-      <SavedGuidesShell
-        saved={saved}
-        sort={sort}
-        onSortChange={(v) => setSort(v as Sort)}
-      >
-        <div className="flex flex-col gap-16">
-        {sections.map(({ key, rows }) => (
-          <section key={key} className="flex flex-col">
-            <div className="mb-2 flex flex-col gap-1.5 border-t border-hairline pt-8">
-              <p className="type-label uppercase text-mute">
-                {key === "none" ? "Unsorted" : LANE_EYEBROW[key]}
-                <span className="ml-2 text-mute/60">·</span>
-                <span className="ml-2 text-mute/80">
-                  {rows.length} {rows.length === 1 ? "guide" : "guides"}
-                </span>
-              </p>
-              {key !== "none" && (
-                <p className="max-w-xl text-[14px] leading-relaxed text-ink/55">
-                  {LANE_LEDE[key]}
-                </p>
-              )}
-            </div>
-            <div>
-              {rows.map((s) => (
-                <SavedGuideCard key={s.guideId} saved={s} />
-              ))}
-            </div>
-          </section>
-        ))}
-        </div>
-      </SavedGuidesShell>
-    </div>
-  );
-}
-
-// Shell wraps the populated state — header + sort + content. Loading and
-// empty states render their own headers inline (so the empty headline can
-// own the moment instead of competing with a second title).
-function SavedGuidesShell({
-  saved,
-  sort,
-  onSortChange,
-  children,
-}: {
-  saved: SavedGuide[];
-  sort: Sort;
-  onSortChange: (v: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <>
       <div className="mb-12">
         <WorkspacePageHeader
           eyebrow="Saved guides"
@@ -217,20 +169,87 @@ function SavedGuidesShell({
             </>
           }
           lede={`${saved.length} ${saved.length === 1 ? "guide" : "guides"} you've bookmarked from Career Compass.`}
-          actions={
-            <Select value={sort} onValueChange={onSortChange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent">Recently saved</SelectItem>
-                <SelectItem value="score">Strongest match first</SelectItem>
-              </SelectContent>
-            </Select>
-          }
         />
       </div>
-      {children}
-    </>
+
+      {/* Controls row - mirrors /career-guides: eyebrow + pill buttons on
+          the left, count on the right. Replaces v1's Select dropdown so
+          the workspace catalogue reads with the same vocabulary as the
+          public catalogue. */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.15, ease }}
+        className="flex items-center justify-between gap-4"
+      >
+        <div className="flex items-center gap-3">
+          <p className={eyebrowCls}>Sort</p>
+          <div className="flex gap-1.5">
+            {SORT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setSort(opt.value)}
+                className={`rounded-pill border px-3 py-1.5 text-[12px] tracking-wide transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/10 focus-visible:ring-offset-2 ${
+                  sort === opt.value
+                    ? "border-ink bg-ink text-paper"
+                    : "border-hairline text-body hover:border-hairline-strong hover:text-ink"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <span className="text-[12px] text-mute">
+          {saved.length} {saved.length === 1 ? "guide" : "guides"}
+        </span>
+      </motion.div>
+
+      {/* List - each lane owns its own hairline so the lane change reads
+          as a chapter break, but the eyebrow stays quiet (10px / 0.18em)
+          so it doesn't compete with the row titles. The full type-headline
+          heading style works on /career-guides because each section has a
+          dense card grid; here rows are themselves headline-weight, so a
+          big lane heading would read as a wall. */}
+      <div className="mt-10 space-y-12 sm:space-y-16">
+        {sections.map(({ key, rows }, idx) => (
+          <motion.section
+            key={key}
+            initial={{ opacity: 0, y: 6 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{
+              duration: 0.45,
+              delay: Math.min(idx * 0.04, 0.16),
+              ease,
+            }}
+          >
+            <header className="mb-2 max-w-xl border-t border-hairline pt-8">
+              <p className={eyebrowCls}>
+                {key === "none" ? "Unsorted" : LANE_NAME[key]}
+                <span aria-hidden className="mx-2 text-mute/50">
+                  ·
+                </span>
+                <span className="text-mute/80">
+                  {rows.length} {rows.length === 1 ? "guide" : "guides"}
+                </span>
+              </p>
+              {key !== "none" && (
+                <p className="mt-2 max-w-prose text-[14px] leading-relaxed text-ink/55">
+                  {LANE_LEDE[key]}
+                </p>
+              )}
+            </header>
+            <div>
+              {rows.map((s) => (
+                <SavedGuideCard key={s.guideId} saved={s} />
+              ))}
+            </div>
+          </motion.section>
+        ))}
+      </div>
+    </div>
   );
 }

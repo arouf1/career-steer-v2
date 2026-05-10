@@ -4,7 +4,7 @@
 // so the page stays server-rendered and crawlable. Free-text typing debounces
 // (cheap-but-not-free Convex query); city selection is discrete so it applies
 // immediately. URL is updated via router.replace to avoid polluting history
-// with intermediate keystroke states — back-button restores the last
+// with intermediate keystroke states, back-button restores the last
 // deliberately-navigated state (e.g. clicking pagination), not every typed char.
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -59,7 +59,7 @@ export function JobsFiltersBar({ initialQ, initialCity }: Props) {
   );
 
   // Debounce free-text query changes. City is included in deps so the
-  // captured closure stays fresh — when both q and city change in quick
+  // captured closure stays fresh, when both q and city change in quick
   // succession, the timer fires with the latest values rather than reverting
   // to a stale snapshot. Redundant firings no-op via lastAppliedRef.
   useEffect(() => {
@@ -71,7 +71,7 @@ export function JobsFiltersBar({ initialQ, initialCity }: Props) {
 
   const handleCityChange = (next: string | null) => {
     setCity(next);
-    // Combobox selection is a discrete event — apply without waiting for the
+    // Combobox selection is a discrete event, apply without waiting for the
     // debounce so the result update feels instant.
     apply(q.trim(), next?.trim() ?? "");
   };

@@ -52,7 +52,7 @@ export function OutreachDraftDrawer({ person, onClose }: Props) {
   );
 
   // Lock body scroll while the drawer is open. The simple
-  // `body { overflow: hidden }` lock isn't enough on iOS Safari —
+  // `body { overflow: hidden }` lock isn't enough on iOS Safari -
   // the browser still transitions its URL bar in response to inner
   // scrolls, which re-anchors `position: fixed` elements (the drawer)
   // to a different visual viewport mid-session and cuts off the
@@ -61,7 +61,7 @@ export function OutreachDraftDrawer({ person, onClose }: Props) {
   // scrollY. Safari reads that as "the page isn't scrolling," so it
   // stops transitioning its URL bar entirely, the visual viewport
   // stays stable, and the drawer's footer stays where it should.
-  // (Same pattern as MobileCardSheet — see memory entry
+  // (Same pattern as MobileCardSheet, see memory entry
   // `feedback_ios_sheet_pattern.md`.)
   useEffect(() => {
     const scrollY = window.scrollY;
@@ -94,7 +94,7 @@ export function OutreachDraftDrawer({ person, onClose }: Props) {
   }, [onClose]);
 
   // Auto-resize the textarea as content grows. With the intent picker
-  // collapsed there's plenty of room — only the drawer's outer scroll
+  // collapsed there's plenty of room, only the drawer's outer scroll
   // container should take over for unusually long drafts.
   useEffect(() => {
     const el = textareaRef.current;
@@ -116,7 +116,7 @@ export function OutreachDraftDrawer({ person, onClose }: Props) {
       setTimeout(() => setCopied(false), 2200);
     } catch {
       // Most browsers permit clipboard writes from a click; rare failure
-      // surfaces as the button not flashing "Copied" — acceptable.
+      // surfaces as the button not flashing "Copied", acceptable.
     }
   };
 
@@ -175,7 +175,7 @@ export function OutreachDraftDrawer({ person, onClose }: Props) {
                 <p className="mt-1 truncate text-[14px] font-medium leading-tight text-ink">
                   {selectedIntent.label}
                   <span className="ml-2 font-normal text-mute">
-                    — {selectedIntent.hint}
+                   , {selectedIntent.hint}
                   </span>
                 </p>
               </div>
@@ -315,7 +315,7 @@ export function OutreachDraftDrawer({ person, onClose }: Props) {
             {copied ? (
               <>
                 <Check className="h-4 w-4" aria-hidden strokeWidth={1.75} />
-                Copied — opening LinkedIn
+                Copied, opening LinkedIn
               </>
             ) : (
               <>

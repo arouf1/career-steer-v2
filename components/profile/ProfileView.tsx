@@ -71,7 +71,7 @@ export function ProfileView({ profile }: Props) {
   const summary = profile.summary ?? null;
 
   // Dateline segments
-  // profiles table has no explicit updatedAt — parsedAt tracks when the CV
+  // profiles table has no explicit updatedAt, parsedAt tracks when the CV
   // was last parsed, which is the closest proxy for "last updated".
   const datelineSegments: string[] = [];
   datelineSegments.push(`Joined ${formatJoinedDate(profile._creationTime)}`);
@@ -188,9 +188,9 @@ export function ProfileView({ profile }: Props) {
                     {[
                       entry.company,
                       entry.startDate
-                        ? `${formatYear(entry.startDate)} – ${entry.endDate ? formatYear(entry.endDate) : "Present"}`
+                        ? `${formatYear(entry.startDate)} - ${entry.endDate ? formatYear(entry.endDate) : "Present"}`
                         : entry.endDate
-                          ? `– ${formatYear(entry.endDate)}`
+                          ? `- ${formatYear(entry.endDate)}`
                           : null,
                     ]
                       .filter(Boolean)
@@ -225,7 +225,7 @@ export function ProfileView({ profile }: Props) {
                 )}
                 {(entry.startDate || entry.endDate) && (
                   <p className="type-caption mt-0.5 text-mute">
-                    {entry.startDate ?? "—"} &ndash; {entry.endDate ?? "—"}
+                    {entry.startDate ?? "-"} &ndash; {entry.endDate ?? "-"}
                   </p>
                 )}
               </li>

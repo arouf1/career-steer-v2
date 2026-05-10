@@ -12,7 +12,7 @@ import {
 // Host stays the same across every guide so users learn Alice's voice.
 // The voice id is reserved in voiceCatalog.ts and structurally excluded
 // from GUEST_VOICE_POOL, so a future host swap is a one-line change to
-// HOST_VOICE_ID over there — no risk of the guest pool accidentally
+// HOST_VOICE_ID over there, no risk of the guest pool accidentally
 // containing the host.
 export const HOST = {
   name: "Alice Clements",
@@ -28,7 +28,7 @@ export type Gender = "female" | "male";
 export type PersonaEnergy = "measured" | "animated" | "reserved" | "expressive";
 
 // Structural subset of PersonaTraits the picker actually reads. Any
-// PersonaTraits value satisfies this — callers pass `personaTraits`
+// PersonaTraits value satisfies this, callers pass `personaTraits`
 // directly and TypeScript narrows accordingly.
 export type PersonaForVoiceMatch = {
   speakingStyle: { energy: PersonaEnergy };
@@ -37,7 +37,7 @@ export type PersonaForVoiceMatch = {
 
 // Map a persona to the styles the picker should bias toward, in priority
 // order. preferred[0] is the dominant fit, preferred[1] is the secondary
-// fit. Two slots is enough — beyond that the bias becomes uniform noise
+// fit. Two slots is enough, beyond that the bias becomes uniform noise
 // and we lose the point of having style buckets at all.
 //
 // Energy is the dominant signal because it's how the voice will actually
@@ -77,8 +77,8 @@ function preferredStyles(
   }
 }
 
-// Sampling weights. Primary fit dominates without being deterministic —
-// roughly 4x more likely than a random voice — so two consecutive guests
+// Sampling weights. Primary fit dominates without being deterministic -
+// roughly 4x more likely than a random voice, so two consecutive guests
 // in the same bucket still occasionally land on different styles.
 const PRIMARY_WEIGHT = 4;
 const SECONDARY_WEIGHT = 2;
@@ -105,7 +105,7 @@ function weightFor(
 //
 // `gender` is what the script LLM decided the guest should be. The pool
 // is gender-correct per voiceCatalog.ts, so the audible voice always
-// matches the cast guest's stated gender — that was the bug this whole
+// matches the cast guest's stated gender, that was the bug this whole
 // refactor is fixing.
 export function pickGuestVoice(
   gender: Gender,
@@ -137,13 +137,13 @@ export function pickGuestVoice(
     r -= weights[i];
     if (r <= 0) return pool[i].id;
   }
-  // Numerical safety net — last weight could be picked if r is exactly 0
+  // Numerical safety net, last weight could be picked if r is exactly 0
   // due to floating-point rounding.
   return pool[pool.length - 1].id;
 }
 
 // Re-export the catalog tuples for callers that want to introspect (e.g.
 // admin tooling, future "preview voice" UIs). Most callers should not
-// need these — pickGuestVoice + HOST cover the normal path.
+// need these, pickGuestVoice + HOST cover the normal path.
 export const FEMALE_VOICES = GUEST_VOICE_POOL.filter((v) => v.gender === "female");
 export const MALE_VOICES = GUEST_VOICE_POOL.filter((v) => v.gender === "male");

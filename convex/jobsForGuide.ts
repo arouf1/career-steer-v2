@@ -5,12 +5,12 @@
 //     ladder (50 km radius → country → anywhere), hydrates company name,
 //     bakes in the fit tier when the viewer is signed-in with a profile
 //     embedding, and returns JobResult-shaped rows that JobCardRow can
-//     render directly — visual parity with /jobs/listing and
+//     render directly, visual parity with /jobs/listing and
 //     /workspace/jobs.
 //
 //   - searchLive(action): rate-limited trigger that fans out to the public
 //     jobSearch.search action so signed-in users can fill thin caches. Two
-//     limits via the existing rate_limits table — per (user, archetype) per
+//     limits via the existing rate_limits table, per (user, archetype) per
 //     hour, and per user per day.
 //
 // Spec: docs/superpowers/specs/2026-05-06-career-guide-jobs-plug-design.md
@@ -29,7 +29,7 @@ import { loadProfileAndJobVectors } from "./lib/jobFit";
 import { cosineSim } from "./lib/discoverScoring";
 import { tryConsumeRateLimit } from "./lib/rateLimit";
 
-// Tunables — see "Open questions / tunables" in the spec for context.
+// Tunables, see "Open questions / tunables" in the spec for context.
 const RADIUS_KM = 50;
 const MAX_LADDER_CANDIDATES = 200;
 
@@ -46,7 +46,7 @@ const PER_USER_PER_DAY = 20;
 
 // ── forGuide ──────────────────────────────────────────────────────────────
 
-// JobResult-shaped — matches the projection in jobPostings.searchCache and
+// JobResult-shaped, matches the projection in jobPostings.searchCache and
 // the action return shape in jobSearch.search. Kept in lockstep so that
 // JobCardRow renders both surfaces identically without an adapter.
 const fitTierValidator = v.union(
@@ -134,7 +134,7 @@ export const forGuide = query({
       RADIUS_KM,
     );
 
-    // Fit tiers — only for signed-in viewers with a profile embedding. Falls
+    // Fit tiers, only for signed-in viewers with a profile embedding. Falls
     // back to fitTier=null for everyone else (anonymous, signed-out, signed
     // in without a profile, or a profile that hasn't been embedded yet).
     const identity = await ctx.auth.getUserIdentity();

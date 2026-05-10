@@ -64,7 +64,7 @@ export function CareerGuidesIndexClient({
   // different value on hydration). The first effect after mount reads
   // localStorage and applies any stored preference, then later changes
   // are persisted on every change.
-  // "ladder" is the editorial default — it's the framing the rest of
+  // "ladder" is the editorial default, it's the framing the rest of
   // the product (Career Compass, guide pages) builds on, so the
   // catalogue lands you in the same mental model.
   const [sort, setSort] = useState<SortOption>("ladder");
@@ -107,7 +107,7 @@ export function CareerGuidesIndexClient({
   const [generating, setGenerating] = useState(false);
   const lastValidatedRef = useRef<string>("");
 
-  // Reset validation synchronously when search changes — adjust-during-render.
+  // Reset validation synchronously when search changes, adjust-during-render.
   const [lastSearch, setLastSearch] = useState(search);
   if (search !== lastSearch) {
     setLastSearch(search);
@@ -335,7 +335,7 @@ export function CareerGuidesIndexClient({
                 [
                   { value: "ladder", label: "By ladder" },
                   { value: "newest", label: "Newest" },
-                  { value: "alphabetical", label: "A – Z" },
+                  { value: "alphabetical", label: "A - Z" },
                 ] as const
               ).map((opt) => (
                 <button
@@ -509,7 +509,7 @@ function NoResultsBlock({
             <p className="text-[15px] leading-relaxed text-mute">
               Checking if &ldquo;
               <span className="font-medium text-ink">{search}</span>
-              &rdquo; is a recognized career
+              &rdquo; is a recognised career
               <CheckingDots />
             </p>
           </motion.div>

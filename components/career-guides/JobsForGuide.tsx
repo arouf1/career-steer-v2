@@ -160,7 +160,7 @@ export function JobsForGuide({
   }, [searchLive, guideSlug, searchCity, searchCountry]);
 
   // Auto-fire live search when a signed-in user scrolls the section into
-  // view AND the cache doesn't have anything in their actual radius —
+  // view AND the cache doesn't have anything in their actual radius -
   // either entirely empty, or only country / anywhere fallbacks. Pulls
   // location-relevant postings into the cache as a side effect; existing
   // fallback cards stay visible until the new ones land and the ladder
@@ -168,7 +168,7 @@ export function JobsForGuide({
   //
   // Single-shot per (guide-page, mount). Bounded cross-mount by the
   // existing rate-limit on searchLive (5/archetype/hour, 20/user/day).
-  // Suppressed when the viewer has no resolvable location — firing
+  // Suppressed when the viewer has no resolvable location, firing
   // without one returns SearchAPI's geographic default (US-centric).
   const emptyRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -178,12 +178,12 @@ export function JobsForGuide({
     if (!isSignedIn) return;
     if (!data) return;
     if (autoFiredRef.current || autoSearchAttempted) return;
-    // profileGeo === undefined is "still loading" — wait.
+    // profileGeo === undefined is "still loading", wait.
     if (profileGeo === undefined) return;
     // No usable location at all → don't auto-fire. User can still click
     // the manual button if they want.
     if (!searchCity && !searchCountry) return;
-    // Skip when the cache already has results in the viewer's radius —
+    // Skip when the cache already has results in the viewer's radius -
     // the ladder is doing its job, no need to spend SearchAPI quota.
     if (data.jobs.length > 0 && data.ladderHit === "radius") return;
 
@@ -213,7 +213,7 @@ export function JobsForGuide({
   ]);
 
   if (!clerkLoaded || data === undefined) {
-    // The header already carries the guide title and the eyebrow — they're
+    // The header already carries the guide title and the eyebrow, they're
     // known synchronously from props. Render those at full fidelity and let
     // the body slot stay quiet until the live query lands. No pulsing
     // rectangles, no ghost cards: the message under the headline does the
@@ -372,7 +372,7 @@ export function JobsForGuide({
 }
 
 // Section shell mirrors RelatedGuides exactly so the two paired editorial
-// blocks stack with consistent rhythm — same width, same eyebrow→headline
+// blocks stack with consistent rhythm, same width, same eyebrow→headline
 // hierarchy, same hairline top-border. Inner content rail widens to
 // max-w-5xl because JobCardRow's three-zone layout needs the room.
 const Section = forwardRef<
@@ -428,6 +428,6 @@ const Section = forwardRef<
   );
 });
 
-// Suppress unused-import lint for the preserved Id type — exported in case
+// Suppress unused-import lint for the preserved Id type, exported in case
 // callers want to type their own helpers around the same shape later.
 export type { Id };

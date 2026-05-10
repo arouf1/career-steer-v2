@@ -23,7 +23,7 @@
 }
 
 @theme inline {
-  /* Color palette — Warm Sunset (ported from v1). Hue 30–35 cream + warm brown ink. */
+  /* Color palette. Warm Sunset (ported from v1). Hue 30-35 cream + warm brown ink. */
   --color-paper: hsl(35 30% 97%);
   --color-paper-raised: hsl(35 25% 94%);
   --color-paper-lifted: hsl(35 30% 99%);
@@ -35,7 +35,7 @@
   --color-hairline: hsl(35 18% 86%);
   --color-hairline-strong: hsl(35 18% 80%);
 
-  /* shadcn surface tokens — mapped onto the warm-sunset palette so primitives
+  /* shadcn surface tokens, mapped onto the warm-sunset palette so primitives
      (Popover, HoverCard, DropdownMenu, ContextMenu, etc.) inherit the brand
      surface instead of falling through to transparent. */
   --color-popover: hsl(35 30% 99%);             /* matches --color-paper-lifted */
@@ -43,17 +43,17 @@
 
   /* Accent maps to a warm-paper surface tone. shadcn primitives consume this
      as their default hover/selection background (Skeleton, Button ghost,
-     calendar range, command/select focus, etc.) — so it must read as a
+     calendar range, command/select focus, etc.), so it must read as a
      neutral lift, not a brand colour. */
   --color-accent: hsl(35 25% 94%);              /* matches --color-paper-raised */
   --color-accent-foreground: oklch(0.25 0.015 30); /* matches --color-ink */
 
-  /* State colors — used per-surface only, never in the resting palette. */
+  /* State colors, used per-surface only, never in the resting palette. */
   --color-state-error: oklch(0.65 0.18 20);
   --color-state-success: oklch(0.58 0.15 140);
   --color-state-warning: oklch(0.7 0.14 75);
 
-  /* Font families — wired to next/font CSS variables in app/layout.tsx. */
+  /* Font families, wired to next/font CSS variables in app/layout.tsx. */
   --font-serif: var(--font-eb-garamond), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-figtree), system-ui, -apple-system, sans-serif;
   --font-logo: "Vogun", Georgia, "Times New Roman", serif;
@@ -77,11 +77,11 @@
 /* No page-level horizontal scroll, ever. Browser anchor navigation,
    scrollIntoView with implicit inline:"nearest", and stray sub-pixel
    overflow can all kick the page sideways otherwise. The product never
-   uses horizontal page scroll — content that genuinely scrolls
+   uses horizontal page scroll, content that genuinely scrolls
    horizontally (Career Compass canvas, the ladder anchor strip) lives
    inside its own overflow-x container.
 
-   `overflow-x: clip` (not `hidden`) is deliberate — `hidden` makes the
+   `overflow-x: clip` (not `hidden`) is deliberate, `hidden` makes the
    element a scroll container, which forces the browser to render a
    secondary vertical scrollbar inside body and disconnects the body
    from the html scroll context. `clip` simply truncates overflow without
@@ -154,7 +154,7 @@ body {
   }
 
   /* Used on workspace content containers to soften the swap from skeleton
-     to populated state. Single keyframe, simple opacity ramp — calm beats
+     to populated state. Single keyframe, simple opacity ramp, calm beats
      clever. Disabled under prefers-reduced-motion via the @media query
      below; never animates on subsequent re-renders because keyframe
      animations only fire on mount. */
@@ -175,7 +175,7 @@ body {
     }
   }
 
-  /* Skeleton placeholder — pulsing tonal block. Tinted toward ink rather
+  /* Skeleton placeholder, pulsing tonal block. Tinted toward ink rather
      than chrome grey so it sits on warm paper without clashing. */
   .skeleton-block {
     background-color: oklch(22% 0.015 70 / 0.06);

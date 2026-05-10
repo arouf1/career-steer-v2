@@ -16,7 +16,7 @@ type Props = {
 /**
  * FeatherIcon driven on a loop via its imperative handle. The icon's
  * animate variant ends at rest (rotate/x/y all return to 0), so restarting
- * mid-cycle would be jarring — we wait the full 2s breathing window before
+ * mid-cycle would be jarring, we wait the full 2s breathing window before
  * triggering the next cycle.
  */
 export function LoopingFeather({

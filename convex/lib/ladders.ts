@@ -1,5 +1,5 @@
 // Pure helpers for the career_ladders + career_guide_ladder_positions tables.
-// No DB access — keep this file safe to import from queries, mutations, and
+// No DB access, keep this file safe to import from queries, mutations, and
 // actions alike, and to unit-test without convex-test scaffolding.
 
 export type Tier =
@@ -31,7 +31,7 @@ export type LadderFamily =
   | "creative"
   | "other";
 
-// Canonical altitude order. Index = "altitude" — higher index means higher
+// Canonical altitude order. Index = "altitude", higher index means higher
 // scope. Used for cross-tier comparisons (Linear lane = candidate tier above
 // user tier; Earlier lane = candidate tier below; Adjacent = peer tier on a
 // different ladder).
@@ -84,7 +84,7 @@ export function isPeerTier(candidate: Tier, reference: Tier): boolean {
 // `typicalCareerStage` filled in. Returns null when the stage doesn't map
 // cleanly (the classifier is then the sole source of truth for that guide).
 //
-// Note: the legacy `typicalCareerStage` had no concept of "head" — it
+// Note: the legacy `typicalCareerStage` had no concept of "head", it
 // collapsed Head, Director, VP into the broader categories. The classifier
 // disambiguates from the title text.
 export type LegacyCareerStage =

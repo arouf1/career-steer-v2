@@ -2,12 +2,12 @@ import { z } from "zod";
 
 export const CONTENT_MODEL_ID = "google/gemini-3.1-pro-preview";
 export const JUDGE_MODEL_ID = "google/gemini-2.5-flash";
-// Gemini 3 Flash — used for short-form, latency-sensitive surfaces where the
+// Gemini 3 Flash, used for short-form, latency-sensitive surfaces where the
 // user is actively waiting (Go Deeper Q&A expansions). The full pro-tier
 // model is reserved for the heavier upfront guide generation.
 export const BRANCH_MODEL_ID = "google/gemini-3-flash-preview";
 
-// Homepage search validation — single boolean + a normalized title. Latency
+// Homepage search validation, single boolean + a normalized title. Latency
 // matters more than nuance, and the schema is trivial, so flash is the right
 // fit. Kept separate from BRANCH so the two surfaces can diverge later.
 export const VALIDATION_MODEL_ID = "google/gemini-3-flash-preview";
@@ -28,7 +28,7 @@ Input: "${career}"
 
 Accept full, specific job titles ("marine biologist", "primary school teacher", "plumber") AND common abbreviations or short-form variants of real titles.
 
-CRITICAL — normalizedTitle must always be the FULL, expanded, canonical job title in proper title case. NEVER return an acronym, initialism, or short form as the canonical title. Always expand:
+CRITICAL, normalizedTitle must always be the FULL, expanded, canonical job title in proper title case. NEVER return an acronym, initialism, or short form as the canonical title. Always expand:
 - "SWE" → "Software Engineer"
 - "PM" → "Product Manager" (default; "Project Manager" only if industry context clearly suggests it)
 - "CPO" → "Chief Product Officer" (default; "Chief People Officer" if HR/people context is explicit; if truly ambiguous, prefer the SaaS / product-industry meaning)
@@ -49,7 +49,7 @@ CRITICAL — normalizedTitle must always be the FULL, expanded, canonical job ti
 - "SVP X" → "Senior Vice President of X"
 - "FP&A Manager" → "Financial Planning and Analysis Manager"
 - "QA Engineer" → "Quality Assurance Engineer"
-- "DevOps Engineer" → "DevOps Engineer" (already canonical — no expansion needed for established compound words)
+- "DevOps Engineer" → "DevOps Engineer" (already canonical, no expansion needed for established compound words)
 - "UX Designer" → "User Experience Designer"
 - "UI Designer" → "User Interface Designer"
 - "SDR" → "Sales Development Representative"
@@ -59,7 +59,7 @@ CRITICAL — normalizedTitle must always be the FULL, expanded, canonical job ti
 - "PMM" → "Product Marketing Manager"
 - "SRE" → "Site Reliability Engineer"
 - "ML Engineer" → "Machine Learning Engineer"
-- "AI Engineer" → "AI Engineer" (acronym is the canonical industry term — leave AI; do not expand to "Artificial Intelligence Engineer")
+- "AI Engineer" → "AI Engineer" (acronym is the canonical industry term, leave AI; do not expand to "Artificial Intelligence Engineer")
 - "Head of X" stays "Head of X" (already canonical)
 - "Director of X" stays "Director of X" (already canonical)
 
@@ -70,7 +70,7 @@ Reject if any of these apply:
 - The input is a discipline, industry, department, or skill rather than a job ("biology", "finance", "marketing", "javascript").
 - The input is an adjective or modifier with no role attached ("senior", "remote", "freelance").
 - The input is nonsense, offensive, or a random string of characters.
-- **The input is a generic leadership title with no functional or sectoral context.** "Executive Director" alone, "Director" alone, "Manager" alone, "Vice President" alone, "Head" alone, "Lead" alone — all reject. These could mean wildly different things across non-profits, finance, theatre, charity, etc.; without a function or sector the resulting guide would be useless. Hint the user toward a specific form ("Executive Director of a Non-Profit", "Director of Engineering", "Marketing Manager"). The same applies to "Chief Officer" without a domain — accept "Chief Financial Officer" but reject bare "Chief".
+- **The input is a generic leadership title with no functional or sectoral context.** "Executive Director" alone, "Director" alone, "Manager" alone, "Vice President" alone, "Head" alone, "Lead" alone, all reject. These could mean wildly different things across non-profits, finance, theatre, charity, etc.; without a function or sector the resulting guide would be useless. Hint the user toward a specific form ("Executive Director of a Non-Profit", "Director of Engineering", "Marketing Manager"). The same applies to "Chief Officer" without a domain, accept "Chief Financial Officer" but reject bare "Chief".
 
 If the input could plausibly be the start of several different real careers and you cannot tell which the user means, reject it and explain that more detail is needed.
 
@@ -95,7 +95,7 @@ export const buildDedupPrompt = (
 ): string => `
 You are deciding whether a user's career-guide search query refers to the same role as any of the existing guides listed below.
 
-DUPLICATE (return isDuplicate=true) — these refer to the same role:
+DUPLICATE (return isDuplicate=true), these refer to the same role:
 - Acronym variants of the same role: "FP&A Manager" = "Financial Planning & Analysis Manager"; "SWE" = "Software Engineer".
 - Common synonyms / abbreviations of the same role: "Front-End Developer" = "Frontend Engineer".
 - IC-track seniority of the same role (no change in management scope or function):
@@ -103,14 +103,14 @@ DUPLICATE (return isDuplicate=true) — these refer to the same role:
     "Staff Designer" = "Designer";
     "Lead Data Scientist" (IC lead, not a people manager) = "Data Scientist".
 
-NOT a duplicate (return isDuplicate=false) — these are GENUINELY DIFFERENT roles even when they share words:
+NOT a duplicate (return isDuplicate=false), these are GENUINELY DIFFERENT roles even when they share words:
 - Leadership-tier roles vs the IC role they oversee. The leadership role is its own guide; never collapse it into an IC role.
     "Head of Product" is NEVER "Product Manager".
     "Director of Engineering" is NEVER "Software Engineer".
     "VP Marketing" is NEVER "Marketing Manager".
     "Chief Financial Officer" is NEVER "Financial Analyst".
     "Chief Product Officer" is NEVER "Product Manager".
-    "Engineering Manager" is NEVER "Senior Software Engineer" (different track — management vs IC).
+    "Engineering Manager" is NEVER "Senior Software Engineer" (different track, management vs IC).
 - Different functions that happen to share a word:
     "Lead Vocalist" is NOT "Engineering Lead".
     "Account Executive" (sales) is NOT "Account Manager" (post-sale customer success).
@@ -171,7 +171,7 @@ const FollowUpsSchema = z.object({
 });
 export type FollowUps = z.infer<typeof FollowUpsSchema>;
 
-// SEO meta produced inline with content. No bound constraints — Gemini
+// SEO meta produced inline with content. No bound constraints. Gemini
 // rejects them; lengths and counts are encoded in the prompt.
 export const ContentMetaSchema = z.object({
   title: z.string(),
@@ -203,7 +203,7 @@ export const ContentResponseSchema = z.object({
   // Classification of the role's typical career stage. Mirrors the
   // careerStage vocabulary on profile_enrichments minus "transitioning"
   // (guides describe destinations, not transitions). Drives discover-canvas
-  // lane bucketing — see CareerStageSchema below for the canonical rubric.
+  // lane bucketing, see CareerStageSchema below for the canonical rubric.
   typicalCareerStage: z.enum([
     "early-career",
     "mid-career",
@@ -218,7 +218,7 @@ export type ContentResponse = z.infer<typeof ContentResponseSchema>;
 export const buildContentPrompt = (title: string): string => `
 You are writing a public career guide for the role of "${title}".
 
-Write authoritative, well-researched content in British English. The page is a public wiki-style resource and must NOT reference any specific person's background or skills — write as a general career resource for any reader.
+Write authoritative, well-researched content in British English. The page is a public wiki-style resource and must NOT reference any specific person's background or skills, write as a general career resource for any reader.
 
 The page serves both United States and United Kingdom audiences. Some information differs by country (salary, hiring market, qualifications, common job-posting titles); shared information (overview, skills, day-to-day, risks, why consider) applies globally.
 
@@ -229,7 +229,7 @@ Field guidance:
 - typicalSkills: 8 to 12 specific skills, ordered most-important first. Avoid generic soft skills. Must be the same names that appear in typicalSkillsDetail (in the same order).
 - typicalSkillsDetail: the same skills as typicalSkills, each expanded into an object with three fields:
   - name: the skill name (concise, 1 to 5 words; matches the corresponding entry in typicalSkills exactly).
-  - rationale: 1 to 2 sentences (max ~25 words) explaining concretely why this skill matters for the role — what it unlocks day-to-day, what fails without it, or what employers screen for. Be specific to "${title}", not generic. Avoid restating the skill name.
+  - rationale: 1 to 2 sentences (max ~25 words) explaining concretely why this skill matters for the role, what it unlocks day-to-day, what fails without it, or what employers screen for. Be specific to "${title}", not generic. Avoid restating the skill name.
   - tier: "must" for non-negotiable / employer-screened capabilities a candidate cannot get hired without; "nice" for capabilities that strongly differentiate but are not table-stakes. Aim for 4 to 6 must and 3 to 5 nice. Order within each tier from most to least important.
 - dayToDay: 100 to 150 words. Specific and vivid description of a typical working day or week.
 - riskFactors: 3 to 5 honest considerations or challenges someone should know before pursuing this path. Include automation exposure and market volatility where relevant.
@@ -242,7 +242,7 @@ Field guidance:
 - regional.uk.careerOutlook: 100 to 150 words on UK hiring demand, 12-month trend, growth trajectory, UK-specific industry context.
 - regional.uk.learningPath: 5 to 8 sequential steps for entering this career in the UK, with UK-specific qualifications where relevant (chartered status, UK apprenticeships, common UK degree routes, professional bodies).
 - regional.uk.relatedRoles: same as regional.us.relatedRoles but with names as they appear in UK job postings. Same distinctness rule applies.
-- followUps: a "Go Deeper" map of career-discovery questions. The reader is someone considering whether to pursue or pivot into this career — NOT a practitioner looking for tactical execution depth. Every question must serve the question "is this career right for me, and what would entering it actually be like?" Reject any question that sounds like it belongs in a how-to-do-the-job manual (e.g. "How do you resolve technical disputes with developers?", "Which user-experience metrics matter most?", "What tools do practitioners use?"). Accept questions about fit, accessibility, market reality, lifestyle, ceiling, comparisons to adjacent careers, AI/automation risk, and the felt experience of doing the work.
+- followUps: a "Go Deeper" map of career-discovery questions. The reader is someone considering whether to pursue or pivot into this career. NOT a practitioner looking for tactical execution depth. Every question must serve the question "is this career right for me, and what would entering it actually be like?" Reject any question that sounds like it belongs in a how-to-do-the-job manual (e.g. "How do you resolve technical disputes with developers?", "Which user-experience metrics matter most?", "What tools do practitioners use?"). Accept questions about fit, accessibility, market reality, lifestyle, ceiling, comparisons to adjacent careers, AI/automation risk, and the felt experience of doing the work.
 
   For EACH of these seven section keys produce 4 to 5 questions: "overview", "day-to-day", "outlook-us", "outlook-uk", "learning-path-us", "learning-path-uk", "considerations". Every key must be present and non-empty. Each question is a single sentence ending with a question mark, max 90 characters, in the same warm voice as the rest of the guide.
 
@@ -255,13 +255,13 @@ Field guidance:
 
   Examples of the right voice for "${title}": "Could someone without a marketing background actually break in?", "How exposed is this role to AI replacing the basic work?", "Does this job get more or less interesting as you get senior?". Examples of the WRONG voice: "Which on-page ranking factors matter most?", "How do practitioners handle technical SEO disputes?", "What is the typical fringe-fitting calculation?".
 
-  Skip "skills" and "related" sections — those already function as drill-downs.
+  Skip "skills" and "related" sections, those already function as drill-downs.
 - meta: SEO meta tags for the page. Produce all four fields in the same British English voice as the rest of the guide.
   - meta.title: 50 to 60 characters total. Lead with the role and a high-CTR benefit phrase. Do NOT append "career guide" or the site name (the layout adds a site suffix automatically). Use a SERP-CTR pattern such as "Park Ranger Career: Salary, Skills, How to Become One" or "How to Become a Cardiologist: Routes, Pay, Outlook". Title-case the first word and proper nouns.
-  - meta.description: 150 to 160 characters. A single complete sentence — no mid-cut, no ellipsis. Lead with what the role does. Ground a number where natural (a representative salary band or a hiring trend signal). Do not start with "Discover" or "Learn about" — pick a concrete, declarative opening.
+  - meta.description: 150 to 160 characters. A single complete sentence, no mid-cut, no ellipsis. Lead with what the role does. Ground a number where natural (a representative salary band or a hiring trend signal). Do not start with "Discover" or "Learn about", pick a concrete, declarative opening.
   - meta.keywords: 8 to 12 short search-intent phrases. Mix head terms (the role title alone, common variants) with tail terms ("how to become a ${title} uk", "${title} salary us", "${title} career path"). Lower-case, no quotes.
   - meta.socialAlt: 1 to 2 sentences describing the role for the OG/Twitter image's alt attribute. Plain English, ends with a full stop. Used by screen readers and platforms that strip the image.
-- typicalCareerStage: classify the PRIMARY level this guide describes — the level a reader would first encounter the role at, not the full trajectory. Pick ONE of:
+- typicalCareerStage: classify the PRIMARY level this guide describes, the level a reader would first encounter the role at, not the full trajectory. Pick ONE of:
   - "early-career": junior / associate / 0-2 years experience expected. Trainee, apprentice, junior X.
   - "mid-career": individual contributor with 2-7 years experience. Plain titles like "Software Engineer", "Data Engineer", "Therapist", "Nurse", "Teacher".
   - "senior-IC": individual contributor with 7+ years experience, no direct reports. Senior X / Staff X / Principal X / Lead X (when not a people-leader title).
@@ -363,14 +363,14 @@ export function buildEnrichmentQuery(
 //
 // Used when Exa retrieval succeeds for ≥4 enrichment tasks before content
 // generation. The model writes prose grounded in fresh research and returns
-// `usedSources` — per-field 0-based indexes into the per-field source list
+// `usedSources`, per-field 0-based indexes into the per-field source list
 // it actually drew from. The Convex action then materialises citations
 // directly from those indexes, so the LLM never invents URLs.
 //
 // Schema-key shape: kebab-case keys (mirrors FollowUpsSchema's known-good
 // pattern). Dotted fieldPaths like "regional.us.salary" map to safe keys
 // like "salary-us" via FIELD_PATH_TO_USED_KEY. Per project memory: no
-// .int/.min/.max/array-length constraints — Gemini rejects them.
+// .int/.min/.max/array-length constraints. Gemini rejects them.
 
 export const FIELD_PATH_TO_USED_KEY: Record<string, string> = {
   "regional.us.salary": "salary-us",
@@ -416,14 +416,14 @@ export function buildGroundedContentPrompt(
     const research = exaByField.get(task.fieldPath);
     if (!research || research.sources.length === 0) {
       researchBlocks.push(
-        `### ${task.fieldPath} (usedSources key: "${usedKey}")\n(no fresh research available — write from your own knowledge and return [] for usedSources["${usedKey}"])`,
+        `### ${task.fieldPath} (usedSources key: "${usedKey}")\n(no fresh research available, write from your own knowledge and return [] for usedSources["${usedKey}"])`,
       );
       continue;
     }
     const sourceList = research.sources
       .map(
         (c, i) =>
-          `[${i}] ${c.title} — ${c.url}${c.publisher ? ` (${c.publisher})` : ""}`,
+          `[${i}] ${c.title}, ${c.url}${c.publisher ? ` (${c.publisher})` : ""}`,
       )
       .join("\n");
     researchBlocks.push(
@@ -438,7 +438,7 @@ Rules:
 - For every grounded field with fresh research, write that field's content from the research below. Do not contradict the cited sources. If your prior knowledge disagrees with the sources, prefer the sources.
 - For grounded fields where research is empty, fall back to your own knowledge for that one field and return an empty array for its key in "usedSources".
 - Do NOT invent URLs, publishers, or citations. The Convex layer materialises citations from the indexes you return.
-- Return a top-level "usedSources" object with ALL eight required keys: "salary-us", "salary-uk", "career-outlook-us", "career-outlook-uk", "learning-path-us", "learning-path-uk", "typical-skills", "risk-factors". Each value is a list of 0-based indexes into THAT field's source list — only the indexes you actually drew from. Use [] if you used none.
+- Return a top-level "usedSources" object with ALL eight required keys: "salary-us", "salary-uk", "career-outlook-us", "career-outlook-uk", "learning-path-us", "learning-path-uk", "typical-skills", "risk-factors". Each value is a list of 0-based indexes into THAT field's source list, only the indexes you actually drew from. Use [] if you used none.
 - Source indexes are LOCAL to each field. "salary-us"'s [0] is unrelated to "salary-uk"'s [0].
 
 GROUNDED FIELDS:
@@ -447,7 +447,7 @@ ${researchBlocks.join("\n\n")}
 
 ────────────────────────────────────────
 
-Now write the rest of the guide as instructed below. Narrative fields (overview, dayToDay, whyConsider, relatedRoles, followUps) are not grounded and should be written from your own knowledge in the same warm, authoritative voice — no usedSources entry required for them.
+Now write the rest of the guide as instructed below. Narrative fields (overview, dayToDay, whyConsider, relatedRoles, followUps) are not grounded and should be written from your own knowledge in the same warm, authoritative voice, no usedSources entry required for them.
 
 `;
 
@@ -458,7 +458,7 @@ Now write the rest of the guide as instructed below. Narrative fields (overview,
 //
 // Used to retroactively produce content.meta for guides created before the
 // SEO meta fields existed in ContentResponseSchema. Cheaper than
-// regenerating the whole guide — feeds existing content as input and asks
+// regenerating the whole guide, feeds existing content as input and asks
 // for just the four meta fields.
 
 export const MetaOnlySchema = z.object({
@@ -508,7 +508,7 @@ ${args.riskFactors.join("; ")}
 
 Produce the meta object using these rules:
 - meta.title: 50 to 60 characters total. Lead with the role and a high-CTR benefit phrase. Do NOT append "career guide" or the site name (the layout adds a site suffix automatically). Use a SERP-CTR pattern such as "Park Ranger Career: Salary, Skills, How to Become One" or "How to Become a Cardiologist: Routes, Pay, Outlook". Title-case the first word and proper nouns.
-- meta.description: 150 to 160 characters. A single complete sentence — no mid-cut, no ellipsis. Lead with what the role does. Ground a number where natural (use the existing salary or outlook content above). Do not start with "Discover" or "Learn about" — pick a concrete, declarative opening.
+- meta.description: 150 to 160 characters. A single complete sentence, no mid-cut, no ellipsis. Lead with what the role does. Ground a number where natural (use the existing salary or outlook content above). Do not start with "Discover" or "Learn about", pick a concrete, declarative opening.
 - meta.keywords: 8 to 12 short search-intent phrases. Mix head terms (the role title alone, common variants) with tail terms ("how to become a ${args.title} uk", "${args.title} salary us", "${args.title} career path"). Lower-case, no quotes.
 - meta.socialAlt: 1 to 2 sentences describing the role for the OG/Twitter image's alt attribute. Plain English, ends with a full stop.
 
@@ -516,7 +516,7 @@ British English. Avoid em dashes and en dashes. No emoji.
 `.trim();
 }
 
-// Salary judge — compares stored vs Exa-grounded salary, may patch on
+// Salary judge, compares stored vs Exa-grounded salary, may patch on
 // material delta. Per project memory: Gemini structured output cannot
 // have .int/.min/.max/array-length constraints.
 
@@ -603,7 +603,7 @@ export function buildFollowUpsBackfillPrompt(args: {
   const numbered = (xs: string[]) =>
     xs.map((x, i) => `${i + 1}. ${x}`).join("\n");
   return `
-You are extending a public career guide on "${args.title}" by adding "Go Deeper" follow-up questions. The reader is someone considering whether to pursue or pivot into this career — NOT a practitioner looking for tactical execution depth. Every question must serve "is this career right for me, and what would entering it actually be like?"
+You are extending a public career guide on "${args.title}" by adding "Go Deeper" follow-up questions. The reader is someone considering whether to pursue or pivot into this career. NOT a practitioner looking for tactical execution depth. Every question must serve "is this career right for me, and what would entering it actually be like?"
 
 REJECT any question that belongs in a how-to-do-the-job manual. For "${args.title}", that means rejecting questions like "How do practitioners resolve technical disputes with developers?", "Which on-page ranking factors matter most?", "What tools do they use?", "What does a typical fringe-fitting calculation look like?", "How do you measure success post algorithm update?". Those are practitioner-tactics questions; this is a career-discovery surface.
 
@@ -626,16 +626,16 @@ ${args.overview}
 DAY TO DAY
 ${args.dayToDay}
 
-OUTLOOK — UNITED STATES
+OUTLOOK. UNITED STATES
 ${args.outlookUs}
 
-OUTLOOK — UNITED KINGDOM
+OUTLOOK. UNITED KINGDOM
 ${args.outlookUk}
 
-LEARNING PATH — UNITED STATES
+LEARNING PATH. UNITED STATES
 ${numbered(args.learningPathUs)}
 
-LEARNING PATH — UNITED KINGDOM
+LEARNING PATH. UNITED KINGDOM
 ${numbered(args.learningPathUk)}
 
 CONSIDERATIONS
@@ -651,7 +651,7 @@ ${numbered(args.riskFactors)}
 //  - Fact-heavy sections (outlook-*, learning-path-*, considerations): "exa"
 //    mode. Run an Exa search first, then generate with citations.
 
-// Sections that fan out to Exa on first click. Single source of truth —
+// Sections that fan out to Exa on first click. Single source of truth -
 // imported by convex/guideBranches.ts to route the generation flow.
 //
 // As of the citation-everywhere change: ALL Go Deeper sections run through
@@ -670,8 +670,8 @@ export const isFactHeavySection = (_sectionId: string): boolean => true;
 
 // Friendly labels for the section context shown to the model.
 const SECTION_LABELS: Record<string, string> = {
-  overview: "Overview — what the role involves",
-  "day-to-day": "Day to day — what the work actually looks like",
+  overview: "Overview, what the role involves",
+  "day-to-day": "Day to day, what the work actually looks like",
   "outlook-us": "Career outlook in the United States",
   "outlook-uk": "Career outlook in the United Kingdom",
   "learning-path-us": "Learning path in the United States",
@@ -682,7 +682,7 @@ const SECTION_LABELS: Record<string, string> = {
 const formatCitationContext = (citations: Citation[]): string => {
   if (citations.length === 0) return "(no citations attached to parent section)";
   return citations
-    .map((c, i) => `[${i + 1}] ${c.title} — ${c.url}${c.publisher ? ` (${c.publisher})` : ""}`)
+    .map((c, i) => `[${i + 1}] ${c.title}, ${c.url}${c.publisher ? ` (${c.publisher})` : ""}`)
     .join("\n");
 };
 
@@ -755,7 +755,7 @@ export function buildDeepenPromptGrounded(args: {
   const exaList = args.exaSources.length === 0
     ? "(no fresh sources)"
     : args.exaSources
-        .map((c, i) => `[${i}] ${c.title} — ${c.url}${c.publisher ? ` (${c.publisher})` : ""}`)
+        .map((c, i) => `[${i}] ${c.title}, ${c.url}${c.publisher ? ` (${c.publisher})` : ""}`)
         .join("\n");
   return `
 You are extending a public career guide on "${args.guideTitle}" with a fact-grounded "Go Deeper" branch.
@@ -775,7 +775,7 @@ ${formatCitationContext(args.parentCitations)}
 Fresh research from a web search for this specific question:
 ${args.exaAnswer}
 
-Sources for the fresh research (cite by index — these are 0-based and you must return their indexes in citationIndexes):
+Sources for the fresh research (cite by index, these are 0-based and you must return their indexes in citationIndexes):
 ${exaList}
 
 Field guidance:
@@ -847,7 +847,7 @@ export function buildBranchExaQuery(args: {
 // stage. Drives the discover canvas's 4-lane bucketing (next-steps / sideways
 // / earlier-chapters / a-different-chapter) by comparing this against the
 // user's profile_enrichments.careerStage. Vocabulary mirrors the enrichment
-// stage minus "transitioning" — guides describe destinations, not transitions.
+// stage minus "transitioning", guides describe destinations, not transitions.
 //
 // Per project memory `feedback_gemini_structured_output_schema_limits`: the
 // schema avoids constraints (no .min/.max/.int/array-length) so Gemini's
@@ -865,7 +865,7 @@ export const CareerStageSchema = z.object({
 });
 export type CareerStageClassification = z.infer<typeof CareerStageSchema>;
 
-// Flash tier — short-form classification, latency-friendly. Same model
+// Flash tier, short-form classification, latency-friendly. Same model
 // family as VALIDATION/BRANCH for consistency.
 export const CAREER_STAGE_MODEL_ID = "google/gemini-3-flash-preview";
 
@@ -882,7 +882,7 @@ ROLE: ${args.title}
 DAY-TO-DAY: ${args.dayToDay}
 SALARY BANDS: entry=${args.entrySalary ?? "n/a"}, mid=${args.midSalary ?? "n/a"}, senior=${args.seniorSalary ?? "n/a"}
 
-Rubric — what's the PRIMARY level this role describes?
+Rubric, what's the PRIMARY level this role describes?
 - "early-career": junior / associate / 0-2 years experience expected. Trainee, apprentice, junior X.
 - "mid-career": individual contributor with 2-7 years experience. Plain titles like "Software Engineer", "Data Engineer", "Therapist", "Nurse", "Teacher".
 - "senior-IC": individual contributor with 7+ years experience, no direct reports. Senior X / Staff X / Principal X / Lead X (when not a people-leader title).
@@ -890,7 +890,7 @@ Rubric — what's the PRIMARY level this role describes?
 - "director": director / head-of / department lead. 7-15 reports across 1-2 sub-teams.
 - "exec": VP / SVP / C-suite / Chief X Officer / President. Cross-functional executive scope.
 
-Pick ONE classification — the level a generalist reading this guide would FIRST encounter the role at, not the entire career trajectory.`;
+Pick ONE classification, the level a generalist reading this guide would FIRST encounter the role at, not the entire career trajectory.`;
 }
 
 // ── Skills-detail backfill ────────────────────────────────────────────────
@@ -922,11 +922,11 @@ ${args.typicalSkills.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
 Return a typicalSkillsDetail array that:
 - Contains exactly the same names as the input, in the same order. Do not rename, add, remove, merge, or reword any entry. Match each input string verbatim in the "name" field.
-- For each skill, write a rationale of 1 to 2 sentences (max ~25 words) explaining concretely why this skill matters specifically for "${args.title}" — what it unlocks day-to-day, what fails without it, or what employers screen for. Be specific, not generic. Do not restate the skill name as the rationale.
+- For each skill, write a rationale of 1 to 2 sentences (max ~25 words) explaining concretely why this skill matters specifically for "${args.title}", what it unlocks day-to-day, what fails without it, or what employers screen for. Be specific, not generic. Do not restate the skill name as the rationale.
 - Tag each skill with a tier:
   - "must" = non-negotiable / employer-screened capabilities a candidate cannot get hired without.
   - "nice" = capabilities that strongly differentiate but are not table-stakes.
-  - The earlier-listed skills are more likely to be must-haves; later-listed skills are more likely to be nice-to-haves. Use judgment, but aim for 4 to 6 must and 3 to 5 nice across the full list.
+  - The earlier-listed skills are more likely to be must-haves; later-listed skills are more likely to be nice-to-haves. Use judgement, but aim for 4 to 6 must and 3 to 5 nice across the full list.
 
 Style: British English. Avoid em dashes and en dashes. Be concrete and insightful.
 `.trim();

@@ -20,7 +20,7 @@ import {
 // the input as unchanged. Bias toward not surprising the user.
 const MIN_APPLY_CONFIDENCE = 0.85;
 
-// Hard timeout — Flash usually returns in <1s, but a runaway shouldn't
+// Hard timeout. Flash usually returns in <1s, but a runaway shouldn't
 // block the search action's own deadline.
 const RUN_TIMEOUT_MS = 10_000;
 
@@ -41,7 +41,7 @@ export const _lookup = internalQuery({
 // Read-then-insert under Convex's serializable transaction. If a concurrent
 // writer commits first, our commit OCC-conflicts and retries; on retry the
 // read finds the existing row and we return it instead of inserting a
-// duplicate. Layer-2 dedup primitive — guarantees one cached correction
+// duplicate. Layer-2 dedup primitive, guarantees one cached correction
 // per inputNormalized forever. Mirrors titleCanonicalization._writeThrough.
 export const _writeThrough = internalMutation({
   args: {
@@ -115,7 +115,7 @@ export const getOrCreateCorrection = internalAction({
       };
     }
 
-    // Cache lookup — free path.
+    // Cache lookup, free path.
     const hit = await ctx.runQuery(internal.queryCorrection._lookup, {
       inputNormalized,
     });
@@ -150,7 +150,7 @@ export const getOrCreateCorrection = internalAction({
         rawQuery: args.rawQuery,
         err: err instanceof Error ? err.message : String(err),
       });
-      // Fail open — return the input unchanged. Don't cache the failure;
+      // Fail open, return the input unchanged. Don't cache the failure;
       // a transient OpenRouter blip shouldn't lock in a no-correction.
       return {
         corrected: args.rawQuery,

@@ -10,13 +10,13 @@ import type { Doc, Id } from "./_generated/dataModel";
 // Sub-project 6 of the jobs feature. Two crons that flip job_postings.isActive
 // from true → false:
 //
-//   1. Liveness sweep — every 2h, takes oldest-checked active rows, HEADs
+//   1. Liveness sweep, every 2h, takes oldest-checked active rows, HEADs
 //      their apply links, and archives any that 404/410/403/redirect-off-domain.
 //      Mirror of V1's two-stage check (HEAD → Exa LLM verification on
 //      inconclusive). For v1 of this sub-project we ship just stage one;
 //      stage two is a follow-up if the false-archive rate ends up too high.
 //
-//   2. Staleness sweep — daily, archives rows where lastSeenAt is older than
+//   2. Staleness sweep, daily, archives rows where lastSeenAt is older than
 //      the staleness window (45 days). Captures listings that simply rolled
 //      off SearchAPI because the source removed them.
 //
@@ -30,7 +30,7 @@ const LIVENESS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const LIVENESS_REQUEST_TIMEOUT_MS = 8_000;
 
 // HTTP statuses that immediately mean "this listing is gone." Anything else
-// (2xx, redirects within domain, 5xx) is treated as inconclusive — we update
+// (2xx, redirects within domain, 5xx) is treated as inconclusive, we update
 // lastChecked but don't archive.
 const HARD_FAIL_STATUSES = new Set([404, 410]);
 
@@ -119,7 +119,7 @@ export const sweepStalePostings = internalAction({
 export const _listLivenessCandidates = internalQuery({
   args: {},
   handler: async (ctx) => {
-    // by_lastChecked sorts ascending with undefined first — never-checked
+    // by_lastChecked sorts ascending with undefined first, never-checked
     // postings drain first, then oldest-checked. Filter to active only in JS
     // because the index doesn't carry isActive.
     const cutoff = Date.now() - LIVENESS_COOLDOWN_MS;

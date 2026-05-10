@@ -26,11 +26,11 @@ import { VOICE_CATALOG } from "../lib/podcast/voiceCatalog";
 // Gemini 3.1 Pro Preview was returning 200 OK with zero usage and an empty
 // body for some podcast prompts (OpenRouter routing dropped the upstream
 // call before reaching Google). Use the GA Gemini 2.5 Pro for podcast
-// scripts — it's fully released and stable for our prompt sizes.
+// scripts, it's fully released and stable for our prompt sizes.
 const SCRIPT_MODEL_ID = "google/gemini-2.5-pro";
 const SCRIPT_TIMEOUT_MS = 180_000;
 // Stage A (persona traits) is a small structured call (~800 in / ~300 out
-// tokens) — usually 1-2s. Cap at 60s so a single hung request can't gate
+// tokens), usually 1-2s. Cap at 60s so a single hung request can't gate
 // the more expensive script call below.
 const PERSONA_TIMEOUT_MS = 60_000;
 const SCRIPT_RETRIES = 2; // total tries = SCRIPT_RETRIES + 1
@@ -44,7 +44,7 @@ const MAX_ATTEMPTS = 5;
 // this is treated as crashed mid-action. Comfortably above SCRIPT_TIMEOUT_MS
 // (3 min) + TTS_TIMEOUT_MS (6 min).
 const PODCAST_RETRY_STUCK_CUTOFF_MS = 15 * 60 * 1000;
-// Stagger between retries the cron schedules in one tick — avoids hammering
+// Stagger between retries the cron schedules in one tick, avoids hammering
 // Gemini TTS / OpenRouter when many guides need recovery at once.
 const PODCAST_RETRY_STAGGER_MS = 5_000;
 
@@ -128,7 +128,7 @@ export const _beginPodcast = internalMutation({
         hostVoice: HOST.voice,
         attempts,
         // Carry forward existing transcript/audio if a previous run produced
-        // them — useful when the synthesize step retries on its own.
+        // them, useful when the synthesize step retries on its own.
         audioStorageId: prev?.audioStorageId,
         durationSeconds: prev?.durationSeconds,
         episodeTitle: prev?.episodeTitle,
@@ -261,7 +261,7 @@ export const _failPodcast = internalMutation({
 
 // Ops trigger: generate (or regenerate) the podcast for an existing guide by
 // slug. Resets `attempts` so it isn't blocked by past failures. Safe to call
-// repeatedly — `_beginPodcast` short-circuits on `complete` state.
+// repeatedly, `_beginPodcast` short-circuits on `complete` state.
 export const triggerPodcastBySlug = mutation({
   args: {
     slug: v.string(),
@@ -348,7 +348,7 @@ export const generateScript = internalAction({
     const normName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
     const forbiddenNorm = new Set([...forbidden].map(normName));
 
-    // Stage A — career-aware persona prior. Runs once before the retry loop
+    // Stage A, career-aware persona prior. Runs once before the retry loop
     // so script retries are anchored to the same persona instead of
     // rerolling it. Soft-fails: on error, traits stay undefined and both
     // prompts fall through to their generic legacy paths. Isolated
@@ -430,9 +430,9 @@ export const generateScript = internalAction({
       } catch (err) {
         lastErr = err;
         const msg = err instanceof Error ? err.message : String(err);
-        // Don't retry on abort (timeout) — caller can re-trigger.
+        // Don't retry on abort (timeout), caller can re-trigger.
         if (controller.signal.aborted) break;
-        // Save-time race guard threw — treat the same as an in-process
+        // Save-time race guard threw, treat the same as an in-process
         // collision: add the colliding name and retry.
         if (msg.startsWith("guestName_collision_race:")) {
           const taken = msg.slice("guestName_collision_race:".length);
@@ -689,7 +689,7 @@ export const backfillEpisodeTitle = internalAction({
 // Autonoe, Gacrux, Pulcherrima.
 //
 // Only podcasts where the voice's *current* catalog gender disagrees with the
-// stored guestGender are misvoiced — i.e. cases like (guestVoice=Algenib,
+// stored guestGender are misvoiced, i.e. cases like (guestVoice=Algenib,
 // guestGender=female) where Algenib is now male. Cases like (guestVoice=
 // Algenib, guestGender=male) were always correctly rendered (Algenib was
 // always male in audio; only the catalog tag was wrong) and must NOT be
@@ -793,7 +793,7 @@ export const _repickAndResynth = internalMutation({
 
 // One-shot ops helper. Run once after a voiceCatalog gender retag to fix
 // every existing complete podcast whose guestVoice flipped pool. Preserves
-// the transcript, persona, name, role, and episode title — only repicks
+// the transcript, persona, name, role, and episode title, only repicks
 // the voice and reschedules TTS. Returns a per-guide outcome list.
 export const repickMisvoicedPodcasts = internalAction({
   args: {},

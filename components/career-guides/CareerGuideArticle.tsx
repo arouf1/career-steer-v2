@@ -128,7 +128,7 @@ export function CareerGuideArticle({
 }: ArticleProps) {
   const searchParams = useSearchParams();
 
-  // Clerk auth state — used to suppress the inline "general guide / upload
+  // Clerk auth state, used to suppress the inline "general guide / upload
   // your CV" callout for signed-in users (the personalization fit slot
   // handles their CTA in every state). While Clerk is loading we err on the
   // side of hiding the inline CTA to avoid a flash of redundant content for
@@ -136,7 +136,7 @@ export function CareerGuideArticle({
   const { isLoaded: clerkLoaded, isSignedIn } = useUser();
   const showInlineCvCta = clerkLoaded && !isSignedIn;
 
-  // Personalization state — also subscribed to inside the fit + skills cards.
+  // Personalization state, also subscribed to inside the fit + skills cards.
   // Convex dedupes useQuery subscriptions on the same query+args, so this
   // costs nothing extra and lets the TOC mirror the article's actual sections.
   const personalization = useQuery(
@@ -159,7 +159,7 @@ export function CareerGuideArticle({
     personalization.row?.status === "complete";
   // Regional content: only honour the live, fresh personalization. When the
   // profile or enrichment has moved on, the previous regional block is by
-  // definition stale (wrong country, wrong currency) — fall back to the
+  // definition stale (wrong country, wrong currency), fall back to the
   // public US/UK content rather than mislead.
   const personalizedRegional =
     personalization?.state === "ready" &&
@@ -657,7 +657,7 @@ function Byline({
   lead?: string;
   /**
    * Optional discrete CTA (e.g. the deep-dive call tile) rendered inline
-   * beside the publish date. Mobile-targeted by design — the same feature
+   * beside the publish date. Mobile-targeted by design, the same feature
    * surfaces in the right aside on desktop.
    */
   deepDiveCta?: React.ReactNode;
@@ -1320,7 +1320,7 @@ function FactCheckCard({ slug }: { slug: string }) {
     return () => clearInterval(id);
   }, [isRunning]);
 
-  // Reset the local pending flag once the doc flips out of "complete" — at
+  // Reset the local pending flag once the doc flips out of "complete", at
   // that point the card visually switches to the running/queued layout.
   useEffect(() => {
     if (refreshPending && enrichment && enrichment.status !== "complete") {
@@ -1580,7 +1580,7 @@ function CareerGuideFailed({ slug, title }: { slug: string; title: string }) {
     try {
       await retry({ slug, clientIp: "", force: true });
     } catch {
-      // Surface nothing — the parent useQuery will reflect the next state.
+      // Surface nothing, the parent useQuery will reflect the next state.
     } finally {
       setPending(false);
     }

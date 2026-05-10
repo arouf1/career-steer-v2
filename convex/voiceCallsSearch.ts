@@ -11,7 +11,7 @@
  *      Literal hits get searchScore = 1.0.
  *
  *   2. Semantic vector search against by_summaryVector. Only runs when the
- *      literal pass leaves slots unfilled — saves an embed call when the
+ *      literal pass leaves slots unfilled, saves an embed call when the
  *      common case (a company/role keyword) saturates results from the
  *      cheap pass.
  *
@@ -102,7 +102,7 @@ export const searchByText = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    // Resolve user inline — keeps the action self-contained (resolveAuthedUser
+    // Resolve user inline, keeps the action self-contained (resolveAuthedUser
     // in voiceCalls.ts is typed for QueryCtx / MutationCtx only and cannot be
     // called from an action).
     const user: { _id: Id<"users"> } | null = await ctx.runQuery(
@@ -174,7 +174,7 @@ export const searchByText = action({
 
     if (hits.length === 0) return result;
 
-    // Drop hits already returned by the literal pass before hydrating —
+    // Drop hits already returned by the literal pass before hydrating -
     // saves a few db.get calls.
     const newHitIds = hits
       .map((h) => h._id)

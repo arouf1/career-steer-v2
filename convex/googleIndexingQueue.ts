@@ -18,7 +18,7 @@ import { isProdDeployment } from "./lib/env";
 const DRAIN_BATCH_SIZE = 8;
 
 // Max retries per item before we give up. Most failures are auth (service
-// account misconfigured) — those won't recover on retry, so a low cap
+// account misconfigured), those won't recover on retry, so a low cap
 // prevents the queue from filling with zombie rows.
 const MAX_ATTEMPTS = 3;
 
@@ -28,7 +28,7 @@ const RETRY_COOLDOWN_MS = 60 * 60 * 1000;
 // ── Enqueue ────────────────────────────────────────────────────────────────
 //
 // Called from convex/jobPostingsContent.ts (URL_UPDATED on first publish) and
-// from the liveness/staleness crons (URL_DELETED on archive). Idempotent —
+// from the liveness/staleness crons (URL_DELETED on archive). Idempotent -
 // drops duplicate pending entries for the same (url, kind) so a row that
 // flips active→inactive→active doesn't pile up.
 
@@ -148,7 +148,7 @@ export const drain = internalAction({
       } catch (err) {
         if (err instanceof IndexingApiNotConfiguredError) {
           // Don't burn attempts on every item just because the env isn't
-          // wired yet — fail this row and bail the batch. Once the env is
+          // wired yet, fail this row and bail the batch. Once the env is
           // set, the cron picks them up after RETRY_COOLDOWN_MS.
           await ctx.runMutation(internal.googleIndexingQueue._markFailed, {
             id: row._id,

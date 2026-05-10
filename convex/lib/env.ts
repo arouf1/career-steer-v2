@@ -10,7 +10,7 @@
  * (prod + dev) get crons registered. Any preview backend ends up with zero
  * `_scheduled_functions` rows and therefore zero possible spend.
  *
- * If you spin up a new permanent deployment (rare — staging, canary, etc.),
+ * If you spin up a new permanent deployment (rare, staging, canary, etc.),
  * add it to the allow-list below FIRST, then deploy.
  */
 
@@ -26,7 +26,7 @@ export function isCronAllowedDeployment(): boolean {
 
 /**
  * True only on the production deployment. Use for things that touch
- * external services where dev shouldn't fire — e.g. Google's Indexing API
+ * external services where dev shouldn't fire, e.g. Google's Indexing API
  * (we don't want our dev URLs in Google's index, and the 200/day quota is
  * shared with prod).
  */

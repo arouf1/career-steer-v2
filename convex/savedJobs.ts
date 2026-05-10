@@ -9,7 +9,7 @@ import type { Id } from "./_generated/dataModel";
 
 // Resolve the current Clerk identity to our internal users row. Throws on
 // missing identity / missing user row so callers can rely on a non-null
-// return — these are the same auth gates used across the app.
+// return, these are the same auth gates used across the app.
 async function requireUserId(
   ctx: QueryCtx | MutationCtx,
 ): Promise<Id<"users">> {
@@ -25,7 +25,7 @@ async function requireUserId(
   return user._id;
 }
 
-// Save a posting. Idempotent — a second save returns the existing row instead
+// Save a posting. Idempotent, a second save returns the existing row instead
 // of creating a duplicate. Note is optional (V1's saved-jobs flow never used
 // it; we expose it now so a future "Why I saved this" affordance has somewhere
 // to write without another migration).
@@ -81,7 +81,7 @@ export const unsave = mutation({
 });
 
 // Returns the set of jobPostingIds the current user has saved. Used by the
-// search results renderer to colour the bookmark icon. Reactive — the page
+// search results renderer to colour the bookmark icon. Reactive, the page
 // re-renders the moment the user saves or unsaves anything.
 export const mySavedSet = query({
   args: {},
@@ -107,7 +107,7 @@ export const mySavedSet = query({
 
 // Listing for a future /workspace/saved-jobs page. Joins the posting +
 // company so the row can render without a second round-trip per item. We
-// cap at 200 — if a user ever saves more than that we'll switch to cursor
+// cap at 200, if a user ever saves more than that we'll switch to cursor
 // pagination, but 200 is generous for a v1 personal saved-jobs list.
 export const listMine = query({
   args: {},

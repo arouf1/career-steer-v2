@@ -128,7 +128,7 @@ const PROFILE_PHOTO_URL_RE =
 // ── Single-URL content fetch (used by LinkedIn import) ───────────────────
 // `exa.getContents([url], { text: true })` is Exa's "scrape this exact URL
 // and give me the readable text" call. It is what V1 used for the LinkedIn
-// import path and what we use here too — LinkedIn has no public API and the
+// import path and what we use here too. LinkedIn has no public API and the
 // Exa scraper handles the auth wall well enough to get the public profile
 // content for retry-able fetches.
 

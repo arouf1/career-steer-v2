@@ -37,7 +37,7 @@ export function InterviewFeedback({ callId, onClose }: Props) {
       <div className="flex flex-col items-center gap-3 p-8 text-center">
         <Loader2 className="h-6 w-6 animate-spin text-mute" strokeWidth={1.5} />
         <p className="text-sm text-ink">Analyzing your interview…</p>
-        <p className="text-[12px] text-mute">Usually 10–15 seconds.</p>
+        <p className="text-[12px] text-mute">Usually 10-15 seconds.</p>
       </div>
     );
   }

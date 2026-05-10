@@ -1,7 +1,7 @@
 "use node";
 
 /**
- * Career Compass voice assistant — Node runtime.
+ * Career Compass voice assistant. Node runtime.
  *
  * Mirrors voiceCallsNode.ts (per-guide call). The browser opens its own
  * WebSocket directly to Gemini Live; this action just (a) gathers the
@@ -72,11 +72,11 @@ export const mintCompassSession = action({
     // injected into the system prompt. Defaults to "focused" if absent so
     // older clients still mint successfully.
     densityLevel: v.optional(DENSITY_VALIDATOR),
-    // Device surface — determines which tools get declared (setDensity is
+    // Device surface, determines which tools get declared (setDensity is
     // desktop-only, goToLane mobile-only) and how the prompt frames
     // navigation verbs. Defaults to "desktop".
     surface: v.optional(SURFACE_VALIDATOR),
-    // Mobile only — which lane is currently in the pager view. Updated
+    // Mobile only, which lane is currently in the pager view. Updated
     // mid-call via clientContent pushes from the hook when the user swipes.
     activeLane: v.optional(LANE_VALIDATOR),
   },
@@ -197,7 +197,7 @@ export const mintCompassSession = action({
       tools,
     });
 
-    // Mint credentials — try ephemeral first, fall back to raw API key per
+    // Mint credentials, try ephemeral first, fall back to raw API key per
     // V1 commit 0689253. Gemini's auth_tokens endpoint occasionally flakes;
     // the fallback keeps calls working when it does.
     const client = new GoogleGenAI({

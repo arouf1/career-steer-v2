@@ -1,5 +1,5 @@
 // Catalog of Gemini 2.5 Pro / Flash TTS prebuilt voices. Single source of
-// truth for voice gender, pitch, and style — the host declaration and the
+// truth for voice gender, pitch, and style, the host declaration and the
 // guest-voice picker (lib/podcast/voices.ts) both read from here.
 //
 // Where the genders and descriptions came from:
@@ -26,17 +26,17 @@
 //
 // Re-tagging guidance:
 //   If a shipped episode lands on a voice that feels miscast, cross-check
-//   gemini-tts.com first (gender + descriptor), then retag here — the
+//   gemini-tts.com first (gender + descriptor), then retag here, the
 //   picker re-derives buckets at module load. Don't add a voice that isn't
 //   actually exposed by Gemini TTS; there is no fallback if the API
 //   rejects the name.
 
 export type VoiceGender = "female" | "male";
 
-// Primary bucket — single most-defining quality of the voice.
+// Primary bucket, single most-defining quality of the voice.
 export type VoiceStyle = "warm" | "bright" | "measured" | "authoritative";
 
-// Pitch hint — informational today, used for catalog readability and
+// Pitch hint, informational today, used for catalog readability and
 // future matching.
 export type VoicePitch = "high" | "mid-high" | "mid" | "mid-low" | "low";
 
@@ -94,7 +94,7 @@ export const VOICE_CATALOG: readonly VoiceProfile[] = [
     style: "authoritative",
     secondaryStyles: ["warm"],
     description:
-      "Gravelly and textured male voice with a lower pitch. Carries a lived-in, experienced quality — gravitas with warmth and rasp.",
+      "Gravelly and textured male voice with a lower pitch. Carries a lived-in, experienced quality, gravitas with warmth and rasp.",
     bestUses: [
       "Documentary narration",
       "audiobook narration (memoir, character)",
@@ -108,7 +108,7 @@ export const VOICE_CATALOG: readonly VoiceProfile[] = [
     style: "warm",
     secondaryStyles: ["measured"],
     description:
-      "Smooth and flowing male voice with a lower pitch. Steady, unhurried delivery — calm warmth without the rasp of Algenib.",
+      "Smooth and flowing male voice with a lower pitch. Steady, unhurried delivery, calm warmth without the rasp of Algenib.",
     bestUses: [
       "Audiobook narration",
       "long-form podcast hosting",
@@ -466,7 +466,7 @@ if (!_hostProfile) {
 }
 
 // Guest pool with the host removed so the guest can never collide with
-// the host. Filtered once at module load — every pickGuestVoice call
+// the host. Filtered once at module load, every pickGuestVoice call
 // reads this snapshot.
 export const GUEST_VOICE_POOL: readonly VoiceProfile[] = VOICE_CATALOG.filter(
   (v) => v.id !== HOST_VOICE_ID,

@@ -126,6 +126,7 @@ Before editing files in these areas, read the corresponding rule file:
 - Editing AI features (`app/api/chat`, `lib/ai/**`) → read `.claude/rules/ai-sdk-patterns.md`
 - Editing `app/**` or `components/**` (visible UI) → read `.claude/rules/ui-quality.md`
 - Editing `vercel.json` / `vercel.ts` / `convex/crons.ts` / `convex/lib/env.ts` / `.github/workflows/**`, **or considering whether to enable a Convex preview backend for a branch** → read `.claude/rules/deployment-previews.md` (V1 burned paid-API credits via abandoned preview crons — opt-in policy + allow-list guard)
+- Editing user-facing copy or AI prompts (`app/**`, `components/**`, `lib/ai/prompts/**`, prompt strings inside `convex/**`) → read `.claude/rules/content-style.md` (no em/en dashes, British English, shared `EDITORIAL_VOICE` constant in `lib/ai/prompts/voice.ts`)
 
 ## Cross-feature impact: Career Compass (a.k.a. Discover internally)
 

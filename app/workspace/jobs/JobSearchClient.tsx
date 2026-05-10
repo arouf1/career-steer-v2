@@ -69,7 +69,7 @@ function JobSearchClientInner() {
   // Two layers, with different write semantics:
   //   - Search identity (q, loc, gl): an explicit user submission. Pushed via
   //     router.push so the back button steps between distinct searches. This
-  //     is the *expensive* layer — every URL with a `q` triggers a paid call.
+  //     is the *expensive* layer, every URL with a `q` triggers a paid call.
   //   - View options (remote, sched, sort): purely client-side filtering of
   //     the in-memory result set. Replaced (not pushed) so the back button
   //     restores the view of the same search rather than a new one.
@@ -113,7 +113,7 @@ function JobSearchClientInner() {
 
   // Sync inputs and clear stale results when the URL identity changes
   // externally (back-nav, deep link, or our own router.push). React's
-  // "store info from previous render" pattern — setState during render is
+  // "store info from previous render" pattern, setState during render is
   // explicitly recommended here over an effect, since it avoids a wasted
   // render cycle and prevents the cascading-effect anti-pattern.
   // https://react.dev/reference/react/useState#storing-information-from-previous-renders
@@ -132,7 +132,7 @@ function JobSearchClientInner() {
     setLocation(urlLoc || null);
     setGl(urlGl || null);
     if (!urlQ) {
-      // URL emptied out — clear displayed results so back-nav to a bare
+      // URL emptied out, clear displayed results so back-nav to a bare
       // /workspace/jobs lands on the empty-state instead of stale results.
       // The matching requestId bump lives in a dedicated effect below; this
       // block can't touch a ref during render.
@@ -154,7 +154,7 @@ function JobSearchClientInner() {
   }, [urlQ, urlLoc, urlGl]);
 
   // Seed the location field from the profile, but only if the URL didn't
-  // already specify one. URL wins — a shared link should land where it says.
+  // already specify one. URL wins, a shared link should land where it says.
   // Same during-render sync pattern as above.
   const [profileSeeded, setProfileSeeded] = useState(false);
   if (!profileSeeded && profile !== undefined) {
@@ -188,7 +188,7 @@ function JobSearchClientInner() {
 
       const result: SearchResult = await search(snapshot);
 
-      // A newer search has been kicked off — drop this result.
+      // A newer search has been kicked off, drop this result.
       if (myId !== requestIdRef.current) return;
 
       if (result.ok) {
@@ -201,7 +201,7 @@ function JobSearchClientInner() {
         });
         // If the corrector rewrote the query, snap the input to the corrected
         // form so subsequent edits start from there. URL keeps the original
-        // (what the user actually submitted) — the banner provides the
+        // (what the user actually submitted), the banner provides the
         // disambiguation and lets them re-search the original.
         if (result.correctedQuery) setQuery(result.correctedQuery);
         setNextPageToken(result.nextPageToken);
@@ -286,7 +286,7 @@ function JobSearchClientInner() {
   const onSearchOriginal = (originalQuery: string) => {
     if (isBusy) return;
     setQuery(originalQuery);
-    // The skipCorrection flag is a one-off — we don't want to encode it in
+    // The skipCorrection flag is a one-off, we don't want to encode it in
     // the URL (it wouldn't survive a refresh sensibly), so fire the search
     // directly here. URL updates to reflect the original query so the back
     // button still works.
@@ -361,7 +361,7 @@ function JobSearchClientInner() {
     if (urlSched) list = list.filter((r) => r.schedule === urlSched);
     if (urlSort === "newest") {
       // Stable sort by postedAt descending. SearchAPI's postedAt is a
-      // human string ("3 days ago") — we sort on a normalised numeric
+      // human string ("3 days ago"), we sort on a normalised numeric
       // approximation so the ordering is sensible without a parser.
       const score = (s: string | null): number => {
         if (!s) return -Infinity;
@@ -601,7 +601,7 @@ function ResultsRegion(props: {
   } = props;
 
   if (status === "loading") {
-    // Honest single-stage loader — v2's search is synchronous (1-3s), so
+    // Honest single-stage loader, v2's search is synchronous (1-3s), so
     // V1's six-step pipeline progress would be theatre. A hairline
     // indeterminate progress bar paired with one labelled verb keeps the
     // surface restrained and truthful.

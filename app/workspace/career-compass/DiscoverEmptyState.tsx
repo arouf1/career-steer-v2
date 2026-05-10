@@ -13,7 +13,7 @@ export function DiscoverGenerating({ initials = "" }: { initials?: string }) {
   const monogram = initials.slice(0, 2).toUpperCase();
   return (
     <div className="relative h-full w-full overflow-hidden bg-white">
-      {/* Quadrant tints — matches the live canvas exactly so the loader's
+      {/* Quadrant tints, matches the live canvas exactly so the loader's
           geometry is the canvas's geometry. */}
       <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
         <div className="bg-[oklch(0.975_0.011_70)]" />
@@ -22,7 +22,7 @@ export function DiscoverGenerating({ initials = "" }: { initials?: string }) {
         <div className="bg-[oklch(0.973_0.011_290)]" />
       </div>
 
-      {/* Skeleton cards — distributed across all four quadrants at fixed
+      {/* Skeleton cards, distributed across all four quadrants at fixed
           positions, each fading in/out with its own staggered timing. */}
       {SKELETON_CARDS.map((s, i) => (
         <motion.div
@@ -41,7 +41,7 @@ export function DiscoverGenerating({ initials = "" }: { initials?: string }) {
         />
       ))}
 
-      {/* Rippling rings — three SVG circles that scale outward and fade,
+      {/* Rippling rings, three SVG circles that scale outward and fade,
           staggered to read as a continuous pulse. The container sits at
           the canvas centre. */}
       <div className="pointer-events-none absolute left-1/2 top-1/2">
@@ -76,7 +76,7 @@ export function DiscoverGenerating({ initials = "" }: { initials?: string }) {
         </svg>
       </div>
 
-      {/* Pulsing avatar at canvas centre — mirrors the mobile YouAvatar
+      {/* Pulsing avatar at canvas centre, mirrors the mobile YouAvatar
           treatment by surfacing the user's initials inside the dot. */}
       <motion.div
         className="absolute left-1/2 top-1/2 flex size-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-ink text-paper"
@@ -97,7 +97,7 @@ export function DiscoverGenerating({ initials = "" }: { initials?: string }) {
         )}
       </motion.div>
 
-      {/* Subtitle — editorial, italic, anchored bottom-centre */}
+      {/* Subtitle, editorial, italic, anchored bottom-centre */}
       <p className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap text-sm italic text-mute">
         Reading your profile · Mapping your canvas
       </p>
@@ -106,7 +106,7 @@ export function DiscoverGenerating({ initials = "" }: { initials?: string }) {
 }
 
 // Skeleton card positions across the four quadrants, in viewport % coords
-// (matching the lane label positioning convention). Spread is intentional —
+// (matching the lane label positioning convention). Spread is intentional -
 // 3 cards per quadrant with varied positions to give the loader life.
 const SKELETON_CARDS = [
   // Top-left (Next steps)

@@ -356,7 +356,7 @@ export const retryEnrichment = mutation({
 
     // Always reschedule. We previously noop'd on `status === "pending"` to
     // avoid duplicate runs, but a crashed earlier run can leave the row
-    // sitting in "pending" forever — and there is no other recovery path
+    // sitting in "pending" forever, and there is no other recovery path
     // when the catch handler itself threw and never wrote markFailed. The
     // worst case here is two concurrent enrichment runs whose writes get
     // serialised by Convex; the later upsert wins, which is fine.
@@ -567,7 +567,7 @@ export const generate = internalAction({
         regionalCitations = exa.citations;
       }
     } catch (err) {
-      // Exa failure is not fatal — we continue without grounding and the
+      // Exa failure is not fatal, we continue without grounding and the
       // LLM will fall back to setting regional=null. The next regen will
       // try Exa again.
       console.warn("careerGuidePersonalizations.generate:exa_failed", {
@@ -630,7 +630,7 @@ export const generate = internalAction({
       });
 
       // Enforce the schema contract at write time: when the user is in
-      // US/UK or has no location set, the regional block must be null —
+      // US/UK or has no location set, the regional block must be null -
       // otherwise the sidebar renders a duplicate "UK" pill (the hardcoded
       // fallback plus a personalized "user" pill the LLM happily emitted
       // without grounding). Strip the model's regional output server-side

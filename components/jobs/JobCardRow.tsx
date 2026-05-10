@@ -6,7 +6,7 @@
 //   [logo + fit eyebrow]   [title + company + meta + summary + actions]   [salary + save]
 //
 // Lifted from V1's pattern but rewritten in v2 tokens (paper/ink/hairline,
-// type-display/title/label) — and intentionally drops V1's numeric fit-score
+// type-display/title/label), and intentionally drops V1's numeric fit-score
 // percentage in favour of qualitative "Strong match" / "Worth exploring"
 // tags. Numeric percentages are an AI-product cliché the brand voice rejects.
 
@@ -35,7 +35,7 @@ type Props = {
   job: JobResult;
   index: number;
   // Reactive bookmark state from convex/savedJobs.mySavedSet. Null when the
-  // user is signed out — in that mode the card hides the bookmark control.
+  // user is signed out, in that mode the card hides the bookmark control.
   isSavedSet: ReadonlySet<string> | null;
   isSignedIn: boolean;
   // Live content lookup keyed by jobPostingId. Undefined when the row has no
@@ -66,7 +66,7 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-// Brandfetch CDN URL — canonical pattern is `cdn.brandfetch.io/{domain}?c=`.
+// Brandfetch CDN URL, canonical pattern is `cdn.brandfetch.io/{domain}?c=`.
 // The CDN also cross-checks Referer against the allowed-origins list set on
 // the client ID in the Brandfetch dashboard. Returns null when the env var
 // is unset so the caller falls through to initials.
@@ -79,7 +79,7 @@ function brandfetchCdnFallback(domain: string): string | null {
 function FitTag({ tier }: { tier: FitTier }) {
   if (tier === null) return null;
   const label = tier === "strong" ? "Strong match" : "Worth exploring";
-  // Tonal-only treatment per DESIGN.md One Voice Rule — both tiers share the
+  // Tonal-only treatment per DESIGN.md One Voice Rule, both tiers share the
   // same warm-ink hairline accent, with subtle weight contrast carrying the
   // hierarchy. No green/blue/amber colour code.
   return (
@@ -125,7 +125,7 @@ function CompanyMark({
   if (candidateUrl) {
     return (
       // Brandfetch CDN URLs are stable and remote-image config is not yet
-      // wired in next.config — using <img> is intentional here.
+      // wired in next.config, using <img> is intentional here.
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={candidateUrl}
@@ -188,7 +188,7 @@ export function JobCardRow({
 
   // Compose the meta line. Order: location · schedule · remote · postedAt.
   // Each segment is dropped silently when missing rather than rendering a
-  // blank pill — the line should never have hanging separators.
+  // blank pill, the line should never have hanging separators.
   const metaParts: string[] = [];
   if (job.location) metaParts.push(job.location);
   if (job.schedule) metaParts.push(job.schedule);
@@ -333,7 +333,7 @@ export function JobCardRow({
               ) : (
                 // No detail page (no jobPostingId, e.g. SearchAPI pagination
                 // pages where we skip the cache round-trip) and no apply
-                // link — fall back to a plain Google search so the row never
+                // link, fall back to a plain Google search so the row never
                 // ends in a dead end.
                 <a
                   href={buildGoogleSearchUrl(job)}
@@ -370,7 +370,7 @@ export function JobCardRow({
           )}
         </div>
 
-        {/* Right rail: salary + save (sm+ only — mobile folds salary into meta) */}
+        {/* Right rail: salary + save (sm+ only, mobile folds salary into meta) */}
         <div className="hidden sm:flex sm:w-36 sm:shrink-0 sm:flex-col sm:items-end sm:gap-3 sm:pt-1">
           {job.salary && (
             <div className="text-right">

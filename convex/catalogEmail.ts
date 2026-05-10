@@ -42,13 +42,13 @@ export const sendCatalogCreateEmail = internalAction({
   handler: async (_ctx, args) => {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
-      console.warn("[catalogEmail] RESEND_API_KEY not set — skipping");
+      console.warn("[catalogEmail] RESEND_API_KEY not set, skipping");
       return { sent: false, skippedReason: "no_api_key" };
     }
     const recipient = process.env.CATALOG_REPORT_EMAIL;
     if (!recipient) {
       console.warn(
-        "[catalogEmail] CATALOG_REPORT_EMAIL not set — skipping",
+        "[catalogEmail] CATALOG_REPORT_EMAIL not set, skipping",
       );
       return { sent: false, skippedReason: "no_recipient" };
     }

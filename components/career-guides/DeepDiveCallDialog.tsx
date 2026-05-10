@@ -32,7 +32,7 @@ type Props = {
  * fixed-frame card with header, focal animation (Rive halo), toggleable
  * transcription, status text, and a compact 2-button control bar.
  *
- * The modal is opened from the sidebar tile already committed to a call —
+ * The modal is opened from the sidebar tile already committed to a call -
  * there is no in-modal "Start call" button. Closing the modal during a live
  * call ends the call cleanly via the underlying hook.
  */
@@ -56,7 +56,7 @@ export function DeepDiveCallDialog({
   });
 
   // Rive halo. The state-machine has three booleans we drive each render
-  // based on call state — listening (user speaking), thinking (connecting
+  // based on call state, listening (user speaking), thinking (connecting
   // or open mic with no one talking), speaking (AI talking).
   const { rive, RiveComponent } = useRive({
     src: "/halo-2.0.riv",
@@ -98,7 +98,7 @@ export function DeepDiveCallDialog({
     speakingInput,
   ]);
 
-  // Auto-start when the dialog opens. We don't wait for a click — the user
+  // Auto-start when the dialog opens. We don't wait for a click, the user
   // already clicked "Start call" in the sidebar tile.
   useEffect(() => {
     if (!open) {
@@ -161,7 +161,7 @@ export function DeepDiveCallDialog({
                 formatDuration={timer.formatDuration}
               />
 
-              {/* Focal centerpiece — Rive halo OR transcript view */}
+              {/* Focal centerpiece. Rive halo OR transcript view */}
               {!showTranscription ? (
                 <VoiceCallAnimation RiveComponent={RiveComponent} rive={rive} />
               ) : (
@@ -172,7 +172,7 @@ export function DeepDiveCallDialog({
                 />
               )}
 
-              {/* View toggle — only when there's something to switch to */}
+              {/* View toggle, only when there's something to switch to */}
               {(call.callState === "connected" ||
                 call.callState === "connecting") && (
                 <div className="flex justify-center">
@@ -215,7 +215,7 @@ function getStatusText(call: ReturnType<typeof useDeepDiveCall>): string {
         !call.isAITalking &&
         !call.userSpeaking
       ) {
-        return "Connected — say hi to start";
+        return "Connected, say hi to start";
       }
       if (call.isAITalking) return "Adviser is speaking";
       return "Listening";

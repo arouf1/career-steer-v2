@@ -285,7 +285,7 @@ export const _researchCompany = internalAction({
     const timeout = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);
 
     try {
-      // Parallel Exa fan-out — culture + financials.
+      // Parallel Exa fan-out, culture + financials.
       const fields = ["culture", "financials"] as const;
       const queries = {
         culture: `What is the work culture and employee experience like at ${ctxRow.companyName}? Include what people who've worked there say.`,

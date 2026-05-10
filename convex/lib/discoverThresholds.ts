@@ -8,7 +8,7 @@ export const ARC_SIM_FLOOR = 0.5;
  *
  * Why per-lane: with 4-way stage bucketing, the stage signal disambiguates
  * forward / sideways / earlier from each other. The wholeSim floor's job is
- * narrower — keep cross-domain noise out of the three high-signal lanes. The
+ * narrower, keep cross-domain noise out of the three high-signal lanes. The
  * floor can be slightly more permissive for `earlier` because stage gives us
  * extra confidence: "wholeSim 0.69 + lower stage" is more clearly a genuine
  * earlier-stage role in the user's domain than "wholeSim 0.69 + same stage"
@@ -42,9 +42,9 @@ export const LANE_WHOLE_SIM_FLOOR = {
  * Why earlier needs a separate domain gate: wholeSim alone admits cross-domain
  * stage-down roles (e.g. for a Head of ML, "Actuary" and "SEO Manager" both
  * cleared the wholeSim 0.68 floor at ~0.69-0.70). Those roles aren't earlier
- * chapters of an ML career — they're cross-domain alternatives that belong in
- * `transformational` ("a different chapter"). domainSim — cosine over the
- * skills/functional sub-vector — is the right signal: high when the role
+ * chapters of an ML career, they're cross-domain alternatives that belong in
+ * `transformational` ("a different chapter"). domainSim, cosine over the
+ * skills/functional sub-vector, is the right signal: high when the role
  * shares the user's professional domain, low otherwise.
  *
  * Calibrated against the Head-of-ML demo:

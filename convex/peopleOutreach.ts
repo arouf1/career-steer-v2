@@ -404,8 +404,8 @@ export const _streamOutreach = internalAction({
       // Tee the UI message stream into the agent component (for live
       // subscribers via syncStreams) and a parallel collector that builds
       // up the final message text. We can't await `result.text` *and*
-      // pass `result.toUIMessageStream()` to consumeStream — both consume
-      // the same underlying stream — so we capture text from the chunk
+      // pass `result.toUIMessageStream()` to consumeStream, both consume
+      // the same underlying stream, so we capture text from the chunk
       // stream as it flows.
       const uiStream = result.toUIMessageStream();
       const [forStreamer, forCapture] = uiStream.tee();

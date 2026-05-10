@@ -282,7 +282,7 @@ export const backfill = internalAction({
     let queuedForReview = 0;
     let failed = 0;
 
-    // Sequential per guide — keeps per-batch wall time predictable, avoids
+    // Sequential per guide, keeps per-batch wall time predictable, avoids
     // bursting OpenRouter rate limits, and the backfill is one-shot anyway.
     for (const guide of result.page.slice(0, BATCH_SIZE)) {
       const overview = guide.content?.overview ?? "";
@@ -328,7 +328,7 @@ export const backfill = internalAction({
     }
 
     if (!result.isDone || result.page.length > BATCH_SIZE) {
-      // More guides to process — reschedule. Use the page's continueCursor if
+      // More guides to process, reschedule. Use the page's continueCursor if
       // the page itself is exhausted; otherwise the same cursor lets us keep
       // chewing through the larger filtered page in BATCH_SIZE chunks.
       const nextCursor =

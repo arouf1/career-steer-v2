@@ -8,7 +8,7 @@
  *   2. Check per-day rate limit (5 / 24h).
  *   3. Create prep-status doc so the dialog can subscribe immediately.
  *   4. Refresh stale research (interviewBundle, news) via
- *      _synthesizeInterviewResearch (synchronous inline call — the dialog
+ *      _synthesizeInterviewResearch (synchronous inline call, the dialog
  *      waits on status transitions before moving to Phase 2).
  *   5. Build the interviewer system prompt.
  *   6. Mint a Gemini Live ephemeral token with tools: [{ googleSearch: {} }]
@@ -179,7 +179,7 @@ export const mintInterviewSession = action({
     );
 
     if (bundleStale || newsStale) {
-      // Inline synchronous call — the dialog status doc transitions keep the
+      // Inline synchronous call, the dialog status doc transitions keep the
       // user informed while we wait. We do not fire-and-forget because the
       // bundle must be ready before we build the system instruction below.
       try {
@@ -468,7 +468,7 @@ export const _synthesizeInterviewResearch = internalAction({
 
       const out = experimental_output;
 
-      // Persist the bundle — include modelUsed per plan callout.
+      // Persist the bundle, include modelUsed per plan callout.
       await ctx.runMutation(internal.interviewSim._patchInterviewBundle, {
         companyId: args.companyId,
         roleArchetypeSlug: args.cacheKeySlug,
@@ -573,7 +573,7 @@ export const processInterviewAnalysis = internalAction({
 
       // Build a compact verdict string from the rubric and embed it so this
       // interview_job row surfaces in the by_summaryVector semantic search
-      // alongside guide/compass/job rows. Soft-fail — rubric still writes.
+      // alongside guide/compass/job rows. Soft-fail, rubric still writes.
       const verdictText = [
         rubric.oneLineVerdict,
         rubric.bestMoment.why,
@@ -593,7 +593,7 @@ export const processInterviewAnalysis = internalAction({
           "[interviewSim:analysis] summary embedding failed",
           err instanceof Error ? err.message : String(err),
         );
-        // Soft-fail — the rubric is still written; the row just won't surface
+        // Soft-fail, the rubric is still written; the row just won't surface
         // in semantic search until a backfill runs.
       }
 
@@ -670,7 +670,7 @@ function fallbackBundle() {
     ],
     rubric: {
       rigor: 3,
-      rigorRationale: "Generic fallback — no live research available.",
+      rigorRationale: "Generic fallback, no live research available.",
       interviewerArchetype: "hiring manager",
       dimensions: [
         {
@@ -722,7 +722,7 @@ function collectCitations(
 
 function parseNewsBulletsFromExa(answer: string, citations: Citation[]) {
   // Heuristic: split prose answer by sentence, pair sequentially with
-  // citations until exhausted. Conservative to avoid hallucinated headlines —
+  // citations until exhausted. Conservative to avoid hallucinated headlines -
   // if Exa returns no citations, return [].
   if (!citations.length) return [];
   const sentences = answer

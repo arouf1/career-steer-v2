@@ -77,7 +77,7 @@ function Calendar({
           defaultClassNames.dropdowns
         ),
         dropdown_root: cn(
-          // Flat-by-default per DESIGN.md — drop the shadow, use hairline
+          // Flat-by-default per DESIGN.md, drop the shadow, use hairline
           // border and ink focus instead of the ring stack.
           "relative rounded-control border border-hairline bg-paper has-focus:border-ink",
           defaultClassNames.dropdown_root
@@ -96,7 +96,7 @@ function Calendar({
         table: "w-full border-collapse",
         weekdays: cn("flex", defaultClassNames.weekdays),
         weekday: cn(
-          // Editorial label treatment — canonical eyebrow (10px uppercase
+          // Editorial label treatment, canonical eyebrow (10px uppercase
           // tracking-[0.18em]) instead of the generic muted caption.
           "flex-1 select-none text-[10px] font-medium uppercase tracking-[0.18em] text-mute",
           defaultClassNames.weekday
@@ -125,7 +125,7 @@ function Calendar({
         range_end: cn("rounded-r-pill bg-paper-raised", defaultClassNames.range_end),
         today: cn(
           // Today reads as a quiet underline accent rather than a filled
-          // chip — keeps the hierarchy: only the SELECTED day fills with
+          // chip, keeps the hierarchy: only the SELECTED day fills with
           // ink. Today is just a marker.
           "relative text-ink font-medium after:pointer-events-none after:absolute after:inset-x-3 after:bottom-1 after:h-px after:bg-ink/40 data-[selected=true]:after:hidden",
           defaultClassNames.today
@@ -222,7 +222,7 @@ function CalendarDayButton({
         // - default: ghost cell (text-ink, hover swaps to paper-raised)
         // - today: handled at the parent .today className (underline accent)
         // - selected: filled ink pill (bg-ink + text-paper rounded-pill)
-        // - range pieces: paper-raised middle, ink ends — quiet tonal range
+        // - range pieces: paper-raised middle, ink ends, quiet tonal range
         // - focus: hairline ink ring instead of the heavy 3px ring stack
         "flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 leading-none font-normal text-ink rounded-pill transition-colors hover:bg-paper-raised " +
           "group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-1 group-data-[focused=true]/day:ring-ink/30 " +

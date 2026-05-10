@@ -44,7 +44,7 @@ const joinNonEmpty = (parts: string[]): string =>
 
 const unslug = (slug: string): string => slug.replace(/-+/g, " ").trim();
 
-// "Software Engineer at Acme in London" — the framing line shared across
+// "Software Engineer at Acme in London", the framing line shared across
 // facets so the company-context signal isn't lost.
 const buildHeader = (input: JobEmbeddingInput): string => {
   const remote = input.workFromHome === true ? " (remote-friendly)" : "";
@@ -80,7 +80,7 @@ const buildArc = (input: JobEmbeddingInput): string => {
   if (input.roleArchetypeSlug) {
     parts.push(`Role archetype: ${unslug(input.roleArchetypeSlug)}`);
   }
-  // Prefer the LLM-distilled compSummary over the raw salary string —
+  // Prefer the LLM-distilled compSummary over the raw salary string -
   // it captures band, bonus, equity, and any other context the trajectory
   // signal benefits from. Fall back to raw salary when no rewrite yet.
   if (c?.compSummary) {
@@ -89,7 +89,7 @@ const buildArc = (input: JobEmbeddingInput): string => {
     parts.push(`Salary band: ${input.salary}`);
   }
   if (c?.whatStandsOut && c.whatStandsOut.length > 0) {
-    // Distinctive signals — Series stage, scope, scale — are arc cues.
+    // Distinctive signals. Series stage, scope, scale, are arc cues.
     parts.push(
       `Distinctive about this opportunity:\n${c.whatStandsOut.map((s) => `• ${s}`).join("\n")}`,
     );
@@ -101,7 +101,7 @@ const buildArc = (input: JobEmbeddingInput): string => {
   return truncate(joinNonEmpty(parts));
 };
 
-// "What this person actually does day-to-day" — best matched against profile
+// "What this person actually does day-to-day", best matched against profile
 // currentState. theRole + idealCandidate carry that signal; we also include
 // the header so the company context is never absent.
 const buildCurrentState = (input: JobEmbeddingInput): string => {

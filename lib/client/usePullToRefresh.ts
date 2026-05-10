@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 type Options = {
   /**
    * Called once when the user releases past the threshold. Should return a
-   * promise — the indicator stays visible until the promise resolves.
+   * promise, the indicator stays visible until the promise resolves.
    */
   onRefresh: () => Promise<void> | void;
   /**
@@ -35,7 +35,7 @@ type Options = {
  * The hook only intercepts touch gestures when the container is at scrollTop
  * 0 and the gesture is pulling downward. Vertical scroll inside the
  * container otherwise behaves natively. No interference with horizontal
- * gestures (those are typically handled by an outer pager — Embla locks
+ * gestures (those are typically handled by an outer pager. Embla locks
  * its own axis on touchstart).
  */
 export function usePullToRefresh({
@@ -50,7 +50,7 @@ export function usePullToRefresh({
   // Track gesture state in a ref so handlers see the latest value without
   // re-binding on every render.
   // `axisLocked` is set on the first move that crosses the deadband and
-  // remains until touchend — once we've decided "this is a horizontal swipe"
+  // remains until touchend, once we've decided "this is a horizontal swipe"
   // we do nothing for the rest of the gesture, so a slightly-diagonal swipe
   // never accidentally fires pull-to-refresh.
   const gesture = useRef<{
@@ -106,7 +106,7 @@ export function usePullToRefresh({
       // uses on its side, so the two never fight.
       if (gesture.current.axisLocked === null) {
         const moved = Math.max(Math.abs(dx), Math.abs(dy));
-        if (moved < 8) return; // deadband — too small to commit yet
+        if (moved < 8) return; // deadband, too small to commit yet
         if (Math.abs(dx) > Math.abs(dy)) {
           gesture.current.axisLocked = "horizontal";
           return;
@@ -116,7 +116,7 @@ export function usePullToRefresh({
 
       // Vertical-locked gesture from here on.
       if (dy <= 0) {
-        // Upward — release the gesture so vertical scroll resumes.
+        // Upward, release the gesture so vertical scroll resumes.
         gesture.current = {
           startY: null,
           startX: null,
@@ -126,7 +126,7 @@ export function usePullToRefresh({
         setPullDistance(0);
         return;
       }
-      // Downward at scrollTop 0 — capture the pull.
+      // Downward at scrollTop 0, capture the pull.
       gesture.current.capturing = true;
       // Resistance: linear up to threshold, then slows.
       const resisted =

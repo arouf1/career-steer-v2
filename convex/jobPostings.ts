@@ -19,7 +19,7 @@ import {
 import { expandTitleAbbreviations } from "./lib/titleAbbreviations";
 
 // Resolve a posting's city → gps via the locations table, preferring the
-// matching country code when known. Returns undefined when no match — the
+// matching country code when known. Returns undefined when no match, the
 // row stays without gps and the backfill migration picks it up later, or
 // the radius rung in jobsForGuide.forGuide silently excludes it.
 async function resolveGpsForCity(
@@ -115,7 +115,7 @@ export const searchCache = query({
     });
 
     // Project to the JobResult shape the client already consumes. Companies
-    // are joined N+1 here — N is bounded to ~50 by the projection size and
+    // are joined N+1 here. N is bounded to ~50 by the projection size and
     // each row hits a single point lookup, which is acceptable for v1.
     const results = await Promise.all(
       filtered.map(async (p) => {
@@ -159,7 +159,7 @@ export const searchCache = query({
 });
 
 // Public query for the /jobs/listing/[city]/[company]/[title]/[id] page.
-// No auth gate — these pages are SEO-indexable. Returns posting + company +
+// No auth gate, these pages are SEO-indexable. Returns posting + company +
 // optionally the related career-guide stub for cross-linking. The page
 // component decides whether to redirect to the canonical URL when the slug
 // segments in the URL don't match the actual posting.
@@ -342,7 +342,7 @@ export const listPublicRecent = query({
 
 // Live content + status lookup for a batch of posting IDs. The workspace
 // search subscribes to this so cards swap from raw description to the LLM-
-// rewritten overview the moment the rewrite lands — no manual refresh, no
+// rewritten overview the moment the rewrite lands, no manual refresh, no
 // polling timer, just the standard Convex subscription. Returns one row per
 // requested id (preserving the input order is left to the caller via
 // jobPostingId in each row).
@@ -361,7 +361,7 @@ export const liveContentByIds = query({
     }),
   ),
   handler: async (ctx, args) => {
-    // Cap at 100 — the workspace search page-size ceiling is well under this.
+    // Cap at 100, the workspace search page-size ceiling is well under this.
     const ids = args.ids.slice(0, 100);
     const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
     const out: Array<{
@@ -381,7 +381,7 @@ export const liveContentByIds = query({
   },
 });
 
-// Total cached postings across all queries — feeds the workspace UI's
+// Total cached postings across all queries, feeds the workspace UI's
 // "K total cached" line. Bounded by index walk; we cap at a count, not a
 // document scan, so this stays cheap.
 export const cacheStats = query({
@@ -405,7 +405,7 @@ export const cacheStats = query({
 //   3a. Existing → patch lastSeenAt, seenCount, merge searchQueries, fill in
 //       a now-present applyLink if it was previously missing.
 //   3b. New → resolve roleArchetypeSlug from cached title_canonicalizations
-//       (no LLM call — best-effort), insert with contentStatus="pending",
+//       (no LLM call, best-effort), insert with contentStatus="pending",
 //       mirror to job_postings_index.
 //
 // Returns counts the action surfaces to the client UI.
@@ -538,7 +538,7 @@ export const upsertFromSearch = internalMutation({
           job.title,
         );
         // Per-posting country detection. Google Jobs (via SearchAPI) often
-        // returns out-of-region results when local matches are thin —
+        // returns out-of-region results when local matches are thin -
         // searching with `gl=gb` for a niche role can still surface US
         // postings. Trusting the action's countryCode arg blindly stamps
         // every row with that country, which then breaks the location
@@ -668,7 +668,7 @@ async function mirrorToIndex(
   }
 }
 
-// Best-effort sync archetype lookup. NEVER calls the LLM — only consults the
+// Best-effort sync archetype lookup. NEVER calls the LLM, only consults the
 // title_canonicalizations cache that some other code path has already
 // populated. Returns null on miss, which sub-project 5 will resolve later
 // when it actually needs the archetype slug.
@@ -697,7 +697,7 @@ async function resolveArchetypeSlugFromCache(
 // ── Lazy archetype resolution ──────────────────────────────────────────────
 //
 // The upsert path resolves roleArchetypeSlug from the title canonicalization
-// cache only — no LLM call. Postings whose title is seen for the first time
+// cache only, no LLM call. Postings whose title is seen for the first time
 // land with `roleArchetypeSlug: null`, which means the company-role research
 // (interview process, compensation insights) never gets queued and the cards
 // hang on "Researching…" forever.
@@ -706,7 +706,7 @@ async function resolveArchetypeSlugFromCache(
 // `_resolveArchetype` (the internal action it schedules) close that gap:
 // canonicalize the title via the LLM, look for a matching career_guide, and
 // stamp the result onto the posting. Idempotent on `roleArchetypeResolvedAt`
-// — once we've made the attempt we won't repeat the LLM call.
+//, once we've made the attempt we won't repeat the LLM call.
 
 export const ensureArchetypeResolved = mutation({
   args: { jobPostingId: v.id("job_postings") },
@@ -714,7 +714,7 @@ export const ensureArchetypeResolved = mutation({
   handler: async (ctx, args) => {
     const posting = await ctx.db.get(args.jobPostingId);
     if (!posting) return { scheduled: false };
-    // Already resolved — slug present, or attempt already made.
+    // Already resolved, slug present, or attempt already made.
     if (
       posting.roleArchetypeSlug != null ||
       posting.roleArchetypeResolvedAt != null
@@ -789,7 +789,7 @@ export const _patchArchetypeResolution = internalMutation({
 
 // Thin wrapper around the role-research insert path so the action above can
 // stay confined to convex/jobPostings.ts and not import companyResearch
-// internals directly. Idempotent — safe to schedule on every patch.
+// internals directly. Idempotent, safe to schedule on every patch.
 export const _queueRoleResearch = internalMutation({
   args: {
     companyId: v.id("companies"),
@@ -826,7 +826,7 @@ export const _queueRoleResearch = internalMutation({
 });
 
 // LLM canonicalize + guide lookup + stamp result. All three legs are wrapped
-// in try/catch — on failure we still stamp `roleArchetypeResolvedAt` so we
+// in try/catch, on failure we still stamp `roleArchetypeResolvedAt` so we
 // don't retry on every page view. The user sees "Not available" rather than
 // permanent "Researching…", which is the honest UX.
 export const _resolveArchetype = internalAction({

@@ -61,7 +61,7 @@ async function callRerank(args: {
 }
 
 /**
- * Step 8 — batched why-match reasons.
+ * Step 8, batched why-match reasons.
  *
  * Returns one one-line reason per input pair, keyed by `guideId`. Production
  * binding calls Gemini 3.1 Pro via OpenRouter with structured output; tests
@@ -127,12 +127,12 @@ ${JSON.stringify(promptPairs, null, 2)}`,
  * "belongs" in that lane in qualitative terms, so the LLM can demote
  * candidates that pass embedding + stage gates but are clearly wrong for
  * THIS user. Transformational is the catch-all bucket and is never
- * adjudicated — demoted candidates from the other three lanes land here.
+ * adjudicated, demoted candidates from the other three lanes land here.
  *
  * Rubric design rules (apply equally to all three lanes):
  *   - Demote-only. The judge cannot promote a candidate from one lane to
  *     another; it can only keep or push to transformational.
- *   - Conservative on uncertainty. Default to "keep" — an extra noisy card
+ *   - Conservative on uncertainty. Default to "keep", an extra noisy card
  *     in the right lane is less costly than an empty lane.
  *   - Cross-domain test, not difficulty test. The judge is checking domain
  *     coherence ("does this make sense for THIS user's professional path"),
@@ -184,7 +184,7 @@ const JUDGE_RUBRICS: Record<
 };
 
 /**
- * Lane judge — provisional candidates admitted to a non-transformational
+ * Lane judge, provisional candidates admitted to a non-transformational
  * lane via embeddings + stage gates are re-evaluated by Gemini Flash to
  * catch cross-domain mismatches that pass the math but fail the smell test.
  *
@@ -194,15 +194,15 @@ const JUDGE_RUBRICS: Record<
  *  - adjacent:  admitted by `cmp === "sideways" && wholeSim ≥ 0.72`
  *
  * Override-admitted candidates (literal past roles via seedingGuideSlugs)
- * skip the judge entirely — clean signal, no fuzz to clean up.
+ * skip the judge entirely, clean signal, no fuzz to clean up.
  *
  * Demoted candidates are moved to `transformational` (their semantic home
- * — cross-domain or otherwise off-track for the user). Conservative on
+ *, cross-domain or otherwise off-track for the user). Conservative on
  * uncertainty: defaults to "keep" on any LLM failure or missing output,
  * so a flaky judge never silently empties a lane.
  *
  * Production binding calls Gemini Flash (project's standard for trivial
- * structured-extraction work — same reasoning as the canonicalizer);
+ * structured-extraction work, same reasoning as the canonicalizer);
  * tests inject a deterministic implementation via
  * `globalThis.__testJudgeLLM__` (clean up in a `finally` so the stub
  * doesn't leak).
@@ -269,12 +269,12 @@ Each candidate below has been provisionally admitted to the "${rubric.laneLabel}
 
 For each candidate, return BOTH a verdict and a confidence level:
 
-VERDICT — "keep" if the candidate fits this lane for THIS user; "demote" if it is a clear cross-domain or off-track mismatch. Be CONSERVATIVE — when in doubt, KEEP. Only demote clear mismatches.
+VERDICT, "keep" if the candidate fits this lane for THIS user; "demote" if it is a clear cross-domain or off-track mismatch. Be CONSERVATIVE, when in doubt, KEEP. Only demote clear mismatches.
 
-CONFIDENCE — how strongly the candidate fits the lane for this user:
+CONFIDENCE, how strongly the candidate fits the lane for this user:
 - "high"   = textbook fit. Reads as a natural, expected card in this lane for this user's path.
-- "medium" = reasonable but a stretch. Same general direction but feels slightly off — a niche specialty, an unusual industry crossover, or a role where the user would need significant pivot effort.
-- "low"    = barely makes sense even though the embeddings agree. Treat the same as "demote" — return verdict="demote" alongside confidence="low".
+- "medium" = reasonable but a stretch. Same general direction but feels slightly off, a niche specialty, an unusual industry crossover, or a role where the user would need significant pivot effort.
+- "low"    = barely makes sense even though the embeddings agree. Treat the same as "demote", return verdict="demote" alongside confidence="low".
 
 If you return verdict="demote", you must return confidence="low" (don't hedge a demotion as medium). If you return verdict="keep", confidence is "high" or "medium".
 
@@ -337,7 +337,7 @@ function defaultReasonFor(
   if (slot === "bridge") return `Builds on your ${skill}.`;
   if (slot === "aspirational")
     return `A different direction matched to your aspirations.`;
-  return `Worth a look — overlaps with your ${skill}.`;
+  return `Worth a look, overlaps with your ${skill}.`;
 }
 
 /**
@@ -345,7 +345,7 @@ function defaultReasonFor(
  *
  * NOTE: this project's `users` table is keyed by Clerk's `tokenIdentifier`
  * (not `subject` / `clerkId`), so we look up by the `by_tokenIdentifier`
- * index — matching the pattern in `convex/users.ts`.
+ * index, matching the pattern in `convex/users.ts`.
  */
 async function requireUserId(
   ctx: QueryCtx | MutationCtx,
@@ -371,10 +371,10 @@ async function requireUserId(
  * needing independent regen.
  *
  * `dedupKey` examples:
- *   "init"          — first eager generation on profile completion
- *   "embedding"     — profile embedding regenerated
- *   "guide:<id>"    — guide content/embedding changed (fan-out)
- *   "manual"        — user-initiated refresh
+ *   "init"         , first eager generation on profile completion
+ *   "embedding"    , profile embedding regenerated
+ *   "guide:<id>"   , guide content/embedding changed (fan-out)
+ *   "manual"       , user-initiated refresh
  */
 export const scheduleSnapshotRegeneration = internalMutation({
   args: {
@@ -452,7 +452,7 @@ export const scheduleSnapshotRegeneration = internalMutation({
 
 // ─── generateSnapshot action ────────────────────────────────────────────
 //
-// Pipeline (built up across Tasks 2.2 – 2.9):
+// Pipeline (built up across Tasks 2.2 - 2.9):
 //
 //   Step 1  Read profile_embedding + all guide embeddings           [2.2]
 //   Step 2  Score each guide on arc/currentState/domain/whole        [2.2]
@@ -464,7 +464,7 @@ export const scheduleSnapshotRegeneration = internalMutation({
 //   Step 8  Generate why-match reasons (cached)                      [2.7]
 //   Step 9  Persist snapshot + junction rows                         [this file]
 //
-// This task implements 1–3; later tasks layer on top, replacing the
+// This task implements 1-3; later tasks layer on top, replacing the
 // degenerate "everything strong in linear" stub below.
 
 type ScoredCandidate = {
@@ -476,7 +476,7 @@ type ScoredCandidate = {
   /**
    * Distance penalty applied by the lane judge. 0 = no penalty (high
    * confidence or never adjudicated); 1 = "medium-confidence" demotion
-   * — the judge kept the candidate in this lane but flagged it as a
+   *, the judge kept the candidate in this lane but flagged it as a
    * stretch. Picked up as a primary sort key by `pickStrong` / `pickBridge`
    * / aspirational rerank pool, so penalized candidates fall behind every
    * non-penalized candidate regardless of cosine score. Effect: a
@@ -486,7 +486,7 @@ type ScoredCandidate = {
   judgePenalty?: number;
 };
 
-/** Slot kinds populated across Steps 6a–6c + Step 7 (extras). */
+/** Slot kinds populated across Steps 6a-6c + Step 7 (extras). */
 type Slot = "strong" | "bridge" | "aspirational" | "extra";
 
 type CardStub = {
@@ -517,7 +517,7 @@ type LaneStub = {
 const penaltyOf = (c: ScoredCandidate): number => c.judgePenalty ?? 0;
 
 /**
- * Step 6a — strong-fit picks: top-N by arcSim. These are the cards that
+ * Step 6a, strong-fit picks: top-N by arcSim. These are the cards that
  * most resemble the user's narrative arc; they anchor the lane.
  */
 function pickStrong(pool: ScoredCandidate[]): ScoredCandidate[] {
@@ -529,7 +529,7 @@ function pickStrong(pool: ScoredCandidate[]): ScoredCandidate[] {
 }
 
 /**
- * Step 6b — bridge picks: top-N by domainSim, with arcSim as tiebreaker.
+ * Step 6b, bridge picks: top-N by domainSim, with arcSim as tiebreaker.
  * Excludes guides already taken by `pickStrong` so the same card never
  * appears in two slots within a lane.
  */
@@ -549,7 +549,7 @@ function pickBridge(
 }
 
 /**
- * Step 6c — aspirational pick. Pulls the top ASPIRATIONAL_RERANK_TOP_N
+ * Step 6c, aspirational pick. Pulls the top ASPIRATIONAL_RERANK_TOP_N
  * remaining candidates by arcSim, fetches their overview text, and asks
  * Cohere rerank (via the `callRerank` test seam) to pick the single
  * most-resonant guide for the user's `arcSourceText`. If rerank throws
@@ -642,7 +642,7 @@ export const generateSnapshot = internalAction({
     try {
       await runPipeline(ctx, args);
     } catch (err) {
-      // Concurrency abort from `_writeSnapshot` is expected racing behavior —
+      // Concurrency abort from `_writeSnapshot` is expected racing behavior -
       // a fresher in-flight generation has already (or is about to) replaced
       // the snapshot. Don't mark this run as failed; just bail silently so
       // the live row keeps whatever the winning action wrote.
@@ -665,9 +665,9 @@ export const generateSnapshot = internalAction({
 
 /**
  * Inner pipeline body. Extracted from the action handler so the outer
- * try/catch wrapping it stays uncluttered and the existing Steps 0–9
+ * try/catch wrapping it stays uncluttered and the existing Steps 0-9
  * structure is preserved verbatim. `_markSnapshotFailed` only patches an
- * existing `discover_canvases` row — in production
+ * existing `discover_canvases` row, in production
  * `scheduleSnapshotRegeneration` always inserts the generating row before
  * dispatching this action, so the patch target reliably exists.
  */
@@ -743,14 +743,14 @@ async function runPipeline(
   // floor (and, for `earlier`, an additional domainSim floor).
   //
   // Lane semantics:
-  //   linear            ("Next steps")        — guide stage > user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.linear
-  //   adjacent          ("Sideways moves")    — guide stage == user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.adjacent
-  //   earlier           ("Earlier chapters")  — guide stage < user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.earlier AND domainSim ≥ LANE_DOMAIN_SIM_FLOOR.earlier
-  //   transformational  ("A different chapter") — fails any of the above gates OR stage missing
+  //   linear            ("Next steps")       , guide stage > user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.linear
+  //   adjacent          ("Sideways moves")   , guide stage == user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.adjacent
+  //   earlier           ("Earlier chapters") , guide stage < user stage AND wholeSim ≥ LANE_WHOLE_SIM_FLOOR.earlier AND domainSim ≥ LANE_DOMAIN_SIM_FLOOR.earlier
+  //   transformational  ("A different chapter"), fails any of the above gates OR stage missing
   //
   // Per-lane wholeSim floors (linear/adjacent: 0.72, earlier: 0.68): the
   // stage signal disambiguates forward/sideways/earlier, but the wholeSim
-  // floor's job is narrower — keep cross-domain noise out of the three
+  // floor's job is narrower, keep cross-domain noise out of the three
   // high-signal lanes.
   //
   // Why earlier also gets a domainSim gate: the lane is rendered as "Earlier
@@ -758,13 +758,13 @@ async function runPipeline(
   // admits cross-domain stage-down roles (e.g. for a Head of ML, "Actuary"
   // and "SEO Manager" both cleared the wholeSim 0.68 floor at ~0.69-0.70
   // despite being unrelated industries). The domainSim floor restores label
-  // honesty — a role only enters `earlier` if it both sits at a lower stage
+  // honesty, a role only enters `earlier` if it both sits at a lower stage
   // AND shares the user's professional domain. Cross-domain stage-down roles
   // fall through to `transformational` ("a different chapter"), which is
   // exactly the lane intended for cross-domain pivots.
   //
   // When user or guide stage is missing the candidate falls through to
-  // transformational rather than guessing — so guides that haven't been
+  // transformational rather than guessing, so guides that haven't been
   // backfilled with `typicalCareerStage` yet still have a place to land.
   //
   // Why this replaces percentile-based wholeSim bucketing: senior users (Head
@@ -794,7 +794,7 @@ async function runPipeline(
   // titles of the roles they've actually held, populated by
   // `internal.profileGuideSeeding.seedGuidesFromProfile`). Any candidate
   // whose slug appears here is a literal past role and will be force-routed
-  // into the `earlier` lane below — bypassing the embedding-based
+  // into the `earlier` lane below, bypassing the embedding-based
   // classifier, which can mis-route past roles when the stage embedding
   // overlaps with the user's current state or the domainSim/wholeSim floors
   // don't admit them.
@@ -823,7 +823,7 @@ async function runPipeline(
   //   - Adjacent    = candidates on a DIFFERENT ladder at the user's tier
   //   - Transformational = everything else (cross-ladder, cross-tier)
   //
-  // The LLM judge is skipped for ladder-classified candidates — the
+  // The LLM judge is skipped for ladder-classified candidates, the
   // structural relationship doesn't need second-guessing. Only the
   // transformational lane runs through any further filtering, and even
   // that's just the existing slot pickers (no judge call).
@@ -872,7 +872,7 @@ async function runPipeline(
           byLane.earlier.push(c);
         }
         // candTierRank === userTierRank → same tier on user's own ladder;
-        // skip — it's effectively the user's own role.
+        // skip, it's effectively the user's own role.
         continue;
       }
 
@@ -887,7 +887,7 @@ async function runPipeline(
   } else {
     // Fallback: profile isn't on a known ladder yet (no seededSlugs, or
     // seeded guide has no ladder position). Use the legacy stage-based
-    // bucketing + LLM judge — same logic as before ladders existed.
+    // bucketing + LLM judge, same logic as before ladders existed.
     const embeddingAdmissions: Record<JudgeLane, ScoredCandidate[]> = {
       earlier: [],
       linear: [],
@@ -967,7 +967,7 @@ async function runPipeline(
   // of medium-confidence ones), then wholeSim desc within each tier. The
   // slot pickers each apply their own metric-specific sort with the same
   // penalty-first rule, so this initial sort is mostly cosmetic for the
-  // empty-lane override below — but keeping it consistent avoids surprises
+  // empty-lane override below, but keeping it consistent avoids surprises
   // for any downstream code that walks `byLane[k]` linearly.
   for (const k of ["linear", "adjacent", "earlier", "transformational"] as const) {
     byLane[k].sort(
@@ -979,7 +979,7 @@ async function runPipeline(
   // elsewhere to fill it. Under stage-based bucketing this can happen
   // legitimately for senior users (no senior-leadership guides exist yet so
   // "Next steps" is empty for a Director/VP profile); the saved override
-  // doesn't paper over that — only saved guides on the user's account count.
+  // doesn't paper over that, only saved guides on the user's account count.
   const emptyLanes = (
     Object.keys(byLane) as Array<LaneKindFour>
   ).filter((k) => byLane[k].length === 0);
@@ -1031,7 +1031,7 @@ async function runPipeline(
         profileEmbedding.arcSourceText ?? "",
       );
 
-      // Step 7 — extras: anything remaining in the lane pool, ranked by
+      // Step 7, extras: anything remaining in the lane pool, ranked by
       // arcSim desc, capped at LANE_BUDGET.EXTRA_MAX. The slider reveals
       // these in the order we ship them.
       const usedIds2 = new Set([
@@ -1058,7 +1058,7 @@ async function runPipeline(
     }),
   );
 
-  // Step 8 — why-match reasons. Cache-first read, single batched LLM call
+  // Step 8, why-match reasons. Cache-first read, single batched LLM call
   // for uncached pairs across ALL lanes, persist new reasons, fall back to
   // deterministic templates if the LLM throws.
   const allCards = builtLanes.flatMap((l) => l.cards);
@@ -1076,7 +1076,7 @@ async function runPipeline(
     cachedRows.map((r) => [r.guideId as string, r.reason]),
   );
 
-  // Dedup uncached cards by guideId — a guide could in principle land in
+  // Dedup uncached cards by guideId, a guide could in principle land in
   // two lanes (saved-override path); we only want one entry per guideId
   // when we batch into the LLM call.
   const uncachedByGuide = new Map<string, CardStub>();
@@ -1128,7 +1128,7 @@ async function runPipeline(
     } catch (err) {
       console.warn("discover.reasons_llm_failed", { err: String(err) });
       // Fall back to deterministic per-slot templates. We don't persist
-      // these — caching a template would block a real reason from being
+      // these, caching a template would block a real reason from being
       // generated on the next run.
       for (const c of uncached) {
         const g = guideMap.get(c.guideId as string);
@@ -1162,7 +1162,7 @@ async function runPipeline(
 
 /**
  * Mark the live snapshot row (if any) as failed, increment `attempts`, and
- * record a 500-char-truncated `failureReason`. No-op when no row exists —
+ * record a 500-char-truncated `failureReason`. No-op when no row exists -
  * the pipeline catches that case in `generateSnapshot`'s outer try/catch.
  *
  * Phase 4 (Task 4.3) introduces a cron sweep that uses
@@ -1202,7 +1202,7 @@ export const _readAllGuideEmbeddings = internalQuery({
 /**
  * Reads guides by id for the Step 6c rerank prompt. Returns the full guide
  * docs so the caller can pull `content?.overview` (preferred) or fall back
- * to `title` when overviews are missing. Order is not guaranteed — callers
+ * to `title` when overviews are missing. Order is not guaranteed, callers
  * resolve by id.
  */
 export const _readGuideOverviews = internalQuery({
@@ -1216,7 +1216,7 @@ export const _readGuideOverviews = internalQuery({
 /**
  * Reads the user's profile enrichment row so the Step 5 lane bucketer can
  * compare the user's `careerStage` against each guide's `typicalCareerStage`.
- * Returns `null` when no enrichment exists yet (cold-start) — the bucketer
+ * Returns `null` when no enrichment exists yet (cold-start), the bucketer
  * treats `undefined` user stage as "unknown" and falls every candidate
  * through to the transformational lane in that case.
  */
@@ -1268,7 +1268,7 @@ export const _readGuideStages = internalQuery({
  *  - `headline` + `experience`: passed to the LLM judge that adjudicates
  *    embedding-admitted earlier candidates (Step 5b). Without user context
  *    the judge can't tell same-domain earlier-stage roles ("Data Scientist"
- *    for a Head of ML — keep) from cross-domain noise ("Actuary" — demote).
+ *    for a Head of ML, keep) from cross-domain noise ("Actuary", demote).
  *
  * Returns conservative defaults when the profile is missing or unseeded.
  */
@@ -1295,7 +1295,7 @@ export const _readReactions = internalQuery({
 });
 
 /**
- * Phase 4.2 helper — affected-user lookup for guide fan-out.
+ * Phase 4.2 helper, affected-user lookup for guide fan-out.
  *
  * Returns the deduped set of `userId`s whose live snapshot currently
  * contains `guideId`, by scanning the `discover_snapshot_guides` junction
@@ -1305,7 +1305,7 @@ export const _readReactions = internalQuery({
  * most one regen per user.
  *
  * Bounded by N = number of users with this guide on their canvas. Indexed,
- * NOT a table scan — see `convex-patterns.md` "indexes over filters".
+ * NOT a table scan, see `convex-patterns.md` "indexes over filters".
  */
 export const _readUsersForGuide = internalQuery({
   args: { guideId: v.id("career_guides") },
@@ -1319,14 +1319,14 @@ export const _readUsersForGuide = internalQuery({
 });
 
 /**
- * Phase 4.2 helper — cached-reason invalidation for guide fan-out.
+ * Phase 4.2 helper, cached-reason invalidation for guide fan-out.
  *
  * Deletes any `discover_match_reasons` rows for `(userId, guideId)` across
  * the supplied user set so the next regen produces fresh framing against
  * the updated guide's vectors/content. Uses the `by_user_and_guide` index
  * (indexed two-key lookup per user, no scan).
  *
- * `userIds` is supplied by the caller — we don't redo the
+ * `userIds` is supplied by the caller, we don't redo the
  * `discover_snapshot_guides` query here, both to keep the contract clean
  * and to avoid racing the action's read-then-mutate split (the action has
  * already collected the set the regen will be scheduled against).
@@ -1537,11 +1537,11 @@ export const _writeSnapshot = internalMutation({
 // dismissed reaction state on a guide. All three are auth-gated via
 // `requireUserId` (which throws "Not authenticated" on missing identity).
 // The `discover_reactions` table is keyed on (userId, guideId) via the
-// `by_user_and_guide` index — so each (user, guide) pair has at most one
+// `by_user_and_guide` index, so each (user, guide) pair has at most one
 // row regardless of which mutation last touched it.
 
 /**
- * Save a guide for the current user. Upserts into `discover_reactions` —
+ * Save a guide for the current user. Upserts into `discover_reactions` -
  * if a row already exists for (userId, guideId), patches its `reaction` to
  * `"saved"` (overwriting a prior `"dismissed"` state); otherwise inserts a
  * fresh row. Idempotent: calling twice in a row leaves a single saved row.
@@ -1612,7 +1612,7 @@ export const dismissGuide = mutation({
 
 /**
  * Remove a save for the current user. Deletes the `discover_reactions` row
- * only when the existing reaction is `"saved"` — calling `removeSave` on a
+ * only when the existing reaction is `"saved"`, calling `removeSave` on a
  * dismissed guide is a deliberate no-op so the user can't accidentally
  * undo a dismissal through the save-undo path.
  */
@@ -1633,13 +1633,13 @@ export const removeSave = mutation({
 });
 
 /**
- * Undo a dismissal — used by the "Recently dismissed" recovery affordance
+ * Undo a dismissal, used by the "Recently dismissed" recovery affordance
  * (and the voice undismissCard tool). Deletes the dismissed reaction so
  * the guide is eligible for the next snapshot regen, then schedules the
  * regen so the card actually reappears without the user also clicking
  * refresh. Mirrors the pattern dismissGuide uses on the way out.
  *
- * Symmetrically deliberate no-op when the reaction is "saved" — restoring
+ * Symmetrically deliberate no-op when the reaction is "saved", restoring
  * a saved guide is meaningless, and silently no-op'ing here protects
  * against UI bugs that would call into this from the wrong path.
  */
@@ -1668,8 +1668,8 @@ export const undismissGuide = mutation({
 });
 
 /**
- * List the user's dismissed guides — title + slug + when it was dismissed
- * — so the UI can offer a "recently dismissed" recovery view and the voice
+ * List the user's dismissed guides, title + slug + when it was dismissed
+ *, so the UI can offer a "recently dismissed" recovery view and the voice
  * adviser can address them by name. Sorted most-recent-first; bounded at
  * 20 to keep prompt and popover sizes reasonable. Older dismisses still
  * exist in the table; we just don't surface them.
@@ -1730,7 +1730,7 @@ export const queryDismissedGuides = query({
  *
  * Invoked by the canvas UI when the user taps "refresh." Schedules a
  * snapshot regeneration with `forceFreshReasons: true` so the why-match
- * cache is bypassed — even if no underlying signal has changed, the user
+ * cache is bypassed, even if no underlying signal has changed, the user
  * sees fresh phrasing on every card. Other regen triggers
  * (`refillAfterDismiss`, profile-completion, embedding-regenerated) leave
  * `forceFreshReasons: false` so unchanged cards reuse their cached reasons.
@@ -1745,7 +1745,7 @@ export const queryDismissedGuides = query({
  * and the `runMutation` → scheduler composition has the same
  * "Transaction already committed" failure mode in `convex-test` that
  * `refillAfterDismiss` works around. Production semantics are identical
- * — both paths queue the regen mutation; the dedup gate handles bursts.
+ *, both paths queue the regen mutation; the dedup gate handles bursts.
  */
 export const manualRefresh = mutation({
   args: {},
@@ -1770,7 +1770,7 @@ export const manualRefresh = mutation({
  * live snapshot, we trigger a full snapshot regeneration via
  * `scheduleSnapshotRegeneration`. The dismissal is already persisted in
  * `discover_reactions`, so when `generateSnapshot` re-runs, Step 4's
- * dismissal filter drops the dismissed guide and Steps 5–8 fill its slot
+ * dismissal filter drops the dismissed guide and Steps 5-8 fill its slot
  * from fresh candidates. `forceFreshReasons` is `false` so unchanged cards
  * reuse their cached why-match reasons.
  *
@@ -1782,7 +1782,7 @@ export const manualRefresh = mutation({
  * and matches how production fan-out works for this flow anyway.
  *
  * Surgical per-slot refill (no full regen, just patch one card in place) is
- * a deliberate post-v1 follow-up — see the discover plan.
+ * a deliberate post-v1 follow-up, see the discover plan.
  */
 export const refillAfterDismiss = internalAction({
   args: {
@@ -1803,14 +1803,14 @@ export const refillAfterDismiss = internalAction({
 });
 
 /**
- * Phase 4.2 fan-out trigger — fired from `guideEmbeddings.upsert` after
+ * Phase 4.2 fan-out trigger, fired from `guideEmbeddings.upsert` after
  * a career guide's embedding row has been written. For every user whose
  * live snapshot currently contains the guide:
  *
  *   1. Evict the cached `discover_match_reasons` row for `(userId, guideId)`
  *      so the next regen produces fresh framing against the updated guide
  *      (cached reasons are keyed on `profileEmbeddingId`, but the guide
- *      side has changed too — the reason is a function of both, so we drop
+ *      side has changed too, the reason is a function of both, so we drop
  *      it to be safe).
  *   2. Schedule a snapshot regeneration via
  *      `scheduleSnapshotRegeneration`. The 30s per-user debounce there
@@ -1823,14 +1823,14 @@ export const refillAfterDismiss = internalAction({
  * content-update would race the embedding regeneration job, and the
  * debounce would suppress the second (correct) fire.
  *
- * Affected-user discovery uses `discover_snapshot_guides.by_guideId` —
+ * Affected-user discovery uses `discover_snapshot_guides.by_guideId` -
  * one indexed query, bounded by N affected users per guide. No table scan
  * (see `convex-patterns.md`). Cached-reason invalidation runs in a single
  * mutation hop so all deletes share one transaction.
  *
  * Schedule pattern: each per-user regen is scheduled via
  * `ctx.scheduler.runAfter(0, ...)` (matching `refillAfterDismiss` and the
- * Phase 4.1 triggers) — `convex-test`'s multi-hop transaction state can
+ * Phase 4.1 triggers), `convex-test`'s multi-hop transaction state can
  * race when an action `runMutation`s into a function that itself
  * schedules. Production semantics are equivalent.
  */
@@ -1842,7 +1842,7 @@ export const fanOutGuideUpdate = internalAction({
       { guideId: args.guideId },
     );
     if (userIds.length === 0) {
-      // No live snapshot references this guide — nothing to invalidate or
+      // No live snapshot references this guide, nothing to invalidate or
       // regenerate. Common path for newly-published guides whose first
       // embedding lands before any user's snapshot has surfaced them.
       return;
@@ -1866,7 +1866,7 @@ export const fanOutGuideUpdate = internalAction({
 });
 
 /**
- * Phase 4.3 — nightly sweep of failed snapshots.
+ * Phase 4.3, nightly sweep of failed snapshots.
  *
  * Cron-driven (registered in `convex/crons.ts`, fires daily at 03:00 UTC).
  * Picks up `discover_canvases` rows in `status: "failed"` whose
@@ -1877,12 +1877,12 @@ export const fanOutGuideUpdate = internalAction({
  * Why 24h: gives transient upstream issues (OpenRouter outage, Convex
  * deploy hiccup) time to recover before we burn another retry. Why
  * `attempts < SNAPSHOT_MAX_ATTEMPTS`: caps total retry cost at 3 per
- * permanently-broken snapshot — after that the row stays `failed` and the
+ * permanently-broken snapshot, after that the row stays `failed` and the
  * UI surfaces the failure to the user (see `getSnapshot`).
  *
  * `dedupKey: "sweep"` distinguishes cron-driven retries from user/
  * embedding/guide-driven ones in logs. `forceFreshReasons: false` matches
- * other automated triggers — cached why-match reasons are reused when
+ * other automated triggers, cached why-match reasons are reused when
  * possible.
  *
  * The sweep delegates to `scheduleSnapshotRegeneration` rather than
@@ -1891,7 +1891,7 @@ export const fanOutGuideUpdate = internalAction({
  *
  * Schedule pattern: per-row regen is scheduled via
  * `ctx.scheduler.runAfter(0, ...)` (matching `refillAfterDismiss`,
- * `manualRefresh`, and Phase 4.1/4.2 triggers) — `convex-test`'s multi-hop
+ * `manualRefresh`, and Phase 4.1/4.2 triggers), `convex-test`'s multi-hop
  * transaction state can race when an action `runMutation`s into a function
  * that itself schedules. Production semantics are equivalent.
  */
@@ -1919,11 +1919,11 @@ export const sweepFailedSnapshots = internalAction({
 });
 
 /**
- * Phase 4.3 — failed-snapshot lookup for the cron sweep.
+ * Phase 4.3, failed-snapshot lookup for the cron sweep.
  *
  * Indexed on `by_status` (narrows to `status: "failed"`); the
  * `.filter()` on `generatedAt` is a transformation on the indexed result
- * set, not a narrowing operation — see `convex-patterns.md` "indexes over
+ * set, not a narrowing operation, see `convex-patterns.md` "indexes over
  * filters." Bounded by N = number of failed snapshots in the system, which
  * stays small in practice (sweep runs daily; hard failures rare).
  */
@@ -2046,8 +2046,8 @@ export const getSnapshot = query({
 
 /**
  * Saved guides for the current user, ordered by `reactedAt` desc. Each
- * entry includes guide details (title, slug) and — when the guide also
- * appears on the live snapshot — the card's `lane`, `whyMatchReason`, and
+ * entry includes guide details (title, slug) and, when the guide also
+ * appears on the live snapshot, the card's `lane`, `whyMatchReason`, and
  * `arcScore`. Saved guides not currently on the canvas return `null` for
  * those fields.
  *
@@ -2107,10 +2107,14 @@ export const querySavedGuides = query({
       reactions.map(async (r) => {
         const g = await ctx.db.get(r.guideId);
         const card = cardByGuide.get(r.guideId as string);
+        const illustrationUrl = g?.illustrationStorageId
+          ? await ctx.storage.getUrl(g.illustrationStorageId)
+          : null;
         return {
           guideId: r.guideId,
           title: g?.title ?? "(missing)",
           slug: g?.slug ?? "",
+          illustrationUrl,
           reactedAt: r.reactedAt,
           lane: card?.lane ?? null,
           whyMatchReason: card?.whyMatchReason ?? null,

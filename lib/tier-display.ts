@@ -30,7 +30,7 @@ export const tierChip = (tier: Tier): string => CHIP[tier];
 
 // Editorial sentence-case description for the peer-roles strip caption.
 // Reads as the trailing half of "Senior individual contributors at this
-// scope, on other ladders." — the leading half is the eyebrow above it.
+// scope, on other ladders.", the leading half is the eyebrow above it.
 const PEER_DESCRIPTOR: Record<Tier, string> = {
   "ic-entry": "Junior individual contributors at this scope, on other ladders",
   "ic-mid": "Individual contributors at this scope, on other ladders",

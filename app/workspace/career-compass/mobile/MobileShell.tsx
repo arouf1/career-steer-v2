@@ -28,7 +28,7 @@ export function MobileShell() {
 function MobileShellInner() {
   const { user } = useUser();
   const snapshot = useQuery(api.discover.getSnapshot);
-  // Don't `?? []` here — a fresh `[]` literal would change reference each
+  // Don't `?? []` here, a fresh `[]` literal would change reference each
   // render and bust the `reactionByGuide` memo. Handle null below.
   const reactions = useQuery(api.discover.querySavedGuides);
   const manualRefresh = useMutation(api.discover.manualRefresh);
@@ -60,7 +60,7 @@ function MobileShellInner() {
   // Refs to each lane's scroll handle so we can sync scrollY when the user
   // switches lanes. Otherwise, swiping from a deep-scrolled dense lane to
   // a sparse lane would leave the compass shrunk against scrollTop=0 on
-  // the new lane — feels disconnected.
+  // the new lane, feels disconnected.
   const laneRefs = useRef<Array<LaneFeedHandle | null>>([null, null, null, null]);
 
   // Reactions → guideId map.
@@ -83,7 +83,7 @@ function MobileShellInner() {
 
   // Bucket cards by lane and tag with their lane (so the dot positioner
   // knows which quadrant). Sorted by lane order, then slotKind, then
-  // arcScore — the compass uses this order for its dot reveal stagger.
+  // arcScore, the compass uses this order for its dot reveal stagger.
   const compassCards: ReadonlyArray<CompassCard> = useMemo(() => {
     if (!snapshot || snapshot.status !== "ready") return [];
     const tierWeight: Record<CompassCard["slotKind"], number> = {
@@ -143,7 +143,7 @@ function MobileShellInner() {
     [cardsByLane],
   );
 
-  // Pick a sensible default lane on first load — Linear if it has cards,
+  // Pick a sensible default lane on first load. Linear if it has cards,
   // otherwise the first non-empty lane in the canonical order. Only runs
   // once after snapshot becomes ready.
   const didDefaultRef = useRef(false);
@@ -170,7 +170,7 @@ function MobileShellInner() {
   const initials =
     (user?.firstName?.[0] ?? "Y") + (user?.lastName?.[0] ?? "ou");
 
-  // Refresh handler — bound to the explicit refresh button in the compass
+  // Refresh handler, bound to the explicit refresh button in the compass
   // header. Pull-to-refresh was removed: with vertical scroll, horizontal
   // lane swipes, and bottom-sheet drag-down all happening on the same
   // surface, an additional pull-down gesture mis-fired too often. An
@@ -209,7 +209,7 @@ function MobileShellInner() {
   // Mirror DiscoverCanvas's wiring so the voice adviser can act on the
   // mobile canvas the same way (open / close / save / unsave / dismiss /
   // refresh), plus the mobile-specific `goToLane` for the pager. Density
-  // intentionally isn't here — there's no slider on mobile, the server's
+  // intentionally isn't here, there's no slider on mobile, the server's
   // tool list excludes setDensity for surface="mobile".
   const findCardByGuideId = useCallback(
     (guideId: string): CompassCard | null => {
@@ -318,7 +318,7 @@ function MobileShellInner() {
     await manualRefresh({});
     return {
       ok: true as const,
-      message: "Refresh queued — give it about thirty seconds.",
+      message: "Refresh queued, give it about thirty seconds.",
     };
   }, [manualRefresh]);
 
@@ -372,7 +372,7 @@ function MobileShellInner() {
 
   return (
     <div className="relative flex h-full flex-col bg-paper">
-      {/* Discrete hint — the canvas reveals more on a larger screen. Kept
+      {/* Discrete hint, the canvas reveals more on a larger screen. Kept
           deliberately quiet (mute, small, no chrome) so it never competes
           with the compass itself. */}
       <p className="px-4 pt-2 text-center text-[11px] leading-snug text-mute/70">
@@ -440,7 +440,7 @@ function MobileShellInner() {
       </header>
 
       {/* Pager fills the remaining vertical space. Each lane inside owns
-          its own vertical scroll — switching lanes resets the visible
+          its own vertical scroll, switching lanes resets the visible
           scroll to that lane's stored position. */}
       <main className="flex-1 overflow-hidden">
         {compassState === "ready" && (
@@ -499,7 +499,7 @@ function triggerHaptic(reducedMotion: boolean) {
   try {
     navigator.vibrate(8);
   } catch {
-    // Silently ignore — Android Chrome supports it; iOS Safari ignores it
+    // Silently ignore. Android Chrome supports it; iOS Safari ignores it
     // already. No need to surface anything.
   }
 }

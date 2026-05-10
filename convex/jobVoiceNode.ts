@@ -1,7 +1,7 @@
 "use node";
 
 /**
- * Per-job-posting voice assistant — Node runtime.
+ * Per-job-posting voice assistant. Node runtime.
  *
  * Mirrors voiceCallsNode.ts (per-guide) and compassVoiceNode.ts (per-canvas).
  * The browser opens its own WebSocket directly to Gemini Live; this action
@@ -162,7 +162,7 @@ export const mintJobSession = action({
       citations,
     });
 
-    // Mint credentials — try ephemeral first, fall back to raw API key per
+    // Mint credentials, try ephemeral first, fall back to raw API key per
     // V1 commit 0689253. Gemini's auth_tokens endpoint occasionally flakes;
     // the fallback keeps calls working when it does.
     const client = new GoogleGenAI({

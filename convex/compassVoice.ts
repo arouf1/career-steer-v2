@@ -1,5 +1,5 @@
 /**
- * Career Compass voice assistant — non-Node Convex surface.
+ * Career Compass voice assistant, non-Node Convex surface.
  *
  * Parallel to convex/voiceCalls.ts (per-guide call). The compass surface
  * shares the persistence + analysis pipeline (appendMessage, finalize,
@@ -8,7 +8,7 @@
  * `surface: "guide"`.
  *
  * The action that actually mints the Gemini Live ephemeral token lives in
- * compassVoiceNode.ts (Node runtime) — same split as voiceCalls.ts vs
+ * compassVoiceNode.ts (Node runtime), same split as voiceCalls.ts vs
  * voiceCallsNode.ts.
  */
 
@@ -46,7 +46,7 @@ export const _createCompassSession = internalMutation({
       userId: args.userId,
       surface: "compass",
       canvasSnapshotId: args.canvasSnapshotId,
-      // guideId deliberately omitted — compass calls aren't anchored to a
+      // guideId deliberately omitted, compass calls aren't anchored to a
       // single guide. The schema makes guideId optional for exactly this case.
       sessionId: args.sessionId,
       title: args.title,
@@ -76,7 +76,7 @@ export const _createCompassSession = internalMutation({
  *     real titles + citations, not just IDs)
  *   - saved/dismissed reactions (so the model can say "you already saved X")
  *
- * Read-only — the action follows up with _createCompassSession to insert.
+ * Read-only, the action follows up with _createCompassSession to insert.
  */
 export const _gatherCompassContext = internalQuery({
   args: { tokenIdentifier: v.string() },
@@ -126,7 +126,7 @@ export const _gatherCompassContext = internalQuery({
       };
     }
 
-    // Fan-out load every card's guide doc — bounded by lanes × cards (≤80
+    // Fan-out load every card's guide doc, bounded by lanes × cards (≤80
     // per snapshot, typically 24 once we filter "extra" downstream). De-dupe
     // by guideId in case the same guide appears in multiple lanes (rare but
     // possible during regen).
@@ -149,7 +149,7 @@ export const _gatherCompassContext = internalQuery({
       .withIndex("by_user_and_reaction", (q) => q.eq("userId", user._id))
       .collect();
 
-    // Dismissed guides — off-canvas, so their docs weren't loaded above.
+    // Dismissed guides, off-canvas, so their docs weren't loaded above.
     // Fetch the most recent 10 so the voice prompt can address them by id
     // for the undismissCard recovery path. Bounded so prompt size stays
     // sane even for users who dismiss aggressively.
@@ -197,7 +197,7 @@ async function resolveUser(
  * with the same shape the system prompt uses (lanes + cards + [id:…] +
  * [SAVED] flags). The voice hook subscribes during a live call and pushes
  * any change into the running session via `clientContent` so the model
- * stays in sync with what the user is actually looking at — including
+ * stays in sync with what the user is actually looking at, including
  * extras the density slider exposes and reactions toggled in the UI.
  *
  * Density is a query argument (rather than read from somewhere on the

@@ -104,7 +104,7 @@ export function InterviewSimDialog({
           <DialogTitle className="sr-only">{dialogTitleText}</DialogTitle>
 
           <div className="relative flex min-h-[600px] max-h-[90vh] flex-col bg-paper">
-            {/* Cancel affordance during prep — there's no End Call button yet
+            {/* Cancel affordance during prep, there's no End Call button yet
                 so give the user an explicit out if research stalls. */}
             {phase === "prep" && !liveReady && (
               <button
@@ -117,7 +117,7 @@ export function InterviewSimDialog({
               </button>
             )}
 
-            {/* Phase 1 — prep progress visible until live takes over. */}
+            {/* Phase 1, prep progress visible until live takes over. */}
             {phase === "prep" && !liveReady && (
               <InterviewPrepProgress
                 status={(prep?.status ?? "researching") as PrepStatus}
@@ -127,7 +127,7 @@ export function InterviewSimDialog({
               />
             )}
 
-            {/* Phase 2 — single InterviewLiveCall, mounted across prep/live.
+            {/* Phase 2, single InterviewLiveCall, mounted across prep/live.
                 Hidden via sr-only during prep so the WebSocket stays alive. */}
             {livePhaseActive && (
               <div className={liveVisible ? "flex flex-1 flex-col" : "sr-only"}>
@@ -141,7 +141,7 @@ export function InterviewSimDialog({
               </div>
             )}
 
-            {/* Phase 3a — mint failed fast (no callId): show error + close affordance. */}
+            {/* Phase 3a, mint failed fast (no callId): show error + close affordance. */}
             {phase === "feedback" && !endedCallId && (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
                 <AlertCircle className="h-8 w-8 text-mute" strokeWidth={1.5} />
@@ -157,7 +157,7 @@ export function InterviewSimDialog({
               </div>
             )}
 
-            {/* Phase 3b — feedback, mounts after a real call ends with a callId. */}
+            {/* Phase 3b, feedback, mounts after a real call ends with a callId. */}
             {phase === "feedback" && endedCallId && (
               <InterviewFeedback
                 callId={endedCallId}

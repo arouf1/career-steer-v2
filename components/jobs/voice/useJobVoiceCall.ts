@@ -11,7 +11,7 @@ import {
 } from "@/lib/client/geminiAudio";
 
 /**
- * Per-job-posting voice assistant hook — parallel to useDeepDiveCall and
+ * Per-job-posting voice assistant hook, parallel to useDeepDiveCall and
  * useCompassVoiceCall. Mints via api.jobVoiceNode.mintJobSession; lifecycle
  * (WebSocket → setup → mic capture → transcript persistence → finalize) is
  * identical to the per-guide path.

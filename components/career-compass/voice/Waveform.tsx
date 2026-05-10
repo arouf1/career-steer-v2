@@ -17,9 +17,9 @@ type Props = {
   sensitivity?: number;
   /**
    * Bar color theme.
-   *  - "dark" (default): bars rendered with --color-ink — for use on light
+   *  - "dark" (default): bars rendered with --color-ink, for use on light
    *    surfaces (bg-paper).
-   *  - "light": bars rendered with --color-paper — for use on dark surfaces
+   *  - "light": bars rendered with --color-paper, for use on dark surfaces
    *    (bg-ink), e.g. the active compass dock.
    */
   tone?: "dark" | "light";
@@ -32,7 +32,7 @@ type Props = {
  * to the mic source, mirrors them around the centre for a symmetric pattern,
  * and draws rounded bars that fade out at the edges.
  *
- * The component does NOT own the AudioContext or AnalyserNode — the
+ * The component does NOT own the AudioContext or AnalyserNode, the
  * CompassVoiceDock attaches an analyser to the existing PCMCaptureHandle's
  * sourceNode and passes it down here. That keeps the audio graph single-
  * source and lets the waveform stay purely presentational.
@@ -103,7 +103,7 @@ export function Waveform({
       const totalBars = Math.max(1, Math.floor(w / (barWidth + barGap)));
       const centreY = h / 2;
 
-      // Compute per-bar amplitude — either real frequency data + a soft
+      // Compute per-bar amplitude, either real frequency data + a soft
       // procedural underbreath when the user is silent, or pure procedural
       // when active is false.
       let amplitudes: number[];
@@ -118,7 +118,7 @@ export function Waveform({
 
       if (active && analyser && buffer) {
         analyser.getByteFrequencyData(buffer);
-        // Use only the lower 5%-40% of the FFT bins — that's where speech
+        // Use only the lower 5%-40% of the FFT bins, that's where speech
         // energy concentrates. Mirror the left half across the centre for
         // a symmetric pattern.
         const start = Math.floor(buffer.length * 0.05);
@@ -140,7 +140,7 @@ export function Waveform({
           amplitudes[i] = Math.max(amplitudes[i] ?? 0, breath(i, 0.18));
         }
       } else {
-        // Idle / pre-call resting animation — gentler baseline.
+        // Idle / pre-call resting animation, gentler baseline.
         amplitudes = Array.from({ length: totalBars }, (_, i) =>
           breath(i, 0.1),
         );
@@ -149,7 +149,7 @@ export function Waveform({
       // Draw bars, fading the edges for a softer envelope.
       ctx.fillStyle = fillColor;
       const maxBarHeight = h * 0.8;
-      // Min bar height at silence — large enough to read clearly on a 28px
+      // Min bar height at silence, large enough to read clearly on a 28px
       // dock without dominating when the user actually starts speaking.
       const MIN_BAR_HEIGHT = 5;
       for (let i = 0; i < totalBars; i++) {

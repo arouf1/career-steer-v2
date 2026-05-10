@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Post-call summary. Gemini 3 Flash via OpenRouter — same slug as outreach
+// Post-call summary. Gemini 3 Flash via OpenRouter, same slug as outreach
 // (short structured extraction, high-volume).
 //
 // Per memory `feedback_gemini_structured_output_schema_limits`: Gemini
@@ -120,10 +120,10 @@ export function voiceAdviserPrompt(ctx: VoiceAdviserPromptContext): string {
 
   const aboutCandidate = profile
     ? buildCandidateBlock(profile)
-    : "Profile data isn't available — they're an early-career or unauthenticated user. Open with curiosity rather than assumptions about their background.";
+    : "Profile data isn't available, they're an early-career or unauthenticated user. Open with curiosity rather than assumptions about their background.";
 
   const regionalSalary = guide.region.salary
-    ? `Salary band (${guide.region.label}): entry ${guide.region.salary.entry ?? "—"}, mid ${guide.region.salary.mid ?? "—"}, senior ${guide.region.salary.senior ?? "—"}`
+    ? `Salary band (${guide.region.label}): entry ${guide.region.salary.entry ?? "-"}, mid ${guide.region.salary.mid ?? "-"}, senior ${guide.region.salary.senior ?? "-"}`
     : "";
 
   const dayToDay = guide.dayToDay
@@ -146,17 +146,17 @@ export function voiceAdviserPrompt(ctx: VoiceAdviserPromptContext): string {
     : "";
 
   const sourcesBlock = citations.length
-    ? `\n\n**Sources backing this guide (you can name publishers naturally — never read URLs aloud):**\n${citations
+    ? `\n\n**Sources backing this guide (you can name publishers naturally, never read URLs aloud):**\n${citations
         .slice(0, 10)
         .map(
           (c, i) =>
-            `${i + 1}. ${c.publisher ?? "—"} — "${truncate(c.title, 120)}" (covers: ${c.sectionPath})`,
+            `${i + 1}. ${c.publisher ?? "-"}, "${truncate(c.title, 120)}" (covers: ${c.sectionPath})`,
         )
         .join("\n")}`
     : "";
 
   return `**Persona:**
-You are ${candidateName}'s career adviser. You know career paths well and you genuinely care about helping them think clearly. You speak like a knowledgeable friend — warm, direct, and honest. You have a British English accent and a calm, conversational pace. You never lecture and you never monologue.
+You are ${candidateName}'s career adviser. You know career paths well and you genuinely care about helping them think clearly. You speak like a knowledgeable friend, warm, direct, and honest. You have a British English accent and a calm, conversational pace. You never lecture and you never monologue.
 
 **What this conversation is about:**
 This is a discovery call about a specific career path: **${guide.title}**.
@@ -169,11 +169,11 @@ ${aboutCandidate}
 
 **Conversational rules:**
 
-1. **Greet them warmly.** Two short sentences, not three. Ask how they're doing. Do not name the career path in your greeting — let them say what brought them here.
+1. **Greet them warmly.** Two short sentences, not three. Ask how they're doing. Do not name the career path in your greeting, let them say what brought them here.
 
 2. **Find out what drew them to this path.** Listen. Do not paraphrase or repeat what they say. Add new value with every response.
 
-3. **Anchor in their background.** When you discuss fit, refer to their actual experience and skills (above) — not generic career advice. Be honest about strengths and gaps. Don't oversell their fit if it's a stretch; don't undersell if they're well-positioned.
+3. **Anchor in their background.** When you discuss fit, refer to their actual experience and skills (above), not generic career advice. Be honest about strengths and gaps. Don't oversell their fit if it's a stretch; don't undersell if they're well-positioned.
 
 4. **Use the guide's grounded facts.** When salary, day-to-day, learning path, or outlook come up, draw from the guide content above. If the conversation moves to something live or specific (a particular company, recent layoff news), use Google Search.
 
@@ -185,7 +185,7 @@ ${aboutCandidate}
 
 **Guardrails:**
 - No financial advice or promises about hiring outcomes.
-- No salary "guarantees" — frame all numbers as ranges and benchmarks.
+- No salary "guarantees", frame all numbers as ranges and benchmarks.
 - If they ask something genuinely outside career territory, gently redirect.
 - If they sound anxious, slow down. Reassure without being dismissive.
 - Never repeat what the user just said back to them.

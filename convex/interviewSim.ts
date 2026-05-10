@@ -6,7 +6,7 @@
  *   - voice_calls row creation with surface: "interview_job"
  *   - context-load internal query for the Node mint action
  *
- * Reuses existing voiceCalls.appendMessage + voiceCalls.finalize — those
+ * Reuses existing voiceCalls.appendMessage + voiceCalls.finalize, those
  * are surface-agnostic (lookup by sessionId). voiceCalls.finalize is
  * extended in this PR to dispatch interview rows to
  * interviewSimNode.processInterviewAnalysis.
@@ -302,7 +302,7 @@ export const _gatherInterviewContext = internalQuery({
       .withIndex("by_companyId", (q) => q.eq("companyId", posting.companyId))
       .unique();
 
-    // Cache key — use roleArchetypeSlug when present; otherwise synthesize a
+    // Cache key, use roleArchetypeSlug when present; otherwise synthesize a
     // stable slug from companyId + normalized title so postings sharing a
     // title at the same company share the bundle.
     const cacheKeySlug =
@@ -331,7 +331,7 @@ export const _gatherInterviewContext = internalQuery({
 
 // ── Context loader for processInterviewAnalysis ───────────────────────────
 
-// Bundled query for processInterviewAnalysis — single round-trip.
+// Bundled query for processInterviewAnalysis, single round-trip.
 export const _getPostingWithCompanyAndBundle = internalQuery({
   args: { jobPostingId: v.id("job_postings") },
   returns: v.union(
@@ -376,7 +376,7 @@ export const _getPostingWithCompanyAndBundle = internalQuery({
 export const _patchInterviewRubric = internalMutation({
   args: {
     callId: v.id("voice_calls"),
-    aiSummary: v.any(), // InterviewRubric — shape validated by action
+    aiSummary: v.any(), // InterviewRubric, shape validated by action
     summaryEmbedding: v.optional(v.array(v.float64())),
   },
   returns: v.null(),

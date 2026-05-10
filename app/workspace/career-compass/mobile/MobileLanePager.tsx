@@ -23,7 +23,7 @@ type Props = {
  * Horizontal swipeable pager with Embla under the hood (via shadcn Carousel).
  *
  * Embla is the right tool for this job specifically because it locks the
- * gesture axis on touchstart based on dominant initial direction — so a
+ * gesture axis on touchstart based on dominant initial direction, so a
  * downward pull-to-refresh inside a page never gets mis-identified as a
  * lane swipe, and a clean horizontal swipe never starts as a vertical
  * scroll. We don't need to add any custom gesture-conflict handling.
@@ -75,7 +75,7 @@ export function MobileLanePager({
       dragProgress.set(Math.max(-1, Math.min(1, delta)));
     };
     const onSettle = () => {
-      // Snap to exactly 0 once Embla finishes — kills any tiny residue
+      // Snap to exactly 0 once Embla finishes, kills any tiny residue
       // and lets the compass tint settle clean.
       dragProgress.set(0);
     };
@@ -117,7 +117,7 @@ export function MobileLanePager({
         {pages.map((page, i) => (
           <CarouselItem
             key={i}
-            // Override shadcn's default pl-4 — each page edge-to-edge.
+            // Override shadcn's default pl-4, each page edge-to-edge.
             // `h-full` so each lane's scroll container can fill the
             // pager (which fills the area below the compass header).
             className="h-full pl-0"

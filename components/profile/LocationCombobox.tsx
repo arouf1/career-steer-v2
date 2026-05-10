@@ -13,7 +13,7 @@ type Props = {
   value: string | null;
   onChange: (next: string | null) => void;
   // Fires only when the user picks an item from the dropdown (mouse or
-  // keyboard). Free-text typing does not invoke this — callers that need
+  // keyboard). Free-text typing does not invoke this, callers that need
   // the country code should treat its absence as "user typed something we
   // don't have a country code for."
   onSelect?: (item: LocationSelection) => void;

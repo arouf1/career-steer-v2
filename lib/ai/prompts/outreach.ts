@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Gemini 3 Flash through OpenRouter — outreach drafts are short, templated,
+// Gemini 3 Flash through OpenRouter, outreach drafts are short, templated,
 // and high-volume so the cheaper/faster flash slug is the right fit. Routed
 // via `chatModel(OUTREACH_MODEL_ID, { zdr: true })` so streaming opts into ZDR.
 export const OUTREACH_MODEL_ID = "google/gemini-3-flash-preview";

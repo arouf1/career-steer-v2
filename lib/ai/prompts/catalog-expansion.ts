@@ -1,8 +1,10 @@
+import { EDITORIAL_VOICE_TAIL } from "./voice";
+
 // Prompts for the autonomous career-guide catalog expansion cron.
 // Two LLM calls per tick:
-//   1. Brainstorm — given an industry bucket and a sample of existing
+//   1. Brainstorm, given an industry bucket and a sample of existing
 //      slugs, propose 5 candidate canonical job titles we don't yet cover.
-//   2. Legitimacy judge — given an Exa "answer" for a candidate title,
+//   2. Legitimacy judge, given an Exa "answer" for a candidate title,
 //      decide whether the title is a real, commonly-recognised
 //      professional role worth a guide.
 //
@@ -16,7 +18,7 @@ export const BRAINSTORM_SYSTEM_PROMPT = [
   "product. Your job is to propose canonical job titles for new guides.",
   "",
   "Hard rules:",
-  "1. Each title must be a REAL, widely-recognised professional occupation —",
+  "1. Each title must be a REAL, widely-recognised professional occupation -",
   "   the kind of title that appears on Indeed, LinkedIn, or BLS occupation",
   "   listings. No invented roles. No project tasks. No internal team names.",
   "2. Use the canonical, public form of the title. Title Case.",
@@ -49,7 +51,7 @@ export const buildBrainstormPrompt = (params: {
   return [
     `Industry bucket for this tick: ${industryBucket}`,
     "",
-    "Existing catalog sample (most-recent guides — DO NOT repeat or paraphrase):",
+    "Existing catalog sample (most-recent guides. DO NOT repeat or paraphrase):",
     existingList,
     "",
     "Propose 5 canonical job titles, all in this industry bucket, none in",
@@ -73,7 +75,7 @@ export const LEGITIMACY_JUDGE_SYSTEM_PROMPT = [
   "      professional occupation, not a project task, hobby, marketing",
   "      buzzword, or a single company's internal title.",
   "  R2. Real employers hire for it: results mention multiple companies,",
-  "      employers, or industries hiring this role — not one outlier.",
+  "      employers, or industries hiring this role, not one outlier.",
   "  R3. Distinct identity: the role is materially distinct from",
   "      existing common occupations. If results show it's just a",
   "      seniority variant or trivial synonym of a more common title,",
@@ -88,12 +90,14 @@ export const LEGITIMACY_JUDGE_SYSTEM_PROMPT = [
   "    this role based on the Exa evidence. May equal the candidate, or",
   "    may be a corrected variant if Exa points at the standard term.",
   "    Strip seniority qualifiers per the same rules used for brainstorm.",
-  "  - confidence: 0.0–1.0 — how confident you are the rubric is",
+  "  - confidence: 0.0-1.0, how confident you are the rubric is",
   "    satisfied AND the canonicalTitle is correct.",
-  "  - reasoning: 1–2 sentence explanation, plain text, for logs.",
+  "  - reasoning: 1-2 sentence explanation, plain text, for logs.",
   "",
-  "Be skeptical. When in doubt, reject — the catalog grows hourly and",
+  "Be skeptical. When in doubt, reject, the catalog grows hourly and",
   "we'd rather skip a tick than publish a junk guide.",
+  "",
+  EDITORIAL_VOICE_TAIL,
 ].join("\n");
 
 export const buildLegitimacyJudgePrompt = (params: {
@@ -138,7 +142,7 @@ export const INDUSTRY_BUCKETS = [
 export type IndustryBucket = (typeof INDUSTRY_BUCKETS)[number];
 
 // Deterministic round-robin keyed on the wall-clock hour. Stable across
-// process restarts — picking the same bucket inside the same hour is fine
+// process restarts, picking the same bucket inside the same hour is fine
 // (the actual cron only fires once per hour).
 export const pickIndustryBucket = (now: Date): IndustryBucket => {
   const hoursSinceEpoch = Math.floor(now.getTime() / (60 * 60 * 1000));

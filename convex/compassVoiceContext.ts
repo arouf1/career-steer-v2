@@ -1,7 +1,7 @@
 /**
  * Pure helpers for the Career Compass voice assistant ("Talk to your compass").
  *
- * Mirrors voiceCallContext.ts (per-guide call) — no Convex APIs imported,
+ * Mirrors voiceCallContext.ts (per-guide call), no Convex APIs imported,
  * unit-testable, called from convex/compassVoice.ts after the loader has
  * pulled the necessary documents through ctx.db.
  */
@@ -165,7 +165,7 @@ type AggregatedCitation = {
 
 /**
  * Aggregate citations from every guide on the visible canvas. The compass
- * surface doesn't have its own citation store — the AI's grounding comes
+ * surface doesn't have its own citation store, the AI's grounding comes
  * from whichever guides are on the canvas. We dedupe by URL and surface the
  * most recent N so the prompt stays bounded.
  */
@@ -201,7 +201,7 @@ export function aggregateCompassCitations(args: {
 }
 
 /**
- * Saved-guide set for the user — small wrapper around the reactions list so
+ * Saved-guide set for the user, small wrapper around the reactions list so
  * the compass prompt builder doesn't need to know about the
  * discover_reactions schema.
  */

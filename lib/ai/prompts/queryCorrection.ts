@@ -3,7 +3,7 @@ import { z } from "zod";
 // Typo correction for the job-search bar. Runs server-side before the cache
 // lookup so that a corrected query benefits from any cached results under
 // its corrected form. Cached forever per inputNormalized in the
-// `query_corrections` Convex table — first-time-typo searches pay one Flash
+// `query_corrections` Convex table, first-time-typo searches pay one Flash
 // call, subsequent identical searches are free.
 
 export const JOB_QUERY_CORRECTION_MODEL_ID = "google/gemini-3-flash-preview";
@@ -11,7 +11,7 @@ export const JOB_QUERY_CORRECTION_MODEL_ID = "google/gemini-3-flash-preview";
 // ── Output schema ─────────────────────────────────────────────────────────
 //
 // No bound constraints on confidence (e.g. .min(0).max(1)) because Gemini
-// structured output rejects them — see project memory "Gemini structured
+// structured output rejects them, see project memory "Gemini structured
 // output rejects bound/array-length constraints". The action clamps after
 // parsing.
 

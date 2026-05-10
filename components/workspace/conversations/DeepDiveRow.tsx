@@ -2,7 +2,7 @@
 //
 // Row component for non-interview surfaces ("guide", "compass", "job"). The
 // surface signal is carried by a Figtree label-cased eyebrow above an EB
-// Garamond serif title — no chip, no chromatic accent. Body excerpt under the
+// Garamond serif title, no chip, no chromatic accent. Body excerpt under the
 // title at 60ch max width for editorial line-length.
 
 "use client";
@@ -45,13 +45,13 @@ export function DeepDiveRow({ call, onArchive, onUnarchive }: Props) {
   const excerpt = summary?.summary;
   const isArchived = call.archivedAt !== undefined;
 
-  // Defensive default to "guide" — legacy rows pre-discriminator landed there.
+  // Defensive default to "guide", legacy rows pre-discriminator landed there.
   // Cast back through Surface so the lookup is safe at the type level.
   const surface = (call.surface === "interview_job" ? "guide" : (call.surface ?? "guide")) as Surface;
   const eyebrow = SURFACE_EYEBROW[surface];
 
   // Strip the conversational "Talking through: " prefix the deep-dive
-  // pipeline uses — the eyebrow already sets surface context.
+  // pipeline uses, the eyebrow already sets surface context.
   const cleanTitle = call.title.replace(/^Talking through:\s*/i, "");
 
   return (
@@ -68,7 +68,7 @@ export function DeepDiveRow({ call, onArchive, onUnarchive }: Props) {
       />
 
       {/* Outer flex wrapper sits at z-10 above the absolute-fill Link, so
-          it must be pointer-events-none too — otherwise clicks land on
+          it must be pointer-events-none too, otherwise clicks land on
           the wrapper before reaching the children's per-element handling.
           The action menu opts back in via pointer-events-auto so it
           stays clickable. */}
@@ -127,7 +127,7 @@ export function DeepDiveRow({ call, onArchive, onUnarchive }: Props) {
 }
 
 // ---------------------------------------------------------------------------
-// Inline helpers (intentionally duplicated with InterviewRow — two callers,
+// Inline helpers (intentionally duplicated with InterviewRow, two callers,
 // 5 lines each; the indirection cost would outweigh DRY benefit)
 // ---------------------------------------------------------------------------
 

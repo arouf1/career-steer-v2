@@ -82,7 +82,7 @@ function buildSections(
   }
 
   // Alphabetical by ladder name. Orphan section ("Other paths") always
-  // tails the list — it's a catch-all, not a peer ladder.
+  // tails the list, it's a catch-all, not a peer ladder.
   return Array.from(grouped.values())
     .filter((s) => s.guides.length > 0)
     .sort((a, b) => {
@@ -122,7 +122,7 @@ export function CareerGuidesByLadder({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   // Mouse drag-to-scroll on the strip. Touch / trackpad / wheel all work
-  // natively on overflow-x:auto, but plain-mouse-pointer drag doesn't —
+  // natively on overflow-x:auto, but plain-mouse-pointer drag doesn't -
   // these refs track the drag state so we can update scrollLeft directly
   // and suppress the trailing click when a drag actually moved.
   const dragStateRef = useRef<{
@@ -132,7 +132,7 @@ export function CareerGuidesByLadder({
     moved: boolean;
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  // Back-to-top button visibility — toggled on whenever the page is
+  // Back-to-top button visibility, toggled on whenever the page is
   // scrolled meaningfully below the fold. Click smooth-scrolls to top.
   const [showBackToTop, setShowBackToTop] = useState(false);
   useEffect(() => {
@@ -145,7 +145,7 @@ export function CareerGuidesByLadder({
 
   // Scroll-spy: mark a section "active" when the top of its header
   // crosses ~30% of the viewport. IntersectionObserver with rootMargin
-  // does this efficiently — no scroll-event listener needed.
+  // does this efficiently, no scroll-event listener needed.
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (sections.length === 0) return;
@@ -167,7 +167,7 @@ export function CareerGuidesByLadder({
   }, [sections]);
 
   // Keep the active anchor in view inside the horizontal strip. Use a
-  // direct scrollLeft on the strip container instead of scrollIntoView —
+  // direct scrollLeft on the strip container instead of scrollIntoView -
   // scrollIntoView propagates to ancestors and can shift the entire page
   // horizontally when the inline offset can't be satisfied within the
   // strip alone.
@@ -181,7 +181,7 @@ export function CareerGuidesByLadder({
   }, [activeSlug]);
 
   // Track strip scroll position to toggle the edge-fade indicators. Fades
-  // visually communicate "more pills hidden in this direction" — the
+  // visually communicate "more pills hidden in this direction", the
   // strip is scroll-snappable but without an indicator it reads as a
   // truncated list, not a swipe-able rail.
   useEffect(() => {
@@ -238,7 +238,7 @@ export function CareerGuidesByLadder({
       }, 0);
     };
 
-    // Suppress the click that follows a drag — without this, releasing
+    // Suppress the click that follows a drag, without this, releasing
     // the mouse on top of a pill would fire that pill's onClick.
     const onClickCapture = (e: MouseEvent) => {
       if (dragStateRef.current?.moved) {
@@ -277,11 +277,11 @@ export function CareerGuidesByLadder({
     scrollLockRef.current = window.setTimeout(() => {
       scrollLockRef.current = null;
     }, 800);
-    // Manual window.scrollTo instead of element.scrollIntoView — the
+    // Manual window.scrollTo instead of element.scrollIntoView, the
     // latter defaults inline:"nearest" which still scrolls horizontally
     // when an element is even 1px wider than the viewport. window.scrollTo
     // is vertical-only and cannot shift the page sideways. We deliberately
-    // do NOT set the URL hash — anchor pills are purely a navigational
+    // do NOT set the URL hash, anchor pills are purely a navigational
     // affordance, not a deep-linkable state, and the `#ladder-<slug>` in
     // the address bar reads as junk for the user.
     const rect = target.getBoundingClientRect();
@@ -296,7 +296,7 @@ export function CareerGuidesByLadder({
 
   return (
     <div className="w-full max-w-full overflow-x-clip">
-      {/* Anchor strip — sticky inside the section column, no negative
+      {/* Anchor strip, sticky inside the section column, no negative
           margins (those caused horizontal page overflow in some workspace
           layouts). Strip itself owns its own horizontal scroll, with
           edge-fade indicators when content extends beyond the visible
@@ -338,7 +338,7 @@ export function CareerGuidesByLadder({
           })}
           </ul>
 
-          {/* Edge-fade indicators — soft paper-to-transparent fade on
+          {/* Edge-fade indicators, soft paper-to-transparent fade on
               either edge when more pills are hidden in that direction.
               pointer-events-none so they never block taps. */}
           <div
@@ -414,7 +414,7 @@ export function CareerGuidesByLadder({
         }
       `}</style>
 
-      {/* Back-to-top floater — appears when the page is scrolled below
+      {/* Back-to-top floater, appears when the page is scrolled below
           the fold, click to smoothly scroll back to the top. Fixed
           bottom-right, paper background + 1px hairline border (no
           shadows at rest per DESIGN.md), ink ArrowUp icon. */}

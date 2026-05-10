@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EDITORIAL_VOICE_TAIL } from "./voice";
 
 // Sub-project 2 of the jobs-feature decomposition: rewrite a raw SearchAPI
 // posting into sectioned prose in our voice. Used by
@@ -15,13 +16,13 @@ export const JOB_REWRITE_MODEL_ID = "google/gemini-3-flash-preview";
 // ── Output schema ─────────────────────────────────────────────────────────
 //
 // Bound constraints (.min/.max/.length on strings or arrays) are deliberately
-// omitted because Gemini structured output rejects them — see project memory
+// omitted because Gemini structured output rejects them, see project memory
 // "Gemini structured output rejects bound/array-length constraints". Word
 // budgets and array sizes are enforced via the prompt copy.
 
 export const JobPostingContentSchema = z.object({
   overview: z.string().describe(
-    "A short, energising 80–120 word summary of the role. Plain prose, no " +
+    "A short, energising 80-120 word summary of the role. Plain prose, no " +
       "lists. Reads as if a recruiter we trust is pitching the job to a " +
       "candidate. Names the company and the role plainly.",
   ),
@@ -33,7 +34,7 @@ export const JobPostingContentSchema = z.object({
   whatStandsOut: z
     .array(z.string())
     .describe(
-      "3 to 5 short bullets capturing what makes this listing distinctive — " +
+      "3 to 5 short bullets capturing what makes this listing distinctive, " +
         "stack, perks, mission, scope, salary band, hiring stage, anything " +
         "that makes a reader stop scrolling. Each bullet is one sentence.",
     ),
@@ -45,19 +46,19 @@ export const JobPostingContentSchema = z.object({
   compSummary: z
     .union([z.string(), z.null()])
     .describe(
-      "1–3 sentences summarising compensation when the source posting " +
+      "1-3 sentences summarising compensation when the source posting " +
         "discloses it. Includes the figure, currency, and any meaningful " +
         "context (band, equity, bonus). RETURN NULL when no salary is " +
-        "disclosed in the source — do NOT invent figures or pull from " +
+        "disclosed in the source, do NOT invent figures or pull from " +
         "general knowledge.",
     ),
   metaTitle: z.string().describe(
-    "SEO page title, 50–60 characters. Pattern: '{Role} at {Company} — {Hook}'. " +
+    "SEO page title, 50-60 characters. Pattern: '{Role} at {Company}, {Hook}'. " +
       "The hook is location, salary, or work-arrangement when it adds value. " +
       "Avoid clickbait.",
   ),
   metaDescription: z.string().describe(
-    "SEO meta description, 150–160 characters. One sentence. Compels a click " +
+    "SEO meta description, 150-160 characters. One sentence. Compels a click " +
       "without overpromising; mentions the role, company, and one " +
       "differentiator.",
   ),
@@ -85,6 +86,8 @@ export const REWRITE_SYSTEM_PROMPT = [
   "5. Be concise. Respect the per-section word and character budgets.",
   "6. No emoji. No marketing fluff. No 'we're a fast-paced team' clichés.",
   "7. The reader is a job-seeker scanning quickly. Lead with substance.",
+  "",
+  EDITORIAL_VOICE_TAIL,
 ].join("\n");
 
 export type RewriteInput = {
@@ -101,7 +104,7 @@ export type RewriteInput = {
 
 export function buildRewritePrompt(input: RewriteInput): string {
   // Build the source-posting block. Skip lines whose value is null/undefined
-  // so the prompt never contains literal "null" or "undefined" strings — that
+  // so the prompt never contains literal "null" or "undefined" strings, that
   // confuses the model and pollutes outputs.
   const lines: string[] = [
     `Role: ${input.title}`,
@@ -118,7 +121,7 @@ export function buildRewritePrompt(input: RewriteInput): string {
     lines.push(`Salary disclosed in source: ${input.salary}`);
   } else {
     lines.push(
-      "Salary disclosed in source: NOT DISCLOSED — return null for compSummary.",
+      "Salary disclosed in source: NOT DISCLOSED, return null for compSummary.",
     );
   }
   lines.push("");
@@ -130,13 +133,13 @@ export function buildRewritePrompt(input: RewriteInput): string {
     "",
     "Rewrite this posting into the JSON schema you've been given. Bounds:",
     "",
-    "- overview: 80–120 words. Plain prose.",
+    "- overview: 80-120 words. Plain prose.",
     "- theRole: about 150 words. Day-to-day at THIS company, anchored in specifics.",
     "- whatStandsOut: 3 to 5 bullets. One sentence each. Most distinctive items first.",
     "- idealCandidate: about 80 words. Who would thrive here.",
-    "- compSummary: 1–3 sentences IF salary is disclosed; otherwise null.",
-    "- metaTitle: 50–60 characters.",
-    "- metaDescription: 150–160 characters.",
+    "- compSummary: 1-3 sentences IF salary is disclosed; otherwise null.",
+    "- metaTitle: 50-60 characters.",
+    "- metaDescription: 150-160 characters.",
     "- socialAlt: one short descriptive sentence for the hero image.",
     "",
     "Return ONLY the JSON object matching the schema. No prose before or after.",

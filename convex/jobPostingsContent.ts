@@ -23,7 +23,7 @@ import {
 // the SDK before the abort fires.
 const RUN_TIMEOUT_MS = 120_000;
 
-// Same retry shape as career-guides — three tries, then we stop and surface
+// Same retry shape as career-guides, three tries, then we stop and surface
 // the failure on the row.
 const CONTENT_MAX_ATTEMPTS = 3;
 // Cooldown after a failure before the cron picks the row back up. Lets
@@ -117,7 +117,7 @@ export const _markContentComplete = internalMutation({
     });
     await mirrorStatus(ctx, args.jobPostingId);
 
-    // First time the row is meaningfully indexable — ping Google so the
+    // First time the row is meaningfully indexable, ping Google so the
     // crawler discovers the new URL. The queue handles rate-limiting under
     // Google's 200/day cap. This runs only once per posting because
     // contentStatus → "complete" is one-way (subsequent edits don't reset).
@@ -140,7 +140,7 @@ export const _markContentComplete = internalMutation({
 
     // Embed the posting now that the rewritten content is available. We embed
     // POST-rewrite (not on raw description) so the four facet vectors carry
-    // the same quality signal a profile/guide vector does. Best-effort —
+    // the same quality signal a profile/guide vector does. Best-effort -
     // failure here doesn't roll back the content commit; the backfill
     // action picks up rows missing embeddings.
     await ctx.scheduler.runAfter(
@@ -236,13 +236,13 @@ export const _listFailedPostingsForRetry = internalQuery({
   },
 });
 
-// Also picks up rows that were inserted but never started — schedules them
+// Also picks up rows that were inserted but never started, schedules them
 // to drain. Useful when an upsertFromSearch ran while convex/jobPostings was
 // being deployed and the runAfter call landed on a stale function ref.
 export const _listStuckPendingPostings = internalQuery({
   args: {},
   handler: async (ctx) => {
-    // Pending rows older than 5 minutes — the runAfter(0) should have drained
+    // Pending rows older than 5 minutes, the runAfter(0) should have drained
     // them by now. Anything stuck this long is a missed schedule, not work
     // in flight.
     const cutoff = Date.now() - 5 * 60 * 1000;

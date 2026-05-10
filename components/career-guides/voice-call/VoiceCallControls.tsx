@@ -19,7 +19,7 @@ type Props = {
  *   - connecting / connected → Mute + End
  *   - ended / error          → Close
  *
- * No "Start call" — the modal is opened from the sidebar tile already in
+ * No "Start call", the modal is opened from the sidebar tile already in
  * connecting state, so a separate start affordance would be redundant.
  */
 export function VoiceCallControls({

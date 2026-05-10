@@ -28,7 +28,7 @@ export const DENSITY_VALUE_TO_LEVEL: Record<Density, DensityLevel> = {
 };
 
 /**
- * Controlled — the parent owns density state (and persistence), the slider
+ * Controlled, the parent owns density state (and persistence), the slider
  * is purely presentational. Lets voice and pointer share one source of
  * truth: when voice flips density, the slider visual follows and vice
  * versa.

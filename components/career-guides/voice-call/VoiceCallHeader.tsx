@@ -10,7 +10,7 @@ const eyebrowCls =
   "text-[10px] uppercase tracking-[0.22em] font-medium text-mute";
 
 /**
- * Modal header — eyebrow, talking-through-X title, then a quiet timer line.
+ * Modal header, eyebrow, talking-through-X title, then a quiet timer line.
  * Matches V1's centred header but uses V2 design tokens.
  */
 export function VoiceCallHeader({ guideTitle, duration, formatDuration }: Props) {

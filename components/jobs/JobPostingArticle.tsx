@@ -180,7 +180,7 @@ export function JobPostingArticle({
   const showRoleSurfaces = !archetypeResolved || hasArchetypeSlug;
 
   // Each research surface only renders inline when the data is actually
-  // there — pending/loading/failed/empty states are silently omitted so the
+  // there, pending/loading/failed/empty states are silently omitted so the
   // article never shows a "Researching…" stub under a serif headline. The
   // research lands within ~30-60s and pops in on the next view.
   const cultureText =

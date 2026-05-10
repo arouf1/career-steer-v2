@@ -1,7 +1,7 @@
 // components/workspace/conversations/DeepDiveDetailPanel.tsx
 //
 // Editorial detail panel for deep-dive conversations (career / compass / job).
-// Single-column reading flow on plain paper — no card-in-card chrome, no
+// Single-column reading flow on plain paper, no card-in-card chrome, no
 // priority-grouped action-point sub-cards, no chromatic sentiment chips
 // (those quietly violated the One Voice Rule). Section breaks are hairline
 // dividers; typography carries the hierarchy.
@@ -14,7 +14,7 @@ import type { DeepDiveSummary } from "@/lib/ai/prompts/voiceAdviser";
 type Props = {
   summary: DeepDiveSummary;
   meta: {
-    /** Row title — may differ from summary.title */
+    /** Row title, may differ from summary.title */
     title: string;
     createdAt: number;
     durationSeconds: number;
@@ -36,12 +36,12 @@ export function DeepDiveDetailPanel({
   className,
 }: Props) {
   // Strip the conversational "Talking through: " prefix the deep-dive
-  // pipeline uses — the masthead label already sets surface context. Mirrors
+  // pipeline uses, the masthead label already sets surface context. Mirrors
   // DeepDiveRow.
   const cleanMetaTitle = meta.title.replace(/^Talking through:\s*/i, "");
   const title = summary.title?.trim() || cleanMetaTitle;
 
-  // Action points — flatten with priority-implicit ordering (high → med → low).
+  // Action points, flatten with priority-implicit ordering (high → med → low).
   // No grouped sub-cards; the order alone communicates priority.
   const orderedActionPoints = [
     ...summary.actionPoints.filter((a) => a.priority === "high"),
@@ -84,7 +84,7 @@ export function DeepDiveDetailPanel({
                 key={i}
                 className="flex items-start gap-4 max-w-[60ch] text-[15px] leading-relaxed text-ink"
               >
-                {/* Editorial hairline-bullet — 1px vertical rule per DESIGN.md */}
+                {/* Editorial hairline-bullet, 1px vertical rule per DESIGN.md */}
                 <span
                   className="mt-2 inline-block h-2.5 w-px shrink-0 bg-hairline-strong"
                   aria-hidden

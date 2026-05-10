@@ -1,6 +1,6 @@
 // Phase 4 of the career-ladders rollout: trigger a fresh discover_canvases
 // snapshot for every existing user so they pick up the ladder-aware
-// bucketing in `discover.ts`. Idempotent — re-running fans out the same
+// bucketing in `discover.ts`. Idempotent, re-running fans out the same
 // regen requests, which the 30s per-user debounce in
 // `scheduleSnapshotRegeneration` collapses to one snapshot per user.
 //

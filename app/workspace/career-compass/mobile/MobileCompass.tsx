@@ -44,7 +44,7 @@ const CENTERPIECE_PX = 288;
 const STICKY_PX = 96;
 
 /**
- * Mobile Career Compass dial — passive indicator. Shows where the user is
+ * Mobile Career Compass dial, passive indicator. Shows where the user is
  * in the career landscape (active lane = visibly darker quadrant slice)
  * but is *not* interactive: navigation between lanes happens via swiping
  * the pager below. Removing tap-to-switch gives the dial a single source
@@ -53,7 +53,7 @@ const STICKY_PX = 96;
  * Idle motion is intentionally restrained:
  *   - Avatar breathes very gently (4s opacity loop).
  *   - During loading the avatar pulses faster and sonar rings ripple.
- *   - No periodic scan sweep — was distracting once data was loaded.
+ *   - No periodic scan sweep, was distracting once data was loaded.
  *
  * SVG renders in normalised viewBox `-1 -1 2 2`; geometry comes from
  * `mobileCompassGeometry.ts`. The compass shrinks from centerpiece to
@@ -71,7 +71,7 @@ export function MobileCompass({
   lastFlash,
   prefersReducedMotion = false,
 }: Props) {
-  // Hoisted motion values — declared once per render in stable order.
+  // Hoisted motion values, declared once per render in stable order.
   const sizePx = useTransform(scrollY, [0, SCROLL_SHRINK], [
     CENTERPIECE_PX,
     STICKY_PX,
@@ -179,7 +179,7 @@ export function MobileCompass({
           {/* Sonar ripples on loading only. Plain conditional render
               (no AnimatePresence) so when state flips to "ready" the
               component unmounts instantly. AnimatePresence + repeat:
-              Infinity is a known motion gotcha — the exit transition
+              Infinity is a known motion gotcha, the exit transition
               never fires because the animate cycle keeps overriding it,
               which leaves the ripples spinning forever. */}
           {state === "loading" && <SonarRipples />}
@@ -212,7 +212,7 @@ export function MobileCompass({
               />
             ))}
 
-          {/* Transparent tap targets — one per quadrant. Sit above the
+          {/* Transparent tap targets, one per quadrant. Sit above the
               tints, dots, and labels so a tap anywhere in the quadrant
               triggers the lane switch. The active-quadrant darkening is
               the only visual feedback (no flash); we want the compass
@@ -282,7 +282,7 @@ function QuadrantTint({
     return 0.3;
   });
   const fill = useTransform(intensity, (i) => laneTint(lane, i));
-  // pointer-events: none so the tint paths don't intercept taps —
+  // pointer-events: none so the tint paths don't intercept taps -
   // QuadrantHit (rendered later) owns the click capture for each
   // quadrant.
   return (
@@ -316,7 +316,7 @@ function LaneLabel({
         opacity,
         fontSize: 0.075,
         fill: "oklch(0.45 0.015 35)",
-        // Don't intercept taps — QuadrantHit catches them.
+        // Don't intercept taps. QuadrantHit catches them.
         pointerEvents: "none",
       }}
       className="select-none uppercase tracking-[0.18em]"
@@ -434,7 +434,7 @@ function YouAvatar({
   prefersReducedMotion: boolean;
   sonar: boolean;
 }) {
-  // Whole avatar group is decorative — non-interactive so QuadrantHit
+  // Whole avatar group is decorative, non-interactive so QuadrantHit
   // taps near origin still register.
   return (
     <g style={{ pointerEvents: "none" }}>

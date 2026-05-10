@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Bookmark, Check, X } from "lucide-react";
+import { ArrowUpRight, Bookmark, BookmarkOff, X } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -39,9 +39,10 @@ export function CardPreviewSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const save = useMutation(api.discover.saveGuide);
+  const removeSave = useMutation(api.discover.removeSave);
   const dismiss = useMutation(api.discover.dismissGuide);
   // Lazy hero-image lookup. Pass "skip" when there's no card so the query
-  // doesn't subscribe — kept off the snapshot hot path on purpose.
+  // doesn't subscribe, kept off the snapshot hot path on purpose.
   const image = useQuery(
     api.careerGuides.getCardImage,
     card ? { guideId: card.guideId } : "skip",
@@ -148,34 +149,53 @@ export function CardPreviewSheet({
               )}
 
               <section className="mt-6 flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={card.reaction === "saved"}
-                  onClick={async () => {
-                    await save({ guideId: card.guideId });
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-pill border border-hairline px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-ink-deep hover:bg-paper-raised disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {card.reaction === "saved" ? (
-                    <>
-                      <Check
-                        className="h-3.5 w-3.5"
-                        aria-hidden
-                        strokeWidth={1.75}
-                      />
-                      Saved
-                    </>
-                  ) : (
-                    <>
+                {card.reaction === "saved" ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await removeSave({ guideId: card.guideId });
+                    }}
+                    aria-label={`Remove ${card.title} from saved`}
+                    // Saved state: filled Bookmark + "Saved" by default,
+                    // swapping to BookmarkOff + "Unsave" on hover. Same
+                    // pattern as SavedGuideCard so the icon vocabulary
+                    // reads consistently across the product.
+                    className="group/save inline-flex items-center gap-1.5 rounded-pill border border-hairline px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-ink-deep hover:bg-paper-raised"
+                  >
+                    <span className="relative grid h-3.5 w-3.5 place-items-center">
                       <Bookmark
-                        className="h-3.5 w-3.5"
-                        aria-hidden
+                        className="h-3.5 w-3.5 transition-opacity duration-150 group-hover/save:opacity-0"
+                        fill="currentColor"
                         strokeWidth={1.75}
+                        aria-hidden
                       />
-                      Save
-                    </>
-                  )}
-                </button>
+                      <BookmarkOff
+                        className="absolute h-3.5 w-3.5 opacity-0 transition-opacity duration-150 group-hover/save:opacity-100"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                    </span>
+                    <span className="group-hover/save:hidden">Saved</span>
+                    <span className="hidden group-hover/save:inline">
+                      Unsave
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await save({ guideId: card.guideId });
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-pill border border-hairline px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-ink-deep hover:bg-paper-raised"
+                  >
+                    <Bookmark
+                      className="h-3.5 w-3.5"
+                      aria-hidden
+                      strokeWidth={1.75}
+                    />
+                    Save
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {

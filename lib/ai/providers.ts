@@ -32,8 +32,8 @@ export const chatModel = (modelId: string, opts?: { zdr?: boolean }) =>
 // Gemini Embedding 2 task instructions (vocabulary from
 // https://ai.google.dev/gemini-api/docs/embeddings#task-types-embeddings-2):
 //
-// Symmetric (same prefix on both sides — query and document use the same
-// format). Use these for similarity, clustering, classification — i.e. when
+// Symmetric (same prefix on both sides, query and document use the same
+// format). Use these for similarity, clustering, classification, i.e. when
 // both vectors are "the same kind of thing" and you want cosine similarity
 // to rank them.
 //   - "sentence similarity"  → recommendation systems, duplicate detection.
@@ -43,7 +43,7 @@ export const chatModel = (modelId: string, opts?: { zdr?: boolean }) =>
 //   - "classification"       → bucketing into preset labels.
 //   - "clustering"           → grouping by similarity.
 //
-// Asymmetric (different prefixes on each side — query uses `task:`, document
+// Asymmetric (different prefixes on each side, query uses `task:`, document
 // uses `title: ... | text: ...`). For search/retrieval where one vector is a
 // short query and the other is a longer document.
 //   - "search result", "question answering", "fact checking", "code retrieval"

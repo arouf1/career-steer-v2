@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Bookmark, Check, X } from "lucide-react";
+import { ArrowUpRight, Bookmark, X } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
@@ -36,7 +36,7 @@ type Props = {
  * desktop CardPreviewSheet + OutreachDraftDrawer).
  *
  * iOS sheet pattern (see memory `feedback_ios_sheet_pattern.md`):
- *   - `inset-y-0 right-0` for sheet sizing — spans the full layout
+ *   - `inset-y-0 right-0` for sheet sizing, spans the full layout
  *     viewport on iOS, constant regardless of URL bar state
  *   - CTA absolutely positioned at `bottom-0` with
  *     env(safe-area-inset-bottom) padding so it always clears
@@ -56,6 +56,7 @@ export function MobileCardSheet({
   onDismissed,
 }: Props) {
   const save = useMutation(api.discover.saveGuide);
+  const removeSave = useMutation(api.discover.removeSave);
   const dismiss = useMutation(api.discover.dismissGuide);
   const image = useQuery(
     api.careerGuides.getCardImage,
@@ -70,7 +71,7 @@ export function MobileCardSheet({
   // iOS-friendly body scroll lock. Pin body via position: fixed at a
   // negative top offset equal to current scrollY. Safari reads that
   // as "the page isn't scrolling" and stops transitioning the URL
-  // bar — visual viewport stays stable, fixed elements stay anchored.
+  // bar, visual viewport stays stable, fixed elements stay anchored.
   useEffect(() => {
     if (!open) return;
     const scrollY = window.scrollY;
@@ -129,7 +130,7 @@ export function MobileCardSheet({
             aria-modal="true"
           >
             {/* Scrollable body. paddingBottom reserves room for the
-                absolute-positioned CTA below — content scrolls under
+                absolute-positioned CTA below, content scrolls under
                 the CTA's space without ever hiding behind it. */}
             <div
               className="h-full overflow-y-auto overscroll-contain px-5 pt-4"
@@ -172,7 +173,7 @@ export function MobileCardSheet({
                 </div>
               )}
 
-              {/* Overview — three lines collapsed, full text on tap. */}
+              {/* Overview, three lines collapsed, full text on tap. */}
               <section>
                 <p className={eyebrowCls}>Overview</p>
                 <p
@@ -215,32 +216,31 @@ export function MobileCardSheet({
               <section className="mt-6 flex items-center gap-2">
                 <button
                   type="button"
-                  disabled={reaction === "saved"}
                   onClick={async () => {
-                    await save({ guideId: card.guideId });
-                    onSaved?.(card.guideId as string);
+                    if (reaction === "saved") {
+                      await removeSave({ guideId: card.guideId });
+                    } else {
+                      await save({ guideId: card.guideId });
+                      onSaved?.(card.guideId as string);
+                    }
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-pill border border-hairline px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-ink-deep hover:bg-paper-raised disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label={
+                    reaction === "saved"
+                      ? `Remove ${card.title} from saved`
+                      : `Save ${card.title}`
+                  }
+                  // On mobile there's no hover, so the saved state reads
+                  // "Saved" with a filled bookmark and tap toggles off.
+                  // Standard mobile bookmark-toggle vocabulary.
+                  className="inline-flex items-center gap-1.5 rounded-pill border border-hairline px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-ink-deep hover:bg-paper-raised"
                 >
-                  {reaction === "saved" ? (
-                    <>
-                      <Check
-                        className="h-3.5 w-3.5"
-                        aria-hidden
-                        strokeWidth={1.75}
-                      />
-                      Saved
-                    </>
-                  ) : (
-                    <>
-                      <Bookmark
-                        className="h-3.5 w-3.5"
-                        aria-hidden
-                        strokeWidth={1.75}
-                      />
-                      Save
-                    </>
-                  )}
+                  <Bookmark
+                    className="h-3.5 w-3.5"
+                    aria-hidden
+                    strokeWidth={1.75}
+                    fill={reaction === "saved" ? "currentColor" : "none"}
+                  />
+                  {reaction === "saved" ? "Saved" : "Save"}
                 </button>
                 <button
                   type="button"

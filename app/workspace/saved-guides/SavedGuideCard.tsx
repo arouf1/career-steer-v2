@@ -1,14 +1,16 @@
 "use client";
 
 // Editorial row for a single saved career guide. Lane grouping happens at
-// the parent (SavedGuidesClient) — this component owns one row's typography,
-// match-tier rendering, and hover-revealed Unsave affordance.
+// the parent (SavedGuidesClient), this component owns one row's typography,
+// match-tier rendering, thumbnail, and hover-revealed Unsave affordance.
 //
 // Match phrasing mirrors JobCardRow.tsx's FitTag: qualitative tiers ("Strong
 // match" / "Worth exploring") replacing v1's numeric percentage. The numeric
-// percentage was an AI-product cliché — see JobCardRow.tsx:9-11.
+// percentage was an AI-product cliché, see JobCardRow.tsx:9-11.
 
 import Link from "next/link";
+import Image from "next/image";
+import { Bookmark, BookmarkOff } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -17,6 +19,7 @@ export type SavedGuide = {
   guideId: Id<"career_guides">;
   title: string;
   slug: string;
+  illustrationUrl: string | null;
   reactedAt: number;
   lane: "linear" | "adjacent" | "earlier" | "transformational" | null;
   whyMatchReason: string | null;
@@ -60,41 +63,62 @@ export function SavedGuideCard({ saved }: { saved: SavedGuide }) {
 
   return (
     <article className="group relative border-b border-hairline transition-colors duration-300 hover:bg-ink/[0.02]">
-      <div className="flex flex-col gap-3 px-2 py-8 sm:px-4 sm:py-10">
+      <div className="flex gap-5 px-2 py-8 sm:gap-7 sm:px-4 sm:py-10">
         <Link
           href={`/career-guides/${saved.slug}`}
-          className="block max-w-3xl rounded-sm transition-colors hover:text-ink-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
+          aria-hidden
+          tabIndex={-1}
+          className="relative aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-surface border border-hairline bg-paper-raised sm:w-32"
         >
-          <h3 className="type-headline text-balance text-ink [font-size:clamp(1.25rem,2.4vw,1.625rem)] [line-height:1.2]">
-            {saved.title}
-          </h3>
+          {saved.illustrationUrl ? (
+            <Image
+              src={saved.illustrationUrl}
+              alt=""
+              fill
+              sizes="(min-width: 640px) 128px, 96px"
+              className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-paper" aria-hidden />
+          )}
         </Link>
 
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="type-label uppercase text-mute">
-            Saved {formatSavedAgo(saved.reactedAt)}
-          </span>
-          {matchLabel && (
-            <>
-              <span aria-hidden className="h-px w-6 bg-hairline-strong" />
-              <span
-                className={
-                  tier === "strong"
-                    ? "type-label uppercase text-ink"
-                    : "type-label uppercase text-ink-soft"
-                }
-              >
-                {matchLabel}
-              </span>
-            </>
-          )}
-        </p>
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <Link
+            href={`/career-guides/${saved.slug}`}
+            className="block max-w-3xl rounded-sm transition-colors hover:text-ink-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
+          >
+            <h3 className="type-headline text-balance text-ink [font-size:clamp(1.25rem,2.4vw,1.625rem)] [line-height:1.2]">
+              {saved.title}
+            </h3>
+          </Link>
 
-        {saved.whyMatchReason && (
-          <p className="max-w-2xl text-balance [font-family:var(--font-serif)] text-[15px] italic leading-relaxed text-body">
-            {saved.whyMatchReason}
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="type-label uppercase text-mute">
+              Saved {formatSavedAgo(saved.reactedAt)}
+            </span>
+            {matchLabel && (
+              <>
+                <span aria-hidden className="h-px w-6 bg-hairline-strong" />
+                <span
+                  className={
+                    tier === "strong"
+                      ? "type-label uppercase text-ink"
+                      : "type-label uppercase text-ink-soft"
+                  }
+                >
+                  {matchLabel}
+                </span>
+              </>
+            )}
           </p>
-        )}
+
+          {saved.whyMatchReason && (
+            <p className="max-w-2xl text-balance text-[15px] leading-relaxed text-body">
+              {saved.whyMatchReason}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="absolute right-0 top-8 sm:right-2 sm:top-10">
@@ -102,9 +126,22 @@ export function SavedGuideCard({ saved }: { saved: SavedGuide }) {
           type="button"
           onClick={() => void removeSave({ guideId: saved.guideId })}
           aria-label={`Remove ${saved.title} from saved`}
-          className="type-label rounded-pill px-3 py-1.5 uppercase text-mute opacity-0 transition-opacity duration-200 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 group-hover:opacity-100"
+          // Filled Bookmark by default reads as a persistent saved-status
+          // marker. Hovering the button swaps to BookmarkOff to surface the
+          // "click to remove" intent without needing copy.
+          className="group/btn relative grid h-8 w-8 place-items-center rounded-pill text-mute transition-colors duration-200 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
         >
-          Unsave
+          <Bookmark
+            className="h-4 w-4 transition-opacity duration-150 group-hover/btn:opacity-0"
+            fill="currentColor"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <BookmarkOff
+            className="absolute h-4 w-4 opacity-0 transition-opacity duration-150 group-hover/btn:opacity-100"
+            strokeWidth={1.75}
+            aria-hidden
+          />
         </button>
       </div>
     </article>

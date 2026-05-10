@@ -1,7 +1,7 @@
 // components/workspace/conversations/InterviewDetailPanel.tsx
 //
 // Editorial detail panel for mock-interview conversations. Single-column
-// reading flow on plain paper — no card-in-card chrome, no 2x2 dimension
+// reading flow on plain paper, no card-in-card chrome, no 2x2 dimension
 // grid (DESIGN.md absolute ban), no monospaced "code-block" pull-quotes.
 // Section breaks are hairline dividers; typography carries the hierarchy.
 
@@ -22,7 +22,7 @@ type Props = {
   className?: string;
 };
 
-// Smart open/close quote characters — no italic needed when Garamond carries
+// Smart open/close quote characters, no italic needed when Garamond carries
 // the typographic weight at 26px with these marks.
 const LQUOTE = "“";
 const RQUOTE = "”";
@@ -42,7 +42,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
 
   return (
     <div className={cn("flex flex-col", className)}>
-      {/* ── Masthead + Verdict — career-guide hero pattern ──────────────── */}
+      {/* ── Masthead + Verdict, career-guide hero pattern ──────────────── */}
       <section
         id="verdict"
         className="scroll-mt-24 border-b border-hairline pb-12"
@@ -86,7 +86,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
         </p>
       </section>
 
-      {/* ── Dimensions (stacked, hairline-divided — NEVER a 2x2 grid) ──── */}
+      {/* ── Dimensions (stacked, hairline-divided. NEVER a 2x2 grid) ──── */}
       <section id="dimensions" className="scroll-mt-24">
         <p className="mt-12 mb-4 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
           Where the interview landed
@@ -106,7 +106,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
                 </h3>
                 <p className="shrink-0 text-[18px] font-normal text-ink [font-family:var(--font-serif)]">
                   {d.score == null ? (
-                    <span className="text-mute">{"—"}</span>
+                    <span className="text-mute">{"-"}</span>
                   ) : (
                     <>
                       {Math.round(d.score)}
@@ -115,7 +115,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
                   )}
                 </p>
               </div>
-              {d.whatWorked && d.whatWorked !== "—" && (
+              {d.whatWorked && d.whatWorked !== "-" && (
                 <>
                   <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
                     What worked
@@ -125,7 +125,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
                   </p>
                 </>
               )}
-              {d.whatToFix && d.whatToFix !== "—" && (
+              {d.whatToFix && d.whatToFix !== "-" && (
                 <>
                   <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.18em] text-mute">
                     To push
@@ -140,7 +140,7 @@ export function InterviewDetailPanel({ rubric, meta, className }: Props) {
         </div>
       </section>
 
-      {/* ── Best moment (editorial pull-quote — Garamond normal, no chrome) ─ */}
+      {/* ── Best moment (editorial pull-quote. Garamond normal, no chrome) ─ */}
       {rubric.bestMoment.quote && (
         <section id="best-moment" className="scroll-mt-24">
           <hr className="mt-12 border-t border-hairline" />
@@ -259,7 +259,7 @@ function formatRelative(ms: number): string {
   });
 }
 
-// CompanyAnchor — circular byline-scale logo (32px) or initial mark, no
+// CompanyAnchor, circular byline-scale logo (32px) or initial mark, no
 // border. Sits above the masthead h1 as a "publisher" badge alongside the
 // company name. Brandfetch CDN URLs aren't whitelisted in
 // next.config.ts remotePatterns and we don't want to widen that surface
@@ -307,7 +307,7 @@ function CompanyAnchor({
   );
 }
 
-// Escape a string for safe inclusion in a regex literal — used to strip
+// Escape a string for safe inclusion in a regex literal, used to strip
 // the "at COMPANY" suffix from the title without partial matches.
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

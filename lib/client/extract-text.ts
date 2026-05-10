@@ -24,7 +24,7 @@ export async function extractText(file: File): Promise<ExtractResult> {
 async function extractPdf(file: File): Promise<ExtractResult> {
   try {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    // Provide worker URL via Next.js ?url import — no-op in test env (mocked).
+    // Provide worker URL via Next.js ?url import, no-op in test env (mocked).
     try {
       // Worker URL provided by Next bundler via ?url query.
       pdfjs.GlobalWorkerOptions.workerSrc = (

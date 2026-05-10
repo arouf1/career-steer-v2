@@ -1,6 +1,6 @@
 // components/workspace/conversations/InterviewRow.tsx
 //
-// Row component for "interview_job" surface — the only surface that has a
+// Row component for "interview_job" surface, the only surface that has a
 // company anchor (logo + name) and an overall score. Editorial tone:
 // EB Garamond serif on the score, Figtree on title + meta. The whole row is
 // a clickable link; the action menu is always visible at opacity-40 and
@@ -42,7 +42,7 @@ export function InterviewRow({ call, onArchive, onUnarchive }: Props) {
   const verdict = summary?.oneLineVerdict;
   const isArchived = call.archivedAt !== undefined;
 
-  // Strip the redundant "Mock interview: " prefix — the row component itself
+  // Strip the redundant "Mock interview: " prefix, the row component itself
   // signals surface via the company anchor + score on the right.
   const cleanTitle = call.title.replace(/^Mock interview:\s*/i, "");
 
@@ -134,11 +134,11 @@ export function InterviewRow({ call, onArchive, onUnarchive }: Props) {
 }
 
 // ---------------------------------------------------------------------------
-// CompanyAnchor — logo or initials mark
+// CompanyAnchor, logo or initials mark
 // ---------------------------------------------------------------------------
 //
 // Loads the Brandfetch CDN URL via raw <img> (matches components/jobs/
-// CompanyMark.tsx convention — Brandfetch CDN isn't in next.config.ts
+// CompanyMark.tsx convention. Brandfetch CDN isn't in next.config.ts
 // remotePatterns and we don't want to widen that surface for one row). Falls
 // back to the company-name initial on missing or broken logo.
 
@@ -185,7 +185,7 @@ function CompanyAnchor({
 }
 
 // ---------------------------------------------------------------------------
-// Inline helpers (intentionally duplicated with DeepDiveRow — two callers,
+// Inline helpers (intentionally duplicated with DeepDiveRow, two callers,
 // 5 lines each; the indirection cost would outweigh DRY benefit)
 // ---------------------------------------------------------------------------
 

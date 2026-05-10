@@ -1,6 +1,6 @@
 // Schema.org JobPosting JSON-LD builder for /jobs/listing/[city]/[company]/[title]/[id].
 // Mirrors V1 (`/Users/aqilrouf/Documents/Projects/career-steer/src/lib/structured-data.ts`)
-// field-for-field — V1 was Google-validated and ranked, so this is a known-good
+// field-for-field. V1 was Google-validated and ranked, so this is a known-good
 // shape. Adapted to V2's job_postings schema (detectedExtensions instead of
 // V1's parsed jobType/salaryRange/workArrangement).
 //
@@ -14,8 +14,8 @@ export type JobPostingInput = {
   companyHomepageUrl: string | null;
   location: string;
   description: string;
-  schedule: string | null;       // "Full-time", "Contract", etc — from detectedExtensions
-  salary: string | null;          // free-text — from detectedExtensions
+  schedule: string | null;       // "Full-time", "Contract", etc, from detectedExtensions
+  salary: string | null;          // free-text, from detectedExtensions
   workFromHome: boolean | null;   // true if remote
   experienceLevel: string | null;
   industry: string | null;
@@ -85,7 +85,7 @@ const UNDISCLOSED_PATTERNS = [
   /^confidential$/i,
   /^undisclosed/i,
   /^a\s+(leading|top|major|global|well[\s-]known|prominent)\s+/i,
-  // Anything starting with "stealth" — broader than V1's pattern, which only
+  // Anything starting with "stealth", broader than V1's pattern, which only
   // matched "Stealth", "Stealth Mode", etc. Picks up "Stealth Mode Startup"
   // and any other variants source listings throw at us.
   /^stealth\b/i,
@@ -167,7 +167,7 @@ export function parseSalary(
   if (!salary) return null;
   // Filter noise. Keep numbers >= 100 so abbreviated values ("$120k", "$120")
   // still register, but skip 1-2 digit values. Also skip 4-digit numbers in
-  // the year-like range 1900-2100 — almost always a date reference, never
+  // the year-like range 1900-2100, almost always a date reference, never
   // a salary figure.
   const isYearLike = (n: number) => n >= 1900 && n <= 2100;
   const numbers = salary
@@ -224,7 +224,7 @@ export function buildJobPostingJsonLd(
     : undefined;
 
   // Publisher self-reference. Domain is read from NEXT_PUBLIC_SITE_URL with a
-  // safe default — this is server-rendered HTML, so the env is read at build
+  // safe default, this is server-rendered HTML, so the env is read at build
   // time on the Vercel side.
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://career-steer.app";

@@ -49,14 +49,14 @@ import type { CompassToolCallbacks } from "@/components/career-compass/voice/use
 // Logical canvas size in virtual pixels. Everything is positioned relative
 // to the centre (0, 0). The actual rendered size is computed by the resize
 // observer below and applied via `transform: scale(...)`. The +800 padding
-// gives the outermost cards generous breathing room — at the outer extent a
+// gives the outermost cards generous breathing room, at the outer extent a
 // `w-[200px]` card needs ~226px clearance and we want visible whitespace
 // around the cluster, not edge-to-edge cards. Bumped from +600 to +800 so
 // cards never reach the canvas edge even with the wider scatter.
 const CANVAS_VIRTUAL_WIDTH = QUADRANT_HALF_WIDTH * 2 + 800; // 2240
 const CANVAS_VIRTUAL_HEIGHT = QUADRANT_HALF_HEIGHT * 2 + 800; // 1840
 
-// Zoom multiplier bounds — applied on top of the auto-fit scale.
+// Zoom multiplier bounds, applied on top of the auto-fit scale.
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.15;
@@ -80,7 +80,7 @@ const LANE_META = {
   },
 } as const;
 
-// Quadrant tint backgrounds — barely-visible cream variants on the editorial
+// Quadrant tint backgrounds, barely-visible cream variants on the editorial
 // hue range. Each quadrant becomes a button (or div for empty lanes) and
 // the watermark label sits centered inside.
 const LANE_TINT_BG = {
@@ -136,7 +136,7 @@ function DiscoverCanvasInner() {
 
   // Compute scale to fit the canvas inside the wrapper. Re-runs on resize
   // and when zoom changes. The 1.2 multiplier zooms past the strict
-  // contain-fit so the card cluster fills the visible canvas — the
+  // contain-fit so the card cluster fills the visible canvas, the
   // virtual canvas already includes generous padding around the cluster
   // (CANVAS_VIRTUAL_WIDTH = QUADRANT_HALF * 2 + 800), and that padding
   // would double-up if we also shrank to 0.88 of the contain-fit. The
@@ -145,7 +145,7 @@ function DiscoverCanvasInner() {
   // Wrapper is held as state (callback ref pattern) rather than a useRef so
   // the resize-observer effect re-runs when the element actually mounts.
   // With a useRef, the early-return loading state would mount/unmount the
-  // wrapper without triggering the observer setup — `scale` would stay at
+  // wrapper without triggering the observer setup, `scale` would stay at
   // its initial 1 and cards would render way too big until something else
   // changed the deps (e.g. the user zooming).
   const [wrapper, setWrapper] = useState<HTMLDivElement | null>(null);
@@ -192,7 +192,7 @@ function DiscoverCanvasInner() {
   }, [wrapper]);
 
   // Subscribe to primitive initials and fullName, not the whole `user`
-  // object — Clerk's user reference changes on unrelated session ticks and
+  // object. Clerk's user reference changes on unrelated session ticks and
   // would invalidate the `cards` memo unnecessarily.
   const initials =
     (user?.firstName?.[0] ?? "Y") + (user?.lastName?.[0] ?? "ou");
@@ -254,8 +254,8 @@ function DiscoverCanvasInner() {
   }, [manualRefresh]);
 
   // ── Voice tool callbacks ────────────────────────────────────────────────
-  // The compass voice adviser can act on the canvas — open a card, save /
-  // unsave, dismiss, refresh — through these callbacks. Each returns
+  // The compass voice adviser can act on the canvas, open a card, save /
+  // unsave, dismiss, refresh, through these callbacks. Each returns
   // { ok, message } so the model can speak the result. We resolve guideId
   // back to a card via the snapshot so we can use the title in the message
   // and reject ids that aren't on the user's current canvas.
@@ -367,7 +367,7 @@ function DiscoverCanvasInner() {
     await manualRefresh({});
     return {
       ok: true as const,
-      message: "Refresh queued — give it about thirty seconds.",
+      message: "Refresh queued, give it about thirty seconds.",
     };
   }, [manualRefresh]);
 
@@ -383,7 +383,7 @@ function DiscoverCanvasInner() {
       if (target === density) {
         return {
           ok: true as const,
-          message: `Already at ${level} — no change.`,
+          message: `Already at ${level}, no change.`,
         };
       }
       setDensity(target);
@@ -436,7 +436,7 @@ function DiscoverCanvasInner() {
       className="relative h-full w-full overflow-hidden bg-white"
     >
       {/*
-        Quadrants — each tint cell is a button (or non-interactive div for
+        Quadrants, each tint cell is a button (or non-interactive div for
         empty lanes) with the lane watermark sitting low-opacity in the
         center. Cards in the inner-canvas div paint above and intercept
         their own clicks; only clicks on the visible tint area between
@@ -479,7 +479,7 @@ function DiscoverCanvasInner() {
       </div>
 
       {/*
-        Inner canvas — fixed virtual size, scaled to fit via transform.
+        Inner canvas, fixed virtual size, scaled to fit via transform.
         Holds the rings, user node, and cards. Lane labels live outside
         this scaled region (above) so they don't drift with the zoom.
       */}
@@ -492,7 +492,7 @@ function DiscoverCanvasInner() {
           transformOrigin: "center",
         }}
       >
-        {/* Origin (0, 0) container — sits at the visual centre of the canvas.
+        {/* Origin (0, 0) container, sits at the visual centre of the canvas.
             The wrapper is pointer-events-none so clicks on empty space pass
             through to the quadrant buttons below; individual interactive
             children (UserNode wrapper, card wrappers) re-enable events. */}
@@ -506,7 +506,7 @@ function DiscoverCanvasInner() {
           }}
         >
           {/*
-            Concentric rings centered on the user node — fit-strength scale
+            Concentric rings centered on the user node, fit-strength scale
             for "closer = closer fit." Three named rings at 360 / 520 / 680
             mark the slot-tier boundaries (strong / bridge / aspirational)
             from positionCard.ts; the unnamed rings between/beyond them are
@@ -623,7 +623,7 @@ function DiscoverCanvasInner() {
       </div>
 
       {/*
-        Floating control cluster — bottom-left corner of the canvas.
+        Floating control cluster, bottom-left corner of the canvas.
         Refresh + settings stacked above the zoom controls (in / out /
         reset), with a hairline divider separating the two groups. Sizes
         stay differentiated (size-9 for primary actions, size-8 for zoom
@@ -739,7 +739,7 @@ function DiscoverCanvasInner() {
         (paired-but-opposite from the zoom controls cluster bottom-left);
         active state expands inline into a 480px dock with a frequency
         waveform + status line + mute / end controls. Caption-free by
-        design — the canvas should remain the focal point. Snapshot is
+        design, the canvas should remain the focal point. Snapshot is
         guaranteed status="ready" at this point in the render tree, so we
         always pass canvasReady={true}.
       */}
@@ -753,7 +753,7 @@ function DiscoverCanvasInner() {
 
 
       {/*
-        Focus mode — full-canvas overlay for one lane. Mounts when a lane
+        Focus mode, full-canvas overlay for one lane. Mounts when a lane
         label is clicked; back button or Escape returns. AnimatePresence
         keeps the exit fade alive after focusedLane is cleared. Lives at
         z-30, above all in-canvas chrome but below the preview sheet.
@@ -778,7 +778,19 @@ function DiscoverCanvasInner() {
       </AnimatePresence>
 
       <CardPreviewSheet
-        card={previewCard}
+        card={
+          previewCard
+            ? {
+                ...previewCard,
+                // Override the click-time reaction snapshot with the live
+                // reactive value so the Save button flips to "Saved"
+                // immediately after the mutation lands. Without this,
+                // `previewCard` keeps its stale captured reaction until
+                // the sheet is closed and reopened.
+                reaction: reactionByGuide.get(previewCard.guideId as string),
+              }
+            : null
+        }
         open={previewCard !== null}
         onOpenChange={(o) => !o && setPreviewCard(null)}
       />

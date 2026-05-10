@@ -17,15 +17,15 @@
 // the canvas's named concentric rings (rendered in DiscoverCanvas) claim
 // "STRONG FIT / SKILL BRIDGE / ASPIRATIONAL" zones. Under the old scatter
 // (±0.3 on the slot fraction, plus a 30% arcScore weight), individual
-// cards regularly drifted 1–2 rings off their slot label, which made the
+// cards regularly drifted 1-2 rings off their slot label, which made the
 // ring labels misleading. Anchoring radius to slot makes the rings a true
 // visual classification: every "strong" card sits on the STRONG FIT ring,
 // every "bridge" on the SKILL BRIDGE ring, etc.
 
-// Inner edge — preserved for compatibility, not used by the polar layout
+// Inner edge, preserved for compatibility, not used by the polar layout
 // directly. Kept exported because other modules consume it.
 export const INNER_PADDING = 160;
-// Logical canvas extents — establish the canvas's bounding box for layout
+// Logical canvas extents, establish the canvas's bounding box for layout
 // math elsewhere. Cards may sit anywhere up to roughly QUADRANT_HALF_WIDTH
 // from the origin under the new polar layout (extras ring at r=840).
 export const QUADRANT_HALF_WIDTH = 720;
@@ -46,7 +46,7 @@ const QUADRANT_SIGN: Record<Lane, { x: -1 | 1; y: -1 | 1 }> = {
 // Each slot kind's anchor radius in canvas pixels. Must stay in lockstep
 // with the named-ring radii rendered in DiscoverCanvas.tsx (`Strong fit` at
 // 360, `Skill bridge` at 520, `Aspirational` at 680). The `extra` ring at
-// 840 is rendered but unlabelled — extras are "more to explore" cards
+// 840 is rendered but unlabelled, extras are "more to explore" cards
 // further out, beyond the named bands.
 const SLOT_RADIUS: Record<Slot, number> = {
   strong: 360,
@@ -114,11 +114,11 @@ export function positionCard(args: {
 // Margin past the outer card position so the lane labels sit at the visual
 // centre of each quadrant tint cell without crowding the outermost cards.
 // Now that the canvas is plain CSS (no React Flow fitView), this is purely
-// a layout offset for label placement — the canvas extent is fixed by the
+// a layout offset for label placement, the canvas extent is fixed by the
 // virtual canvas dimensions in DiscoverCanvas.
 const ANCHOR_OFFSET = 80;
 
-// Centre of each quadrant — used by DiscoverCanvas for lane label positions.
+// Centre of each quadrant, used by DiscoverCanvas for lane label positions.
 // Each visual quadrant (one of the four tint cells) occupies a 1/2 × 1/2
 // fraction of the canvas viewport. The centre of each cell sits at half of
 // the extended quadrant extent (QUADRANT_HALF + ANCHOR_OFFSET).

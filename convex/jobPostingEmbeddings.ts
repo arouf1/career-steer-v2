@@ -17,7 +17,7 @@ const BACKFILL_BATCH_SIZE = 5;
 const BACKFILL_STAGGER_MS = 2_000;
 
 const RELATED_LIMIT_DEFAULT = 4;
-// Vector index reads have a hard `limit` of 256 — we ask for slightly more
+// Vector index reads have a hard `limit` of 256, we ask for slightly more
 // than we need so we can drop the self-match and still return `limit` items.
 const RELATED_OVERSCAN = 4;
 
@@ -74,7 +74,7 @@ export const upsert = internalMutation({
     } else {
       await ctx.db.insert("job_posting_embeddings", doc);
     }
-    // No fan-out yet — Discover doesn't consume job vectors. When a "Jobs
+    // No fan-out yet. Discover doesn't consume job vectors. When a "Jobs
     // for You" canvas lands, hook it here (mirroring guideEmbeddings.upsert
     // → discover.fanOutGuideUpdate).
   },
@@ -192,7 +192,7 @@ export const generate = internalAction({
 export const _missingEmbeddingIds = internalQuery({
   args: { limit: v.number() },
   handler: async (ctx, args): Promise<Id<"job_postings">[]> => {
-    // Only consider postings whose content has landed — embedding raw
+    // Only consider postings whose content has landed, embedding raw
     // descriptions is wasteful since we'd just regenerate after the rewrite.
     const candidates = await ctx.db
       .query("job_postings")
@@ -235,7 +235,7 @@ export const backfillBatch = internalAction({
 
 // ── Related-jobs read API ─────────────────────────────────────────────────
 //
-// Public (no auth) action — called from the SSR'd /jobs/listing/... page.
+// Public (no auth) action, called from the SSR'd /jobs/listing/... page.
 // Vector-search has to be an action (not a query) because vectorSearch is
 // only available on action ctx.
 
@@ -297,7 +297,7 @@ export const relatedByPostingId = action({
     });
 
     // Hydrate hit rows + drop the self-match. Inactive postings are also
-    // excluded — we don't want to send a reader to an archived listing.
+    // excluded, we don't want to send a reader to an archived listing.
     const enriched = await ctx.runQuery(
       internal.jobPostingEmbeddings._hydrateRelated,
       {

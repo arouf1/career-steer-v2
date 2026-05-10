@@ -5,7 +5,7 @@ import { useStateMachineInput } from "@rive-app/react-webgl2";
 
 type Props = {
   RiveComponent: React.ComponentType<{ className: string }>;
-  rive: unknown; // Rive instance — typed as unknown because the SDK doesn't export the runtime type cleanly
+  rive: unknown; // Rive instance, typed as unknown because the SDK doesn't export the runtime type cleanly
 };
 
 /**
@@ -23,7 +23,7 @@ export function VoiceCallAnimation({ RiveComponent, rive }: Props) {
   );
 
   // Push light/dark mode into the Rive state machine. Rive's input is an
-  // imperative handle — `.value =` is the documented setter and is intended
+  // imperative handle, `.value =` is the documented setter and is intended
   // to be called from a useEffect. The eslint-react-hooks immutability rule
   // can't distinguish this from mutating React state, hence the suppression.
   useEffect(() => {

@@ -1,7 +1,7 @@
 /**
  * Pure helpers for the realtime voice "deep dive" feature.
  *
- * No Convex APIs imported here — these functions are unit-testable and
+ * No Convex APIs imported here, these functions are unit-testable and
  * called from convex/voiceCalls.ts after it has loaded the necessary
  * documents through ctx.db / ctx.runQuery.
  */
@@ -35,7 +35,7 @@ const MAX_CITATIONS_FOR_PROMPT = 10;
  * per-user personalization (regional Exa fan-out for non-US/UK users) into
  * one deduplicated, recency-sorted list. The `sectionPath` records *where*
  * each source came from so the system prompt can tell the model what each
- * source is about — useful when the model wants to cite naturally.
+ * source is about, useful when the model wants to cite naturally.
  */
 export function aggregateGuideCitations(args: {
   guide: Doc<"career_guides">;
@@ -96,7 +96,7 @@ export function aggregateGuideCitations(args: {
 /**
  * Project the rich profile_enrichments row down to just the bits we want to
  * inject into a 5-10 minute voice call. Anything not surfaced here is
- * deliberately omitted — the model's context budget is small and we want
+ * deliberately omitted, the model's context budget is small and we want
  * the adviser to feel personal, not robotic.
  */
 export function buildProfileSnapshotForVoice(args: {

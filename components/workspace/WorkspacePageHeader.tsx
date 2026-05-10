@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 // Standard header for every workspace page. Editorial section-opener tier
-// (DESIGN.md: type-headline, 1.875–2.5rem) — not type-display, which is
+// (DESIGN.md: type-headline, 1.875-2.5rem), not type-display, which is
 // hero-only and one-per-page-max. Workspace pages are working surfaces;
 // the headline stays calm so content lands above the fold.
 //

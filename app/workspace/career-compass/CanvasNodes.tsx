@@ -56,17 +56,17 @@ export function GuideCard({
       {isSaved && (
         <Bookmark className="absolute right-2.5 top-2.5 size-3.5 fill-ink text-ink" />
       )}
-      {/* Eyebrow — collapsed at rest, fades in on hover/focus. The
+      {/* Eyebrow, collapsed at rest, fades in on hover/focus. The
           arc-labelled rings carry the per-band classification across the
           whole canvas, so the per-card label is only surfaced on focus. */}
       <span className="max-h-0 overflow-hidden text-[11px] italic text-mute opacity-0 transition-all duration-200 group-hover:max-h-6 group-hover:opacity-100 group-focus-visible:max-h-6 group-focus-visible:opacity-100">
         {SLOT_BADGE_LABEL[card.slotKind]}
       </span>
-      {/* Title — always visible. */}
+      {/* Title, always visible. */}
       <div className="line-clamp-2 text-sm font-medium leading-tight text-ink">
         {card.title}
       </div>
-      {/* Why-match — collapsed at rest, expands on hover/focus. */}
+      {/* Why-match, collapsed at rest, expands on hover/focus. */}
       <div className="line-clamp-2 max-h-0 overflow-hidden text-xs italic text-ink-soft opacity-0 transition-all duration-200 group-hover:max-h-12 group-hover:opacity-100 group-focus-visible:max-h-12 group-focus-visible:opacity-100">
         {card.whyMatchReason}
       </div>
@@ -132,7 +132,7 @@ export function UserNode({
 // canvas paints above) and reads as museum-room signage rather than a UI
 // control. The parent quadrant button captures the click; this component is
 // purely decorative content (`pointer-events-none`). On hover/focus the
-// title brightens to hint at the lane's interactivity — the description and
+// title brightens to hint at the lane's interactivity, the description and
 // guide count live in the FocusedLaneView (the "view all" listing), not on
 // the canvas itself, to keep the watermark calm.
 export function WatermarkLabel({

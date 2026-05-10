@@ -38,7 +38,7 @@ function parseValue(raw: string | null | undefined): { date?: Date; precision: P
       return { precision: "month" };
     }
   }
-  // Defensive: legacy data (full ISO, free-form) — try Date(), fall back.
+  // Defensive: legacy data (full ISO, free-form), try Date(), fall back.
   const d = new Date(raw);
   if (!isNaN(d.getTime())) return { date: d, precision: "month" };
   return { precision: "month" };

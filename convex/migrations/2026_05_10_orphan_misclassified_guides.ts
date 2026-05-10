@@ -5,7 +5,7 @@
 // added or a corrected placement is written.
 //
 // Add a new entry to ORPHANS below to reclassify another guide. Idempotent
-// — re-running skips guides whose position has already been removed.
+//, re-running skips guides whose position has already been removed.
 //
 // Invoke with no args:
 //   npx convex run --no-push 'migrations/2026_05_10_orphan_misclassified_guides:orphan' '{}'

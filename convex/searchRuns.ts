@@ -1,5 +1,5 @@
 // Per-query SearchAPI cache marker. The action `convex/jobSearch.ts:search`
-// consults `lookup` before fanning out to SearchAPI — if a row exists for
+// consults `lookup` before fanning out to SearchAPI, if a row exists for
 // (queryNormalized, citySlug, countryCode) within the freshness window, we
 // skip the paid API call entirely and serve the existing job_postings rows
 // for that query.
@@ -51,7 +51,7 @@ export const lookup = query({
 // Internal upsert. Called by jobSearch.search after a successful SearchAPI
 // run. Stamps lastRunAt = now and updates resultCount so the lookup can
 // surface stats in the future (e.g. "we have 8 cached, last refreshed 12m
-// ago"). Treated as fire-and-forget by the caller — failures here would
+// ago"). Treated as fire-and-forget by the caller, failures here would
 // just mean the next identical search re-hits the API, not data loss.
 export const record = internalMutation({
   args: {

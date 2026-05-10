@@ -1,7 +1,7 @@
-// app/jobs/page.tsx — public index of recently-cached job postings.
+// app/jobs/page.tsx, public index of recently-cached job postings.
 //
 // Server-rendered, paginated via a `?cursor=<lastSeenAt>` querystring so
-// crawlers can walk the full set via `<Link>` follow. No JS interactivity —
+// crawlers can walk the full set via `<Link>` follow. No JS interactivity -
 // editorial-row layout to match the workspace search visual register.
 
 import { fetchQuery } from "convex/nextjs";
@@ -18,7 +18,7 @@ const PAGE_SIZE = 24;
 export const metadata: Metadata = {
   title: "Jobs · Career Steer",
   description:
-    "Recently surfaced job postings on Career Steer — software, product, design and more.",
+    "Recently surfaced job postings on Career Steer, software, product, design and more.",
   alternates: { canonical: "/jobs" },
   robots: { index: true, follow: true },
 };
@@ -30,8 +30,8 @@ type SearchParams = Promise<{
 }>;
 
 // Format firstSeenAt as a short relative-time string. Bucketing matches the
-// "added how recently" register editorial readers expect — "today" / "3d" /
-// "2w" — over precise timestamps. Locked to UTC-rounded math so SSR and
+// "added how recently" register editorial readers expect, "today" / "3d" /
+// "2w", over precise timestamps. Locked to UTC-rounded math so SSR and
 // client paint produce identical strings.
 function formatAddedAgo(timestamp: number, now: number): string {
   const diffMs = Math.max(0, now - timestamp);
@@ -156,7 +156,7 @@ export default async function JobsIndexPage({
           </h1>
           <p className="text-balance text-[15px] leading-relaxed text-ink/60">
             Click into any one and you&apos;ll find the role written out as a
-            piece — with what we know about the company, the pay, and the
+            piece, with what we know about the company, the pay, and the
             interview set alongside it.
           </p>
         </header>
@@ -197,7 +197,7 @@ export default async function JobsIndexPage({
         <nav className="mt-12 flex items-center justify-between gap-4 text-[13px]">
           {/* Back to first page only ever appears when we're past the
               homepage. We don't render a "back N" because cursors are
-              opaque — leaving the user a clean reset is the safest UX.
+              opaque, leaving the user a clean reset is the safest UX.
               Filter params are preserved across pagination and across the
               "back to most recent" link. */}
           {cursorLastSeenAt ? (

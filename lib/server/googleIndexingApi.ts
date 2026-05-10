@@ -2,7 +2,7 @@
 // Docs: https://developers.google.com/search/apis/indexing-api/v3/quickstart
 //
 // Quota: 200 publish requests per day per project. Rate-limiting is the
-// caller's responsibility (see convex/googleIndexingQueue.ts) — this helper
+// caller's responsibility (see convex/googleIndexingQueue.ts), this helper
 // just sends one request and returns.
 //
 // Auth: a Google Service Account JSON in the env var
@@ -36,7 +36,7 @@ function loadServiceAccount(): ServiceAccount {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new IndexingApiNotConfiguredError();
   try {
-    // Allow either raw JSON or base64-encoded JSON for env hygiene — some
+    // Allow either raw JSON or base64-encoded JSON for env hygiene, some
     // env stores don't love multi-line strings.
     const text = raw.trim().startsWith("{") ? raw : atob(raw);
     const parsed = JSON.parse(text) as ServiceAccount;

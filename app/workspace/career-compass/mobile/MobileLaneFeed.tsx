@@ -49,7 +49,7 @@ export type LaneFeedHandle = {
  * The slide is `h-full` (it fills the carousel viewport, which fills the
  * pager, which fills the area below the compass header). Inside, content
  * sits in a flex column with `mt-auto` on the end-of-list marker so the
- * marker floats to the bottom of the viewport on sparse lanes — turning
+ * marker floats to the bottom of the viewport on sparse lanes, turning
  * the cream space between cards and marker into intentional whitespace.
  */
 export const MobileLaneFeed = forwardRef<LaneFeedHandle, Props>(
@@ -161,7 +161,7 @@ export const MobileLaneFeed = forwardRef<LaneFeedHandle, Props>(
                 );
               })}
 
-              {/* End-of-list marker — `mt-auto` floats it to the bottom of
+              {/* End-of-list marker, `mt-auto` floats it to the bottom of
                   the bounded lane viewport when content is sparse, so the
                   cream space between cards and marker reads as intentional
                   whitespace rather than missing content. On dense lanes it

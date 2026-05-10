@@ -50,15 +50,15 @@ export function ProfileEditForm({ profile, onDone }: Props) {
   const onSubmit = form.handleSubmit(async (values: Profile) => {
     // Map Zod Profile (nullable sub-fields) → Convex patch (optional sub-fields).
     // Top-level strings: update accepts null via v.union(v.string(), v.null()).
-    // Array sub-fields: update accepts only v.optional(v.string()) — no null.
+    // Array sub-fields: update accepts only v.optional(v.string()), no null.
     await update({
       patch: {
         name: values.name,
         headline: values.headline,
         summary: values.summary,
         location: values.location,
-        // `||` (not `??`) so empty strings — used as a transient "no date
-        // picked" marker after unchecking "I currently work here" — get
+        // `||` (not `??`) so empty strings, used as a transient "no date
+        // picked" marker after unchecking "I currently work here", get
         // coerced to undefined on save, same as null/undefined.
         experience: values.experience.map((e) => ({
           title: e.title,
@@ -310,7 +310,7 @@ function ExperienceEntry({ form, index: i, onRemove, inputCls, labelCls }: Entry
 
   return (
     <li className="relative flex flex-col gap-4 rounded-card border border-hairline bg-paper p-6">
-      {/* Remove button — top-right */}
+      {/* Remove button, top-right */}
       <button
         type="button"
         onClick={onRemove}
@@ -412,7 +412,7 @@ function ExperienceEntry({ form, index: i, onRemove, inputCls, labelCls }: Entry
 function EducationEntry({ form, index: i, onRemove, inputCls, labelCls }: EntrySharedProps) {
   return (
     <li className="relative flex flex-col gap-4 rounded-card border border-hairline bg-paper p-6">
-      {/* Remove button — top-right */}
+      {/* Remove button, top-right */}
       <button
         type="button"
         onClick={onRemove}
@@ -495,7 +495,7 @@ function EducationEntry({ form, index: i, onRemove, inputCls, labelCls }: EntryS
   );
 }
 
-// ── SkillsInput — chip-style tag input ────────────────────────────────────
+// ── SkillsInput, chip-style tag input ────────────────────────────────────
 
 function SkillsInput({
   value,

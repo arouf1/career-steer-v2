@@ -11,7 +11,7 @@ const RESULT_LIMIT = 8;
 const SCAN_CAP = 4000;
 
 // Public typeahead for the profile location field. Filtered to
-// targetType: "City" — the broader locations table also holds countries,
+// targetType: "City", the broader locations table also holds countries,
 // provinces, neighborhoods, etc., but profile location is a city.
 //
 // Strategy: range query on the lowercased name via `by_target_nameLower`.
@@ -19,7 +19,7 @@ const SCAN_CAP = 4000;
 // nameLower starts with it, then sort by `reach` desc (population proxy)
 // and return the top N. The BM25 search index has no popularity signal,
 // so for ambiguous 3-char prefixes (Par, Ber, Mad) it drops the canonical
-// big city outside its top-N — the range index avoids that entirely.
+// big city outside its top-N, the range index avoids that entirely.
 export const searchCities = query({
   args: { query: v.string() },
   handler: async (ctx, { query: q }) => {

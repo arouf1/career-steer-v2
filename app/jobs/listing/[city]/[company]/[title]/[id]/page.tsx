@@ -1,6 +1,6 @@
 // app/jobs/listing/[city]/[company]/[title]/[id]/page.tsx
 //
-// Public job-detail page. URL shape mirrors V1 — keyword-rich slugs in front
+// Public job-detail page. URL shape mirrors V1, keyword-rich slugs in front
 // for SEO, opaque [id] at the end as the actual primary key. Slugs are
 // derived (not the source of truth) so changes to a posting's normalised
 // title/company/city redirect to the canonical URL via permanentRedirect.
@@ -45,7 +45,7 @@ const smartTruncate = (s: string, max: number): string => {
 };
 
 async function loadPosting(idParam: string) {
-  // Convex IDs are opaque strings — bad input lands as a fetch error which
+  // Convex IDs are opaque strings, bad input lands as a fetch error which
   // we treat as a 404. Avoids leaking validation logic to the client.
   try {
     const result = await fetchQuery(api.jobPostings.getByPublicId, {
@@ -72,7 +72,7 @@ export async function generateMetadata({
   // Pull from rewritten content when ready; fall back to raw fields otherwise.
   const title =
     posting.content?.metaTitle ??
-    `${posting.title} at ${company.nameRaw} — ${posting.city}`;
+    `${posting.title} at ${company.nameRaw}, ${posting.city}`;
   const description =
     posting.content?.metaDescription ??
     smartTruncate(posting.rawDescription || "", 158);
@@ -127,7 +127,7 @@ export default async function JobPostingPage({ params }: PageProps) {
 
   const { posting, company, relatedGuide, illustrationUrl } = data;
 
-  // Sub-project 4: lazy hero image. The mutation is idempotent — fires only
+  // Sub-project 4: lazy hero image. The mutation is idempotent, fires only
   // when illustrationStatus is undefined. We `void` (don't await) so the
   // first viewer doesn't block on a 30s+ Gemini call; they get the gradient
   // placeholder, the next visitor gets the real image.
@@ -138,7 +138,7 @@ export default async function JobPostingPage({ params }: PageProps) {
   }
 
   // Sub-project 5: lazy company research. Idempotent. Same fire-and-forget
-  // pattern — research lands within ~30-60s on the next view.
+  // pattern, research lands within ~30-60s on the next view.
   if (posting.isActive) {
     void fetchMutation(api.companyResearch.ensureResearchQueued, {
       companyId: company._id,

@@ -28,7 +28,7 @@ export function PersonalizeProfileCta({ guideTitle, id }: Props) {
         {headline}
       </h2>
       <p className="mt-4 max-w-xl text-[16px] leading-[1.7] text-ink/70">
-        Upload your CV and we'll show you exactly where you stand — the skills
+        Upload your CV and we'll show you exactly where you stand, the skills
         you already bring, what travels with you, and the ground you'd need to
         make up.
       </p>

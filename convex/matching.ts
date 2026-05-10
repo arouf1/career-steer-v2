@@ -64,7 +64,7 @@ const rerankFraming = (
     case "bridge":
       return `I'm looking for someone who has made the kind of career transition I'm considering. About my arc: ${selfArc}`;
     case "cross-pollination":
-      return `I'm looking for someone at a similar career stage but with a complementary background — different function or industry — for fresh perspective. About me: ${selfNarrative}`;
+      return `I'm looking for someone at a similar career stage but with a complementary background, different function or industry, for fresh perspective. About me: ${selfNarrative}`;
   }
 };
 
@@ -355,7 +355,7 @@ const guideRerankFraming = (
     case "stretch":
       return `Recommend career guides for roles I could grow into next, given my trajectory. About my arc: ${selfArc}`;
     case "adjacent":
-      return `Recommend career guides for roles that share my skill domain — adjacent functions or industries that build on what I already do. About me: ${selfNarrative}`;
+      return `Recommend career guides for roles that share my skill domain, adjacent functions or industries that build on what I already do. About me: ${selfNarrative}`;
   }
 };
 
@@ -498,7 +498,7 @@ export const guidesForMe = action({
 // ─── Snapshot-backed guides for profile page ────────────────────────────
 //
 // `guidesForMeFromSnapshot` projects the user's `discover_canvases` row
-// onto the four Career Compass lanes — same source of truth, same
+// onto the four Career Compass lanes, same source of truth, same
 // lane keys, same labels surfaced in the canvas (`DiscoverCanvas.tsx`'s
 // `LANE_META`). We read the precomputed lanes rather than running a
 // second, divergent ranker.
