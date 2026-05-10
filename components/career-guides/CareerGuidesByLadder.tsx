@@ -159,6 +159,16 @@ export function CareerGuidesByLadder({
     moved: boolean;
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // Back-to-top button visibility — toggled on whenever the page is
+  // scrolled meaningfully below the fold. Click smooth-scrolls to top.
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const update = () => setShowBackToTop(window.scrollY > 400);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
 
   // Scroll-spy: mark a section "active" when the top of its header
   // crosses ~30% of the viewport. IntersectionObserver with rootMargin
